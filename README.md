@@ -15,8 +15,6 @@
 
 Barely is an open-source AI agent designed to replace manual QA testing. Write your test goals in plain English, and Barely's AI agent will autonomously execute them via Playwright, generate professional deliverables, and file bug tickets. 
 
-No Selenium scripts. No brittle CSS selectors. Just results.
-
 ## 🌟 What is Barely?
 
 Traditional end-to-end testing requires teams to write hundreds of lines of brittle automation code that breaks every time a button changes color or a div moves. Barely takes a different approach: **Declarative Goal-Based Testing**.
@@ -30,7 +28,7 @@ You define the *goal* and the *assertions* in a simple Markdown file. Barely fig
 - 📊 **Professional Reporting:** Generates compressed PDF and HTML test reports, mirroring the deliverables of a manual QA team.
 - 🔐 **Enterprise Secrets:** Native integration with `.env`, AWS Secrets Manager, and HashiCorp Vault so passwords are never hardcoded.
 
-## 🚀 Getting Started (Coming Soon)
+## 🚀 Getting Started
 
 Barely is built for speed and simplicity. It runs locally as a single binary before scaling to the cloud.
 
@@ -65,14 +63,14 @@ timeout: 120
 barely run --url https://staging.myapp.com --goal .barely/goals/checkout.md
 ```
 
-## 🗺️ Roadmap
+## 📚 Documentation
 
-Barely is actively developed in phases. Check out our detailed roadmap in the `docs/plans/` directory:
-- [Phase 0: MVP](docs/plans/phase_0_mvp.md) - Core CLI and Agent Loop *(We are here)*
-- [Phase 1: Reliability](docs/plans/phase_1_reliability.md) - Caching, PDF Reports, Jira
-- [Phase 2: Professional](docs/plans/phase_2_professional.md) - CI/CD, Visual Regression
-- [Phase 3: Enterprise](docs/plans/phase_3_enterprise.md) - Vault, Dashboards, Accessibility
-- [Phase 4: Platform](docs/plans/phase_4_platform.md) - Cloud Execution, Multi-tenant
+Documentation is currently a work in progress. Detailed guides on architecture, writing goals, and CI/CD integration will be published soon.
+
+## 💬 Community
+
+- **Discord:** Join our community server (Coming soon)
+- **Twitter:** Follow us for updates (Coming soon)
 
 ## 🤝 Contributing
 
