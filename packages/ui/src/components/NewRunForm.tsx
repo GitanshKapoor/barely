@@ -37,8 +37,8 @@ export default function NewRunForm() {
 
   const devices = [
     { id: 'desktop', label: 'Desktop', icon: Monitor, desc: '1280x720' },
-    { id: 'tablet',  label: 'Tablet',  icon: Tablet,  desc: '768x1024' },
-    { id: 'mobile',  label: 'Mobile',  icon: Smartphone, desc: '390x844' },
+    { id: 'ios',     label: 'iOS',     icon: Smartphone, desc: 'iPhone 15' },
+    { id: 'android', label: 'Android', icon: Smartphone, desc: 'Pixel 7' },
   ];
 
   if (!isOpen) {

@@ -7,9 +7,8 @@ class BrowserEngine:
     """
     Manages Playwright browser sessions and DOM distillation.
     Designed for Enterprise Concurrency (Bottleneck 4) and Speed (Bottleneck 1).
-    """
-    MOBILE_VIEWPORT = {"width": 390, "height": 844}
-    TABLET_VIEWPORT = {"width": 768, "height": 1024}
+    IOS_VIEWPORT = {"width": 393, "height": 852} # iPhone 15
+    ANDROID_VIEWPORT = {"width": 412, "height": 915} # Pixel 7
     DESKTOP_VIEWPORT = {"width": 1280, "height": 720}
 
     def __init__(self, headless: bool = True, device: str = "desktop"):
@@ -20,7 +19,6 @@ class BrowserEngine:
         self._context: BrowserContext = None
         self.page: Page = None
         
-        # Load the distiller script once to save I/O time
         script_path = Path(__file__).parent / "distiller.js"
         self._distiller_script = script_path.read_text(encoding="utf-8")
 
@@ -28,12 +26,16 @@ class BrowserEngine:
         """Initializes the browser."""
         self._playwright = sync_playwright().start()
         self._browser = self._playwright.chromium.launch(headless=self.headless)
-        viewport = self.MOBILE_VIEWPORT if self.device == "mobile" else (self.TABLET_VIEWPORT if self.device == "tablet" else self.DESKTOP_VIEWPORT)
-        user_agent = (
-            "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"
-            if self.device == "mobile" else
-            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-        )
+        
+        if self.device == "ios":
+            viewport = self.IOS_VIEWPORT
+            user_agent = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"
+        elif self.device == "android":
+            viewport = self.ANDROID_VIEWPORT
+            user_agent = "Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Mobile Safari/537.36"
+        else:
+            viewport = self.DESKTOP_VIEWPORT
+            user_agent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
         self._context = self._browser.new_context(
             viewport=viewport,
             user_agent=user_agent,

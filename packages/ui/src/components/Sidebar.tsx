@@ -19,7 +19,7 @@ export default function Sidebar() {
       <div className="h-16 flex items-center px-4 border-b border-slate-800/60">
         <Link href="/" className="flex items-center gap-2.5">
           <Image src="/logo.png" alt="Barely Logo" width={36} height={36} className="rounded-md" />
-          <span className="text-slate-100 font-semibold tracking-wide">Barely<span className="text-slate-500 font-normal">.ai</span></span>
+          <span className="text-slate-100 font-bold text-xl tracking-tight">Barely</span>
         </Link>
       </div>
       <nav className="flex-1 py-6 px-3 space-y-1">
