@@ -119,6 +119,12 @@ We welcome contributions! Whether you're fixing bugs, adding new features, or im
 
 See our [Contributing Guide](CONTRIBUTING.md) (coming soon) for more details.
 
+## 👨‍💻 Author & Creator
+
+Created and maintained by **Gitansh Kapoor**:
+- 💼 **LinkedIn:** [linkedin.com/in/gitansh16k](https://www.linkedin.com/in/gitansh16k)
+- 🐙 **GitHub:** [@GitanshKapoor](https://github.com/GitanshKapoor)
+
 ## 📄 License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
