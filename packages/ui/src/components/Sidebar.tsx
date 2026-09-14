@@ -46,7 +46,7 @@ export default function Sidebar() {
           <span className="w-1.5 h-1.5 rounded-full bg-[#0278ff]"></span>
           <p className="text-[11px] text-slate-300 font-mono font-semibold">Barely v1.0</p>
         </div>
-        <p className="text-[10px] text-slate-500 font-mono">"Jumping Joey" (Baby Kangaroo)</p>
+        <p className="text-[10px] text-slate-500 font-mono">"Baby Kangaroo"</p>
       </div>
     </aside>
   );
