@@ -1,64 +1,55 @@
 # Barely.ai 🤖
 
-Autonomous, AI-driven End-to-End testing engine. Barely replaces brittle Selenium/Cypress selectors with dynamic DOM distillation and LLM reasoning. Just write your goals in plain English Markdown, and Barely will figure out how to click, type, and navigate to accomplish them.
+Autonomous, AI-driven End-to-End testing engine. Barely replaces brittle Selenium/Cypress selectors with dynamic DOM distillation and LLM reasoning. Just write your goals in plain English, and Barely will figure out how to click, type, and navigate to accomplish them.
 
 ## 🚀 Quickstart (Docker - Recommended)
 
-The easiest way to run the entire Control Plane (API, UI Dashboard, and execution Worker) without installing browser dependencies on your host machine.
+The easiest way to run the entire Control Plane (API, UI Dashboard, PostgreSQL Database, and execution Worker) without installing browser dependencies on your host machine.
 
 1. **Set your API Key**
-   Create a `.env` file in the root directory:
+   Barely runs on the industry-leading Claude 3.5 Sonnet model. Create a `.env` file in the root directory:
    ```bash
-   echo "GROQ_API_KEY=gsk_your_key_here" > .env
+   echo "ANTHROPIC_API_KEY=sk-ant-your_key_here" > .env
    ```
 
 2. **Boot the Platform**
    ```bash
-   docker compose up --build
+   docker compose up -d --build
    ```
 
 3. **Access the Dashboard**
-   Open your browser and navigate to [http://localhost:3000](http://localhost:3000)
+   Open your browser and navigate to [http://localhost:3000](http://localhost:3000). The UI will poll the database in real-time, instantly showing you when tests are pending, running, or completed!
 
 ---
 
-## 💻 Native Developer Setup (CLI)
+## 💻 Native Developer Setup (Real-Time Visual Execution)
 
-If you want to run tests locally, see the browser move in real-time, or contribute to the python engine, use the native setup.
+If you want to watch the browser pop open and see the AI move the mouse in real-time, run the worker natively on your Mac (since Docker runs invisibly without a screen).
 
 ### Prerequisites
 - Python 3.9+
 - [uv](https://github.com/astral-sh/uv) (Extremely fast Python package manager)
-- Node.js (Only required if developing the Next.js UI locally)
 
-### 1. Install Dependencies
-Install the workspace packages (Core, CLI, API, Worker):
+### 1. Install Dependencies & Browsers
 ```bash
 uv sync
-```
-
-### 2. Install Playwright Browsers
-Barely needs Chromium to interact with the web:
-```bash
 uv run playwright install chromium
 ```
 
-### 3. Add API Key
+### 2. Stop Docker Worker & Start Native Worker
+Keep the API, UI, and Database running in Docker, but run the worker locally:
 ```bash
-echo "GROQ_API_KEY=gsk_your_key_here" > .env
+docker compose stop barely-worker
+HEADLESS=false uv run python packages/worker/src/barely_worker/main.py
 ```
-
-### 4. Run a Test!
-Write a test goal in `.barely/goals/example.md`, then run it. Set `--headless=False` if you want to watch the AI take control of a real Chrome window.
-```bash
-uv run barely run .barely/goals/example.md --headless=False
-```
+Now, trigger a test from the UI and watch your Mac take over!
 
 ## 🏗 Architecture
 This is a standard Monorepo managed by `uv workspaces`:
-- `packages/core`: The DOM Distiller, Agent Loop, and VRT Engine.
+- `barely-db`: Production-grade PostgreSQL database holding test runs and histories.
+- `packages/core`: The DOM Distiller, Agent Loop, SQLAlchemy Models, and VRT Engine.
 - `packages/cli`: The terminal interface (`barely run`).
-- `packages/api`: The FastAPI Control Plane for queueing jobs.
-- `packages/worker`: The execution node that pulls from the queue.
-- `packages/ui`: The Next.js SaaS Dashboard.
+- `packages/api`: The FastAPI Control Plane querying Postgres.
+- `packages/worker`: The execution node driving the browser.
+- `packages/ui`: The Next.js SaaS Dashboard with real-time polling.
 - `plugins/*`: Drop-in extensions like `reporter-jira` and `reporter-pdf`.
