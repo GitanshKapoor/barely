@@ -1,93 +1,120 @@
 import Link from 'next/link';
-import NewRunForm from "../components/NewRunForm";
-import { ArrowRight, CheckCircle2, XCircle } from 'lucide-react';
-import AutoRefresher from "../components/AutoRefresher";
+import { CheckCircle2, XCircle, Clock, Activity, ArrowRight, Play } from 'lucide-react';
 
-async function getRuns() {
+async function getStats() {
   try {
     const apiUrl = process.env.API_URL || 'http://barely-api:8000';
     const res = await fetch(`${apiUrl}/api/runs`, { cache: 'no-store' });
     if (!res.ok) return { runs: [] };
-    return res.json();
+    const data = await res.json();
+    return data;
   } catch (e) {
     return { runs: [] };
   }
 }
 
 export default async function Home() {
-  const data = await getRuns();
+  const data = await getStats();
   const runs = data.runs || [];
 
+  const total     = runs.length;
+  const passed    = runs.filter((r: any) => r.status === 'completed' && r.success).length;
+  const failed    = runs.filter((r: any) => r.status === 'completed' && !r.success).length;
+  const running   = runs.filter((r: any) => r.status === 'running').length;
+  const pending   = runs.filter((r: any) => r.status === 'pending').length;
+  const passRate  = total > 0 ? Math.round((passed / total) * 100) : 0;
+
+  const recentRuns = runs.slice(0, 5);
+
+  const stats = [
+    { label: 'Total Runs',   value: total,    icon: Activity,     color: 'text-blue-400',   bg: 'bg-blue-500/10',   border: 'border-blue-500/20' },
+    { label: 'Passed',       value: passed,   icon: CheckCircle2, color: 'text-green-400',  bg: 'bg-green-500/10',  border: 'border-green-500/20' },
+    { label: 'Failed',       value: failed,   icon: XCircle,      color: 'text-red-400',    bg: 'bg-red-500/10',    border: 'border-red-500/20' },
+    { label: 'In Progress',  value: running + pending, icon: Clock, color: 'text-yellow-400', bg: 'bg-yellow-500/10', border: 'border-yellow-500/20' },
+  ];
+
   return (
-    <div className="max-w-6xl mx-auto space-y-6">
-      <AutoRefresher />
+    <div className="max-w-6xl mx-auto space-y-8">
+      {/* Header */}
       <div className="flex items-center justify-between">
-        <NewRunForm />
-        <h2 className="text-xl font-semibold text-slate-100 tracking-tight">Recent Runs</h2>
+        <div>
+          <h2 className="text-2xl font-bold text-slate-100">Overview</h2>
+          <p className="text-sm text-slate-500 mt-1">Your AI testing platform at a glance.</p>
+        </div>
+        <Link href="/executions" className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium rounded-lg transition-colors">
+          <Play className="w-4 h-4 fill-current" /> New Test Run
+        </Link>
       </div>
 
+      {/* Stat Cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {stats.map((s) => (
+          <div key={s.label} className={`rounded-xl border ${s.border} ${s.bg} p-5 space-y-3`}>
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">{s.label}</p>
+              <s.icon className={`w-4 h-4 ${s.color}`} />
+            </div>
+            <p className={`text-4xl font-bold ${s.color}`}>{s.value}</p>
+          </div>
+        ))}
+      </div>
+
+      {/* Pass Rate Bar */}
+      <div className="rounded-xl border border-slate-800 bg-slate-900/20 p-6 space-y-3">
+        <div className="flex items-center justify-between">
+          <p className="text-sm font-semibold text-slate-300">Overall Pass Rate</p>
+          <p className="text-2xl font-bold text-slate-100">{passRate}%</p>
+        </div>
+        <div className="w-full h-3 bg-slate-800 rounded-full overflow-hidden">
+          <div
+            className="h-full rounded-full transition-all duration-700"
+            style={{
+              width: `${passRate}%`,
+              background: passRate >= 70 ? '#22c55e' : passRate >= 40 ? '#eab308' : '#ef4444'
+            }}
+          />
+        </div>
+        <p className="text-xs text-slate-500">{passed} passed · {failed} failed · {total} total runs</p>
+      </div>
+
+      {/* Recent Runs */}
       <div className="rounded-xl border border-slate-800 bg-slate-900/20 overflow-hidden">
-        <table className="w-full text-sm text-left">
-          <thead className="bg-slate-900/50 border-b border-slate-800 text-xs uppercase tracking-wider text-slate-500 font-semibold">
-            <tr>
-              <th className="px-6 py-4 font-medium">Status</th>
-              <th className="px-6 py-4 font-medium">Test Name</th>
-              <th className="px-6 py-4 font-medium">Device</th>
-              <th className="px-6 py-4 font-medium">Run ID</th>
-              <th className="px-6 py-4 font-medium text-right">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-800/60">
-            {runs.length === 0 ? (
-              <tr>
-                <td colSpan={5} className="px-6 py-12 text-center text-slate-500">
-                  No execution runs found. Run 'barely run' to start testing.
-                </td>
-              </tr>
-            ) : (
-              runs.map((run: any) => (
-                <tr key={run.id} className="hover:bg-slate-800/20 transition-colors group">
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    {run.status === "pending" && (
-                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-yellow-500/10 text-yellow-500 border border-yellow-500/20">
-                        ⏳ Pending
-                      </span>
-                    )}
-                    {run.status === "running" && (
-                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-blue-500/10 text-blue-400 border border-blue-500/20">
-                        <span className="animate-pulse">🔄</span> Running...
-                      </span>
-                    )}
-                    {run.status === "completed" && run.success && (
-                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-green-500/10 text-green-400 border border-green-500/20">
-                        <CheckCircle2 className="w-3.5 h-3.5" /> Pass
-                      </span>
-                    )}
-                    {run.status === "completed" && !run.success && (
-                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-red-500/10 text-red-400 border border-red-500/20">
-                        <XCircle className="w-3.5 h-3.5" /> Fail
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-6 py-4 font-medium text-slate-200">{run.name}</td>
-                  <td className="px-6 py-4">
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono font-medium bg-slate-800 text-slate-400 border border-slate-700 uppercase">
-                      {run.device || 'desktop'}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 font-mono text-xs text-slate-500">{run.id}</td>
-                  <td className="px-6 py-4 text-right">
-                    {run.status === "completed" && (
-                      <Link href={`/runs/${run.id}`} className="inline-flex items-center gap-1 text-blue-400 hover:text-blue-300 font-medium transition-colors opacity-0 group-hover:opacity-100">
-                        View Audit <ArrowRight className="w-4 h-4" />
-                      </Link>
-                    )}
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
+        <div className="px-6 py-4 border-b border-slate-800 flex items-center justify-between">
+          <p className="text-sm font-semibold text-slate-300">Recent Runs</p>
+          <Link href="/executions" className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1">
+            View all <ArrowRight className="w-3 h-3" />
+          </Link>
+        </div>
+        {recentRuns.length === 0 ? (
+          <div className="px-6 py-12 text-center text-slate-500 text-sm">
+            No runs yet. <Link href="/executions" className="text-blue-400 hover:underline">Start your first test →</Link>
+          </div>
+        ) : (
+          <div className="divide-y divide-slate-800/60">
+            {recentRuns.map((run: any) => (
+              <div key={run.id} className="px-6 py-3 flex items-center gap-4 hover:bg-slate-800/20 transition-colors group">
+                <div className="flex-shrink-0">
+                  {run.status === 'completed' && run.success && <CheckCircle2 className="w-4 h-4 text-green-400" />}
+                  {run.status === 'completed' && !run.success && <XCircle className="w-4 h-4 text-red-400" />}
+                  {run.status === 'running' && <span className="animate-pulse inline-block w-4 h-4 text-blue-400">🔄</span>}
+                  {run.status === 'pending' && <Clock className="w-4 h-4 text-yellow-500" />}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-slate-200 truncate">{run.name || run.id}</p>
+                  <p className="text-xs text-slate-500 font-mono truncate">{run.id}</p>
+                </div>
+                <span className="text-[10px] font-mono font-medium px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 border border-slate-700 uppercase flex-shrink-0">
+                  {run.device || 'desktop'}
+                </span>
+                {run.status === 'completed' && (
+                  <Link href={`/runs/${run.id}`} className="text-blue-400 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+                    <ArrowRight className="w-4 h-4" />
+                  </Link>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
