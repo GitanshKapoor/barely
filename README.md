@@ -1,7 +1,5 @@
 <div align="center">
 
-<img src="assets/banner.png" alt="Barely Banner" width="100%" />
-
 <br/>
 
 <img src="assets/logo.png" alt="Barely Logo" width="180" />
@@ -20,6 +18,8 @@
 ---
 
 Barely is an open-source AI agent designed to replace manual QA testing. Write your test goals in plain English, and Barely's AI agent will autonomously execute them via Playwright, generate professional deliverables, and file bug tickets. 
+
+<img src="assets/banner.png" alt="Barely Banner" width="100%" />
 
 ## 🌟 What is Barely?
 
