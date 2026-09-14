@@ -3,6 +3,7 @@ import uuid
 import datetime
 from pathlib import Path
 from fastapi import FastAPI, BackgroundTasks, HTTPException
+from barely_core.db import SessionLocal, RunRecord, init_db
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -18,47 +19,60 @@ app.add_middleware(
 
 runs_dir = Path(".barely/runs")
 queue_dir = Path(".barely/queue/pending")
+goals_dir = Path(".barely/goals")
 
-for d in [runs_dir, queue_dir]:
+for d in [runs_dir, queue_dir, goals_dir]:
     d.mkdir(parents=True, exist_ok=True)
 
 app.mount("/static/runs", StaticFiles(directory=".barely/runs"), name="runs")
 
 class RunRequest(BaseModel):
-    goal_file: str
+    url: str
+    goal_text: str
+    device: str = "desktop"
 
 @app.get("/api/runs")
 def list_runs():
-    runs = []
-    for run_folder in runs_dir.iterdir():
-        if run_folder.is_dir():
-            result_file = run_folder / "result.json"
-            if result_file.exists():
-                try:
-                    data = json.loads(result_file.read_text())
-                    data["id"] = run_folder.name
-                    runs.append(data)
-                except Exception:
-                    pass
-    runs.sort(key=lambda x: x["id"], reverse=True)
-    return {"runs": runs}
-
-@app.get("/api/runs/{run_id}")
-def get_run(run_id: str):
-    result_file = runs_dir / run_id / "result.json"
-    if result_file.exists():
-        return json.loads(result_file.read_text())
-    raise HTTPException(status_code=404, detail="Run not found")
+    db = SessionLocal()
+    try:
+        records = db.query(RunRecord).order_by(RunRecord.created_at.desc()).all()
+        runs = []
+        for r in records:
+            runs.append({
+                "id": r.id,
+                "goal": r.goal,
+                "status": r.status,
+                "success": r.success,
+                "failure_reason": r.failure_reason
+            })
+        return {"runs": runs}
+    finally:
+        db.close()
 
 @app.post("/api/runs")
 def trigger_run(req: RunRequest):
-    """Phase 4: API pushes the execution job to the Queue for the Worker to pick up."""
     job_id = f"job_{uuid.uuid4().hex[:8]}"
+    
+    # 1. DB Save
+    db = SessionLocal()
+    try:
+        new_run = RunRecord(id=job_id, goal=req.goal_text, status="pending")
+        db.add(new_run)
+        db.commit()
+    finally:
+        db.close()
+        
+    # Generate the Markdown Goal File dynamically from the UI Form
+    goal_file = goals_dir / f"{job_id}.md"
+    markdown_content = f"---\nname: \"Dynamic UI Run {job_id}\"\n---\n{req.goal_text}"
+    goal_file.write_text(markdown_content)
+
     job_payload = {
         "job_id": job_id,
-        "goal_file": req.goal_file,
-        "status": "pending",
-        "timestamp": datetime.datetime.now().isoformat()
+        "goal_file": str(goal_file),
+        "start_url": req.url,
+        "device": req.device,
     }
+    
     (queue_dir / f"{job_id}.json").write_text(json.dumps(job_payload))
     return {"message": "Job queued successfully", "job_id": job_id}

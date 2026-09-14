@@ -1,15 +1,20 @@
 [project]
 name = "barely-core"
 version = "0.1.0"
-requires-python = ">=3.12"
+requires-python = ">=3.9"
 dependencies = [
     "playwright>=1.47.0",
     "litellm>=1.44.0",
     "pydantic>=2.9.2",
     "pyyaml>=6.0.2",
     "markdown>=3.7",
-    "Pillow>=10.4.0"
+    "Pillow>=10.4.0",
+    "sqlalchemy",
+    "psycopg2-binary"
 ]
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/barely_core"]

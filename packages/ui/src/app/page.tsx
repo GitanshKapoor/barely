@@ -1,5 +1,7 @@
 import Link from 'next/link';
+import NewRunForm from "../components/NewRunForm";
 import { ArrowRight, CheckCircle2, XCircle } from 'lucide-react';
+import AutoRefresher from "../components/AutoRefresher";
 
 async function getRuns() {
   try {
@@ -17,7 +19,9 @@ export default async function Home() {
 
   return (
     <div className="max-w-6xl mx-auto space-y-6">
+      <AutoRefresher />
       <div className="flex items-center justify-between">
+        <NewRunForm />
         <h2 className="text-xl font-semibold text-slate-100 tracking-tight">Recent Runs</h2>
       </div>
 
@@ -42,11 +46,22 @@ export default async function Home() {
               runs.map((run: any) => (
                 <tr key={run.id} className="hover:bg-slate-800/20 transition-colors group">
                   <td className="px-6 py-4 whitespace-nowrap">
-                    {run.success ? (
+                    {run.status === "pending" && (
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-yellow-500/10 text-yellow-500 border border-yellow-500/20">
+                        ⏳ Pending
+                      </span>
+                    )}
+                    {run.status === "running" && (
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-blue-500/10 text-blue-400 border border-blue-500/20">
+                        <span className="animate-pulse">🔄</span> Running...
+                      </span>
+                    )}
+                    {run.status === "completed" && run.success && (
                       <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-green-500/10 text-green-400 border border-green-500/20">
                         <CheckCircle2 className="w-3.5 h-3.5" /> Pass
                       </span>
-                    ) : (
+                    )}
+                    {run.status === "completed" && !run.success && (
                       <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-red-500/10 text-red-400 border border-red-500/20">
                         <XCircle className="w-3.5 h-3.5" /> Fail
                       </span>
@@ -55,9 +70,11 @@ export default async function Home() {
                   <td className="px-6 py-4 font-mono text-xs text-slate-400">{run.id}</td>
                   <td className="px-6 py-4 font-medium text-slate-200">{run.goal}</td>
                   <td className="px-6 py-4 text-right">
-                    <Link href={`/runs/${run.id}`} className="inline-flex items-center gap-1 text-blue-400 hover:text-blue-300 font-medium transition-colors opacity-0 group-hover:opacity-100">
-                      View Audit <ArrowRight className="w-4 h-4" />
-                    </Link>
+                    {run.status === "completed" && (
+                      <Link href={`/runs/${run.id}`} className="inline-flex items-center gap-1 text-blue-400 hover:text-blue-300 font-medium transition-colors opacity-0 group-hover:opacity-100">
+                        View Audit <ArrowRight className="w-4 h-4" />
+                      </Link>
+                    )}
                   </td>
                 </tr>
               ))

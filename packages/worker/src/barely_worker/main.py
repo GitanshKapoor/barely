@@ -1,6 +1,7 @@
 import time
 import json
 import logging
+import os
 from pathlib import Path
 from barely_core.parser.goal_parser import GoalParser
 from barely_core.browser.engine import BrowserEngine
@@ -12,7 +13,7 @@ logger = logging.getLogger("barely_worker")
 def process_job(job_file: Path):
     try:
         job = json.loads(job_file.read_text())
-        logger.info(f"Picked up job: {job['job_id']}")
+        logger.info(f"Picked up job: {job['job_id']} targeting {job.get('start_url')}")
         
         goal_path = Path(job["goal_file"])
         if not goal_path.exists():
@@ -21,22 +22,29 @@ def process_job(job_file: Path):
 
         parsed_goal = GoalParser.parse(goal_path)
         
-        # Always run Headless on worker nodes
-        engine = BrowserEngine(headless=True)
-        agent = AgentLoop(engine=engine, model="groq/llama3-70b-8192")
+        # Read HEADLESS from environment (default to True for Docker, False for local)
+        is_headless = os.getenv("HEADLESS", "true").lower() == "true"
         
-        logger.info(f"Executing goal: {parsed_goal.name}")
-        agent.run(parsed_goal, start_url="https://example.com")
+        # Initialize browser
+        engine = BrowserEngine(headless=is_headless)
+        
+        agent = AgentLoop(engine=engine, model="anthropic/claude-3-5-sonnet-20240620", run_id=job.get("job_id"))
+        
+        logger.info(f"Executing goal: {job['job_id']}")
+        agent.run(parsed_goal, start_url=job.get("start_url", "https://google.com"))
         logger.info(f"Job {job['job_id']} completed successfully.")
         
     except Exception as e:
         logger.error(f"Job {job_file.name} failed: {e}")
+        Path(f".barely/runs/{job.get('job_id')}_error.txt").write_text(str(e))
     finally:
         # Delete job from queue when done
         job_file.unlink(missing_ok=True)
 
+from barely_core.db import init_db
+
 def start_worker():
-    """Polls the queue directory for new jobs and executes them."""
+    init_db()
     queue_dir = Path(".barely/queue/pending")
     queue_dir.mkdir(parents=True, exist_ok=True)
     
@@ -45,7 +53,6 @@ def start_worker():
     while True:
         jobs = list(queue_dir.glob("*.json"))
         if jobs:
-            # Pick the oldest job
             jobs.sort(key=lambda x: x.stat().st_mtime)
             process_job(jobs[0])
         else:

@@ -1,11 +1,33 @@
 version: '3.8'
 
 services:
+  barely-db:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: barely
+      POSTGRES_PASSWORD: barelypassword
+      POSTGRES_DB: barelydb
+    ports:
+      - "5432:5432"
+    volumes:
+      - barely_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U barely"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
   barely-api:
+    depends_on:
+      barely-db:
+        condition: service_healthy
+    environment:
+      - DATABASE_URL=postgresql://barely:barelypassword@barely-db:5432/barelydb
     build: 
       context: .
       dockerfile: Dockerfile
-    command: ["uv", "run", "--directory", "packages/api", "uvicorn", "barely_api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+      target: api
+    command: ["/opt/.venv/bin/uvicorn", "barely_api.main:app", "--host", "0.0.0.0", "--port", "8000", "--app-dir", "packages/api/src"]
     ports:
       - "8000:8000"
     volumes:
@@ -14,16 +36,22 @@ services:
       - .env
 
   barely-worker:
+    depends_on:
+      barely-db:
+        condition: service_healthy
+    environment:
+      - DATABASE_URL=postgresql://barely:barelypassword@barely-db:5432/barelydb
     build: 
       context: .
       dockerfile: Dockerfile
-    command: ["uv", "run", "--directory", "packages/worker", "python", "src/barely_worker/main.py"]
+      target: worker
+    working_dir: /workspace
+    command: ["/opt/.venv/bin/python3", "packages/worker/src/barely_worker/main.py"]
     volumes:
       - ./:/workspace
     env_file:
       - .env
 
-  # The UI uses a node-based image for production build
   barely-ui:
     image: node:20-alpine
     working_dir: /workspace/packages/ui
@@ -32,3 +60,7 @@ services:
       - "3000:3000"
     volumes:
       - ./:/workspace
+      - /workspace/packages/ui/node_modules
+
+volumes:
+  barely_pgdata:

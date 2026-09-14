@@ -1,7 +1,7 @@
 [project]
 name = "barely-cli"
 version = "0.1.0"
-requires-python = ">=3.12"
+requires-python = ">=3.9"
 dependencies = [
     "typer>=0.12.3",
     "barely-core",
@@ -19,3 +19,6 @@ build-backend = "hatchling.build"
 [tool.uv.sources]
 barely-core = { workspace = true }
 barely-reporter-pdf = { workspace = true }
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/barely_cli"]
