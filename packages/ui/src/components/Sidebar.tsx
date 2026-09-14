@@ -18,7 +18,7 @@ export default function Sidebar() {
     <aside className="w-64 flex-shrink-0 border-r border-slate-800/60 bg-slate-950/50 flex flex-col">
       <div className="h-16 flex items-center px-4 border-b border-slate-800/60">
         <Link href="/" className="flex items-center gap-2.5">
-          <Image src="/mascot.png" alt="Barely Mascot" width={36} height={36} className="rounded-md object-contain" />
+          <Image src="/mascot.png" alt="Barely Mascot" width={36} height={36} className="rounded-md object-contain -scale-x-100" />
           <span className="text-slate-100 font-bold text-xl tracking-tight">Barely!</span>
         </Link>
       </div>
