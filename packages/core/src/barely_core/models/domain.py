@@ -21,3 +21,10 @@ class WorkspaceConfig(BaseModel):
     default_url: Optional[str] = None
     ai_provider: str = "groq"
     ai_model: str = "llama3-70b-8192"
+
+class RunResult(BaseModel):
+    """Represents the final outcome of an Agent execution."""
+    goal_name: str
+    success: bool
+    failure_reason: Optional[str] = None
+    step_history: List[str] = Field(default_factory=list)

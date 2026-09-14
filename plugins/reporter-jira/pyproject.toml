@@ -1,15 +1,11 @@
 [project]
-name = "barely-cli"
+name = "barely-reporter-jira"
 version = "0.1.0"
 requires-python = ">=3.12"
 dependencies = [
-    "typer>=0.12.3",
-    "barely-core",
-    "python-dotenv"
+    "requests",
+    "barely-core"
 ]
-
-[project.scripts]
-barely = "barely_cli.main:app"
 
 [build-system]
 requires = ["hatchling"]

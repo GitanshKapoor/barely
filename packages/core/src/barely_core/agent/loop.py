@@ -3,7 +3,7 @@ import logging
 from typing import List, Dict, Any
 import litellm
 
-from barely_core.models.domain import Goal
+from barely_core.models.domain import Goal, RunResult
 from barely_core.browser.engine import BrowserEngine
 from barely_core.agent.cache import ActionCache
 
@@ -35,21 +35,23 @@ class AgentLoop:
         self.model = model
         self.cache = ActionCache()
 
-    def run(self, goal: Goal, start_url: str):
+    def run(self, goal: Goal, start_url: str) -> RunResult:
         """Executes the autonomous Plan -> Act -> Observe loop."""
         print(f"\n🚀 Starting Goal: {goal.name}")
         self.engine.start()
         
+        step_history = []
+        
         try:
             print(f"🌐 Navigating to {start_url}")
             self.engine.navigate(start_url)
+            step_history.append(f"Navigated to {start_url}")
             
             step_count = 0
             max_steps = 20
             
             while step_count < max_steps:
                 step_count += 1
-                print(f"\n--- Step {step_count} ---")
                 
                 # 1. OBSERVE
                 dom_elements = self.engine.extract_dom()
@@ -58,46 +60,47 @@ class AgentLoop:
                 cached_action = self.cache.get_action(goal.name, dom_elements)
                 
                 if cached_action:
-                    print("⚡ Cache Hit: Bypassing LLM inference.")
+                    print(f"\n--- Step {step_count} [⚡ CACHED] ---")
                     action_payload = cached_action
                 else:
-                    print("🧠 Cache Miss: Querying LLM...")
+                    print(f"\n--- Step {step_count} [🧠 AI] ---")
                     prompt = self._build_prompt(goal, dom_elements)
                     action_payload = self._call_llm(prompt)
-                    print(f"🧠 Thought: {action_payload.get('thought')}")
+                    print(f"Thought: {action_payload.get('thought')}")
                 
                 # 3. ACT
                 action = action_payload.get('action')
                 try:
                     self._execute_action(action, action_payload)
+                    step_history.append(f"Executed: {action} on {action_payload.get('element_id', '')} {action_payload.get('text', '')}")
                     
-                    # If successful and it was an LLM decision, save it to cache
-                    if not cached_action:
+                    if not cached_action and action not in ["fail", "finish"]:
                         self.cache.save_action(goal.name, dom_elements, action_payload)
                         
                 except Exception as e:
                     logger.warning(f"Action execution failed: {e}")
                     if cached_action:
-                        print("⚠️ Cached action failed. Invalidating cache and falling back to LLM...")
+                        print("⚠️ Cached action failed. Invalidating cache and forcing LLM fallback...")
                         self.cache.invalidate(goal.name, dom_elements)
-                        # and continue the loop to let the LLM try again.
                         continue
                     else:
                         print("❌ Fatal Execution Error.")
-                        break
+                        return RunResult(goal_name=goal.name, success=False, failure_reason=str(e), step_history=step_history)
 
                 if action == "finish":
                     print("✅ Goal Accomplished Successfully!")
-                    break
+                    return RunResult(goal_name=goal.name, success=True, step_history=step_history)
                 elif action == "fail":
-                    print(f"❌ Test Failed: {action_payload.get('reasoning')}")
-                    break
+                    reason = action_payload.get('reasoning', 'Unknown AI Failure')
+                    print(f"❌ Test Failed: {reason}")
+                    return RunResult(goal_name=goal.name, success=False, failure_reason=reason, step_history=step_history)
+                    
+            return RunResult(goal_name=goal.name, success=False, failure_reason="Max steps (20) exceeded", step_history=step_history)
                     
         finally:
             self.engine.stop()
 
     def _execute_action(self, action: str, payload: Dict[str, Any]):
-        """Executes the mapped action via the BrowserEngine."""
         if action == "click":
             print(f"🖱️  Action: Click element [{payload.get('element_id')}]")
             self.engine.click_element(payload.get('element_id'))
