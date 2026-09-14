@@ -57,6 +57,11 @@ class BrowserEngine:
         self.page.locator(selector).scroll_into_view_if_needed()
         self.page.locator(selector).fill(text)
 
+    def take_screenshot(self, path: str):
+        """Takes a full page screenshot."""
+        self.page.screenshot(path=path, full_page=True)
+
+
     def stop(self):
         """Cleans up browser resources."""
         if self._context:

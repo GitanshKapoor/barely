@@ -1,9 +1,11 @@
 import json
 import logging
+import datetime
+from pathlib import Path
 from typing import List, Dict, Any
 import litellm
 
-from barely_core.models.domain import Goal, RunResult
+from barely_core.models.domain import Goal, RunResult, StepRecord
 from barely_core.browser.engine import BrowserEngine
 from barely_core.agent.cache import ActionCache
 
@@ -36,16 +38,26 @@ class AgentLoop:
         self.cache = ActionCache()
 
     def run(self, goal: Goal, start_url: str) -> RunResult:
-        """Executes the autonomous Plan -> Act -> Observe loop."""
         print(f"\n🚀 Starting Goal: {goal.name}")
         self.engine.start()
         
         step_history = []
+        rich_history = []
+        
+        # Setup run directory for screenshots
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        run_dir = Path(f".barely/runs/{goal.name}_{timestamp}")
+        run_dir.mkdir(parents=True, exist_ok=True)
         
         try:
             print(f"🌐 Navigating to {start_url}")
             self.engine.navigate(start_url)
+            
+            # Initial screenshot
+            snap_path = str(run_dir / "step_0.png")
+            self.engine.take_screenshot(snap_path)
             step_history.append(f"Navigated to {start_url}")
+            rich_history.append(StepRecord(description=f"Navigated to {start_url}", screenshot_path=snap_path))
             
             step_count = 0
             max_steps = 20
@@ -53,10 +65,7 @@ class AgentLoop:
             while step_count < max_steps:
                 step_count += 1
                 
-                # 1. OBSERVE
                 dom_elements = self.engine.extract_dom()
-                
-                # 2. PLAN (Check Cache First)
                 cached_action = self.cache.get_action(goal.name, dom_elements)
                 
                 if cached_action:
@@ -68,11 +77,14 @@ class AgentLoop:
                     action_payload = self._call_llm(prompt)
                     print(f"Thought: {action_payload.get('thought')}")
                 
-                # 3. ACT
                 action = action_payload.get('action')
                 try:
-                    self._execute_action(action, action_payload)
-                    step_history.append(f"Executed: {action} on {action_payload.get('element_id', '')} {action_payload.get('text', '')}")
+                    desc = self._execute_action(action, action_payload)
+                    snap_path = str(run_dir / f"step_{step_count}.png")
+                    self.engine.take_screenshot(snap_path)
+                    
+                    step_history.append(desc)
+                    rich_history.append(StepRecord(description=desc, screenshot_path=snap_path))
                     
                     if not cached_action and action not in ["fail", "finish"]:
                         self.cache.save_action(goal.name, dom_elements, action_payload)
@@ -85,32 +97,42 @@ class AgentLoop:
                         continue
                     else:
                         print("❌ Fatal Execution Error.")
-                        return RunResult(goal_name=goal.name, success=False, failure_reason=str(e), step_history=step_history)
+                        return RunResult(goal_name=goal.name, success=False, failure_reason=str(e), step_history=step_history, rich_history=rich_history, run_dir=str(run_dir))
 
                 if action == "finish":
                     print("✅ Goal Accomplished Successfully!")
-                    return RunResult(goal_name=goal.name, success=True, step_history=step_history)
+                    return RunResult(goal_name=goal.name, success=True, step_history=step_history, rich_history=rich_history, run_dir=str(run_dir))
                 elif action == "fail":
                     reason = action_payload.get('reasoning', 'Unknown AI Failure')
                     print(f"❌ Test Failed: {reason}")
-                    return RunResult(goal_name=goal.name, success=False, failure_reason=reason, step_history=step_history)
+                    return RunResult(goal_name=goal.name, success=False, failure_reason=reason, step_history=step_history, rich_history=rich_history, run_dir=str(run_dir))
                     
-            return RunResult(goal_name=goal.name, success=False, failure_reason="Max steps (20) exceeded", step_history=step_history)
+            return RunResult(goal_name=goal.name, success=False, failure_reason="Max steps (20) exceeded", step_history=step_history, rich_history=rich_history, run_dir=str(run_dir))
                     
         finally:
             self.engine.stop()
 
-    def _execute_action(self, action: str, payload: Dict[str, Any]):
+    def _execute_action(self, action: str, payload: Dict[str, Any]) -> str:
         if action == "click":
-            print(f"🖱️  Action: Click element [{payload.get('element_id')}]")
+            desc = f"Clicked element [{payload.get('element_id')}]"
+            print(f"🖱️  Action: {desc}")
             self.engine.click_element(payload.get('element_id'))
+            return desc
         elif action == "type":
-            print(f"⌨️  Action: Type '{payload.get('text')}' into [{payload.get('element_id')}]")
+            desc = f"Typed '{payload.get('text')}' into [{payload.get('element_id')}]"
+            print(f"⌨️  Action: {desc}")
             self.engine.type_element(payload.get('element_id'), payload.get('text'))
+            return desc
         elif action == "navigate":
-            print(f"🌐 Action: Navigate to {payload.get('text')}")
+            desc = f"Navigated to {payload.get('text')}"
+            print(f"🌐 Action: {desc}")
             self.engine.navigate(payload.get('text'))
-        elif action not in ["finish", "fail"]:
+            return desc
+        elif action == "finish":
+            return "Agent marked goal as finished."
+        elif action == "fail":
+            return f"Agent marked goal as failed: {payload.get('reasoning')}"
+        else:
             raise ValueError(f"Unknown action: {action}")
 
     def _build_prompt(self, goal: Goal, dom: List[Dict[str, Any]]) -> str:
