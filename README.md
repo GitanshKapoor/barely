@@ -34,18 +34,27 @@ Traditional end-to-end testing requires teams to write hundreds of lines of brit
 
 You define the *goal* and the *assertions* in plain English. Barely figures out the *steps* to achieve it.
 
-### Core Capabilities:
-- 🧠 **Autonomous AI Execution:** Leverages multi-modal LLMs (Anthropic Claude 3.5 Sonnet, OpenAI, Gemini, Groq) via LiteLLM to analyze the live DOM and execute steps in real-time.
+### 🌟 Release 1.0 "Baby Kangaroo" Core Capabilities:
+- 🧠 **Autonomous AI Execution:** Leverages multi-modal LLMs (Anthropic Claude 3.5 Sonnet, OpenAI, Gemini, Groq) via LiteLLM to analyze the live DOM and execute steps via Playwright.
+- ⚡ **Action Plan Caching:** Once the AI figures out a test, it caches the exact actions directly in PostgreSQL. Subsequent runs cost $0 and execute in milliseconds.
 - 🏷️ **Test Suite Tags & Classification:** Categorize test runs (`#smoke`, `#regression`, `#auth`, `#p0`, `#e2e`) with quick-toggle presets and multi-suite filtering.
-- 🎯 **Strict Mode & Autonomous Healing:** Toggle between strict locator uniqueness mode and intelligent autonomous self-healing.
-- 🖼️ **Autonomous Visual Baselines:** Automatically capture golden viewport snapshots across Desktop, Tablet, iOS, and Android device profiles.
-- ⚡ **Zero-Disk Architecture & Action Caching:** 100% of runs, logs, screenshots, and cached action plans persist directly in PostgreSQL. Cached runs execute in milliseconds at $0 model cost.
+- 🎯 **Strict Mode & Autonomous Auto-Healing:** Strict locator uniqueness enforcement or resilient autonomous auto-healing for dynamic selectors.
+- 🖼️ **Autonomous Visual Baselines:** Capture and preview golden UI viewport snapshots across Desktop, Tablet, iOS, and Android device profiles.
 - 📊 **Executive PDF Reports & Artifact Bundles:** One-click export of print-ready multi-page PDF audit reports and downloadable `.zip` bundles (`REPORT.md`, `report.html`, `run_data.json`).
-- 🔄 **Live CI/CD Audit View:** Real-time console log streaming, step-by-step DOM timelines, and one-click re-run & reconfigure modal.
+- 🔄 **Live CI/CD Audit Timeline:** Real-time console log streaming, step-by-step DOM timelines, and one-click re-run & reconfigure modal.
+- 🗄️ **Zero-Disk Runtime Architecture:** 100% of runs, logs, screenshots, and cached action plans persist directly in PostgreSQL.
 
-## 🚀 Quickstart
+## 🗺️ Coming in Release 2.0 (Roadmap)
+- 🐛 **Automated Defect Management (Jira / GitHub Issues):** Auto-create rich bug tickets with reproduction steps, error logs, and failure screenshots.
+- 🔐 **Enterprise Secrets Management:** Native integration with AWS Secrets Manager, HashiCorp Vault, and encrypted secret stores so credentials are never hardcoded.
+- 🤝 **Distributed Multi-Agent Fleet:** Coordinated fleet of parallel autonomous agents executing across sharded test suites.
+- 🔔 **Real-Time Webhook & Slack Alerts:** Instant notifications on test completions, visual regressions, and pipeline failures.
 
-### Option A: Run Full Stack with Docker Compose (Recommended)
+## 🚀 Getting Started
+
+Barely is built for speed and simplicity. It can be launched instantly with Docker Compose or installed locally as a Python package.
+
+### Option A: Quickstart with Docker Compose (Recommended)
 
 Clone the repository and launch the database, control plane API, background worker, and Next.js UI in seconds:
 
@@ -65,13 +74,13 @@ docker compose up -d
 uv pip install barely
 ```
 
-### 2. Initialize a Workspace
+#### 1. Initialize a Workspace
 Initialize a `.barely` workspace in your project repository:
 ```bash
 barely init
 ```
 
-### 3. Write a Test Goal
+#### 2. Write a Test Goal
 Create a file at `.barely/goals/checkout.md`:
 ```markdown
 ---
@@ -85,7 +94,7 @@ timeout: 120
 4. Verify the cart badge displays "1"
 ```
 
-### 4. Run the Agent
+#### 3. Run the Agent
 ```bash
 barely run --url https://staging.myapp.com --goal .barely/goals/checkout.md
 ```
