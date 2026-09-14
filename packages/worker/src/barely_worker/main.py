@@ -9,9 +9,9 @@ from barely_core.parser.goal_parser import Goal
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger("barely_worker")
 
-def process_job(run_id: str, test_name: str, goal_text: str, start_url: str, device: str):
+def process_job(run_id: str, test_name: str, goal_text: str, start_url: str, device: str, strict_mode: bool = False):
     try:
-        logger.info(f"Picked up job: {run_id} ({test_name}) targeting {start_url}")
+        logger.info(f"Picked up job: {run_id} ({test_name}) targeting {start_url} (strict_mode={strict_mode})")
         
         parsed_goal = Goal(
             name=test_name or "Web Test",
@@ -21,7 +21,7 @@ def process_job(run_id: str, test_name: str, goal_text: str, start_url: str, dev
         
         is_headless = os.getenv("HEADLESS", "true").lower() == "true"
         
-        engine = BrowserEngine(headless=is_headless, device=device)
+        engine = BrowserEngine(headless=is_headless, device=device, strict_mode=strict_mode)
         agent = AgentLoop(engine=engine, model="anthropic/claude-sonnet-4-5", run_id=run_id)
         
         logger.info(f"Executing goal: {run_id}")
@@ -60,9 +60,10 @@ def start_worker():
                 goal_text = job.goal
                 start_url = job.start_url
                 device = job.device
+                strict_mode = bool(getattr(job, "strict_mode", False))
                 db.close()
                 
-                process_job(run_id, test_name, goal_text, start_url, device)
+                process_job(run_id, test_name, goal_text, start_url, device, strict_mode)
             else:
                 db.close()
                 time.sleep(2)

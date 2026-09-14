@@ -13,9 +13,10 @@ class BrowserEngine:
     TABLET_VIEWPORT = {"width": 768, "height": 1024} # iPad
     DESKTOP_VIEWPORT = {"width": 1280, "height": 720}
 
-    def __init__(self, headless: bool = True, device: str = "desktop"):
+    def __init__(self, headless: bool = True, device: str = "desktop", strict_mode: bool = False):
         self.headless = headless
         self.device = device
+        self.strict_mode = strict_mode
         self._playwright = None
         self._browser: Browser = None
         self._context: BrowserContext = None
@@ -66,7 +67,7 @@ class BrowserEngine:
     def click_element(self, element_id: int):
         """Clicks an element based on its generated barely-id."""
         selector = f"[barely-id='{element_id}']"
-        loc = self.page.locator(selector).first
+        loc = self.page.locator(selector) if self.strict_mode else self.page.locator(selector).first
         loc.scroll_into_view_if_needed()
         loc.click()
         try:
@@ -77,7 +78,7 @@ class BrowserEngine:
     def type_element(self, element_id: int, text: str):
         """Types text into an element."""
         selector = f"[barely-id='{element_id}']"
-        loc = self.page.locator(selector).first
+        loc = self.page.locator(selector) if self.strict_mode else self.page.locator(selector).first
         loc.scroll_into_view_if_needed()
         loc.fill(text)
 

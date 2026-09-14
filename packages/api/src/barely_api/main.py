@@ -26,6 +26,7 @@ class RunRequest(BaseModel):
     name: str = ""
     goal_text: str
     device: str = "desktop"
+    strict_mode: bool = False
 
 @app.on_event("startup")
 def startup_event():
@@ -45,7 +46,8 @@ def list_runs():
                 "device": r.device,
                 "status": r.status,
                 "success": r.success,
-                "failure_reason": r.failure_reason
+                "failure_reason": r.failure_reason,
+                "strict_mode": bool(r.strict_mode)
             })
         return {"runs": runs}
     finally:
@@ -69,6 +71,7 @@ def get_run(run_id: str):
             "status": r.status,
             "success": r.success,
             "failure_reason": r.failure_reason,
+            "strict_mode": bool(r.strict_mode),
             "created_at": r.created_at.isoformat() if r.created_at else None,
             "logs": r.logs or "",
             "steps": [{"description": s.description, "thought": s.thought, "screenshot": s.screenshot_base64} for s in steps]
@@ -107,6 +110,7 @@ def trigger_run(req: RunRequest):
             goal=req.goal_text,
             start_url=req.url,
             device=req.device, 
+            strict_mode=req.strict_mode,
             status="pending"
         )
         db.add(new_run)

@@ -20,6 +20,7 @@ class RunRecord(Base):
     failure_reason = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     logs = Column(Text, nullable=True)
+    strict_mode = Column(Boolean, default=False)
     
     steps = relationship("RunStep", back_populates="run", cascade="all, delete-orphan")
 
