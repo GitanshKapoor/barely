@@ -8,8 +8,12 @@ class BrowserEngine:
     Manages Playwright browser sessions and DOM distillation.
     Designed for Enterprise Concurrency (Bottleneck 4) and Speed (Bottleneck 1).
     """
-    def __init__(self, headless: bool = True):
+    MOBILE_VIEWPORT = {"width": 390, "height": 844}
+    DESKTOP_VIEWPORT = {"width": 1280, "height": 720}
+
+    def __init__(self, headless: bool = True, device: str = "desktop"):
         self.headless = headless
+        self.device = device
         self._playwright = None
         self._browser: Browser = None
         self._context: BrowserContext = None
@@ -23,8 +27,15 @@ class BrowserEngine:
         """Initializes the browser."""
         self._playwright = sync_playwright().start()
         self._browser = self._playwright.chromium.launch(headless=self.headless)
+        viewport = self.MOBILE_VIEWPORT if self.device == "mobile" else self.DESKTOP_VIEWPORT
+        user_agent = (
+            "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"
+            if self.device == "mobile" else
+            "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        )
         self._context = self._browser.new_context(
-            viewport={"width": 1280, "height": 720},
+            viewport=viewport,
+            user_agent=user_agent,
             ignore_https_errors=True
         )
         self.page = self._context.new_page()

@@ -31,6 +31,10 @@ class RunRequest(BaseModel):
     goal_text: str
     device: str = "desktop"
 
+@app.on_event("startup")
+def startup_event():
+    init_db()
+
 @app.get("/api/runs")
 def list_runs():
     db = SessionLocal()
@@ -46,6 +50,26 @@ def list_runs():
                 "failure_reason": r.failure_reason
             })
         return {"runs": runs}
+    finally:
+        db.close()
+
+@app.get("/api/runs/{run_id}")
+def get_run(run_id: str):
+    from barely_core.db import RunStep
+    db = SessionLocal()
+    try:
+        r = db.query(RunRecord).filter(RunRecord.id == run_id).first()
+        if not r:
+            raise HTTPException(status_code=404, detail="Run not found")
+        steps = db.query(RunStep).filter(RunStep.run_id == run_id).order_by(RunStep.step_index).all()
+        return {
+            "id": r.id,
+            "goal": r.goal,
+            "status": r.status,
+            "success": r.success,
+            "failure_reason": r.failure_reason,
+            "steps": [{"description": s.description, "screenshot": s.screenshot_path} for s in steps]
+        }
     finally:
         db.close()
 

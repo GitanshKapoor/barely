@@ -25,10 +25,11 @@ def process_job(job_file: Path):
         # Read HEADLESS from environment (default to True for Docker, False for local)
         is_headless = os.getenv("HEADLESS", "true").lower() == "true"
         
-        # Initialize browser
-        engine = BrowserEngine(headless=is_headless)
+        # Initialize browser with correct device profile
+        device = job.get("device", "desktop")
+        engine = BrowserEngine(headless=is_headless, device=device)
         
-        agent = AgentLoop(engine=engine, model="anthropic/claude-3-5-sonnet-20240620", run_id=job.get("job_id"))
+        agent = AgentLoop(engine=engine, model="anthropic/claude-sonnet-4-5", run_id=job.get("job_id"))
         
         logger.info(f"Executing goal: {job['job_id']}")
         agent.run(parsed_goal, start_url=job.get("start_url", "https://google.com"))

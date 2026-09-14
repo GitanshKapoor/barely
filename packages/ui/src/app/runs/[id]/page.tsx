@@ -3,7 +3,8 @@ import { ArrowLeft, PlayCircle } from 'lucide-react';
 
 async function getRunDetails(id: string) {
   try {
-    const res = await fetch(`http://127.0.0.1:8000/api/runs/${id}`, { cache: 'no-store' });
+    const apiUrl = process.env.API_URL || 'http://barely-api:8000';
+    const res = await fetch(`${apiUrl}/api/runs/${id}`, { cache: 'no-store' });
     if (!res.ok) return null;
     return res.json();
   } catch (e) {

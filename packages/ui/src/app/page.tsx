@@ -5,7 +5,8 @@ import AutoRefresher from "../components/AutoRefresher";
 
 async function getRuns() {
   try {
-    const res = await fetch('http://127.0.0.1:8000/api/runs', { cache: 'no-store' });
+    const apiUrl = process.env.API_URL || 'http://barely-api:8000';
+    const res = await fetch(`${apiUrl}/api/runs`, { cache: 'no-store' });
     if (!res.ok) return { runs: [] };
     return res.json();
   } catch (e) {

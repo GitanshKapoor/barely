@@ -34,7 +34,7 @@ Do not include markdown blocks like ```json in your output. Just output the raw 
 """
 
 class AgentLoop:
-    def __init__(self, engine: BrowserEngine, model: str = "anthropic/claude-3-5-sonnet-20240620", run_id: str = None):
+    def __init__(self, engine: BrowserEngine, model: str = "anthropic/claude-sonnet-4-5", run_id: str = None):
         self.engine = engine
         self.model = model
         self.cache = ActionCache()
