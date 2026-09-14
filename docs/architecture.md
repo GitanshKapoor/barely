@@ -22,7 +22,7 @@ graph TD
     Agent <-->|REST| LLM
 ```
 
-## Phase 4: Enterprise Microservices
+## Phase 3-5: Enterprise Microservices
 Designed for massive parallel execution and dashboard management.
 
 ```mermaid
