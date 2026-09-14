@@ -106,6 +106,15 @@ export default function ExecutionsPage() {
                       {run.status === "pending" && <Clock className="w-4 h-4 text-amber-400 flex-shrink-0" />}
                       <span className="truncate max-w-xs">{run.name || run.id}</span>
                     </div>
+                    {run.tags && run.tags.length > 0 && (
+                      <div className="flex items-center gap-1 mt-1.5 pl-6 flex-wrap">
+                        {run.tags.map((tag: string) => (
+                          <span key={tag} className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-slate-800 text-slate-400 border border-slate-700/60">
+                            #{tag}
+                          </span>
+                        ))}
+                      </div>
+                    )}
                   </td>
                   <td className="px-6 py-4">
                     <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-slate-800 text-slate-300 border border-slate-700 uppercase">
@@ -146,7 +155,8 @@ export default function ExecutionsPage() {
                           url: run.start_url || 'https://',
                           goalText: run.goal,
                           device: run.device || 'desktop',
-                          strictMode: Boolean(run.strict_mode)
+                          strictMode: Boolean(run.strict_mode),
+                          tags: run.tags || []
                         }}
                         triggerButton={(openModal) => (
                           <button

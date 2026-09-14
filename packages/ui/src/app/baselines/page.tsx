@@ -33,6 +33,8 @@ interface BaselineSuite {
   status: string;
   success: boolean | null;
   created_at: string | null;
+  strict_mode?: boolean;
+  tags?: string[];
   snapshots_count: number;
   snapshots: Snapshot[];
 }
@@ -138,6 +140,11 @@ export default function BaselinesPage() {
                     <span className="text-[11px] font-semibold text-slate-400 flex items-center gap-1">
                       <Layers className="w-3.5 h-3.5 text-[#0278ff]" /> {suite.snapshots_count} snapshots
                     </span>
+                    {suite.tags && suite.tags.length > 0 && suite.tags.map((tag: string) => (
+                      <span key={tag} className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-slate-800 text-slate-400 border border-slate-700/60">
+                        #{tag}
+                      </span>
+                    ))}
                   </div>
                   {suite.start_url && (
                     <a 
@@ -157,7 +164,9 @@ export default function BaselinesPage() {
                       name: suite.name,
                       url: suite.start_url || 'https://',
                       goalText: suite.goal,
-                      device: suite.device
+                      device: suite.device,
+                      strictMode: Boolean(suite.strict_mode),
+                      tags: suite.tags || []
                     }}
                     triggerButton={(open) => (
                       <button

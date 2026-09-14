@@ -8,6 +8,8 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
+from typing import Optional, List
+
 from barely_api.report import router as report_router
 
 app = FastAPI(title="Barely Control Plane API")
@@ -27,6 +29,7 @@ class RunRequest(BaseModel):
     goal_text: str
     device: str = "desktop"
     strict_mode: bool = False
+    tags: Optional[List[str]] = []
 
 @app.on_event("startup")
 def startup_event():
@@ -47,7 +50,8 @@ def list_runs():
                 "status": r.status,
                 "success": r.success,
                 "failure_reason": r.failure_reason,
-                "strict_mode": bool(r.strict_mode)
+                "strict_mode": bool(r.strict_mode),
+                "tags": [t for t in r.tags.split(",") if t] if r.tags else []
             })
         return {"runs": runs}
     finally:
@@ -89,6 +93,8 @@ def list_baselines():
                 "start_url": r.start_url,
                 "status": r.status,
                 "success": r.success,
+                "strict_mode": bool(r.strict_mode),
+                "tags": [t for t in r.tags.split(",") if t] if r.tags else [],
                 "created_at": r.created_at.isoformat() if r.created_at else None,
                 "snapshots_count": len(steps),
                 "snapshots": [
@@ -125,6 +131,7 @@ def get_run(run_id: str):
             "success": r.success,
             "failure_reason": r.failure_reason,
             "strict_mode": bool(r.strict_mode),
+            "tags": [t for t in r.tags.split(",") if t] if r.tags else [],
             "created_at": r.created_at.isoformat() if r.created_at else None,
             "logs": r.logs or "",
             "steps": [{"description": s.description, "thought": s.thought, "screenshot": s.screenshot_base64} for s in steps]
@@ -154,6 +161,7 @@ def cancel_run(run_id: str):
 @app.post("/api/runs")
 def trigger_run(req: RunRequest):
     job_id = f"job_{uuid.uuid4().hex[:8]}"
+    tag_str = ",".join([t.strip().lstrip("#") for t in (req.tags or []) if t.strip()]) if req.tags else None
     
     db = SessionLocal()
     try:
@@ -164,6 +172,7 @@ def trigger_run(req: RunRequest):
             start_url=req.url,
             device=req.device, 
             strict_mode=req.strict_mode,
+            tags=tag_str,
             status="pending"
         )
         db.add(new_run)

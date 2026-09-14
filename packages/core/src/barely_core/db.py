@@ -21,6 +21,7 @@ class RunRecord(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     logs = Column(Text, nullable=True)
     strict_mode = Column(Boolean, default=False)
+    tags = Column(String, nullable=True)
     
     steps = relationship("RunStep", back_populates="run", cascade="all, delete-orphan")
 

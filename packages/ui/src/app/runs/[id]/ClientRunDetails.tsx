@@ -15,7 +15,8 @@ import {
   Layers, 
   ExternalLink,
   RotateCw,
-  RotateCcw
+  RotateCcw,
+  Tag
 } from 'lucide-react';
 import NewRunForm from '../../../components/NewRunForm';
 
@@ -35,6 +36,7 @@ interface RunData {
   success: boolean | null;
   failure_reason: string | null;
   strict_mode?: boolean;
+  tags?: string[];
   created_at: string | null;
   logs: string;
   steps: RunStep[];
@@ -154,6 +156,11 @@ export default function ClientRunDetails({ id }: { id: string }) {
               <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700 uppercase">
                 {run.device || 'desktop'}
               </span>
+              {run.tags && run.tags.length > 0 && run.tags.map((tag: string) => (
+                <span key={tag} className="text-[11px] font-medium font-mono px-2 py-0.5 rounded-full bg-[#0278ff]/10 text-[#0278ff] border border-[#0278ff]/30 flex items-center gap-1">
+                  <Tag className="w-3 h-3 text-[#0278ff]" /> #{tag}
+                </span>
+              ))}
             </div>
             <div className="flex items-center gap-3 text-xs text-slate-400 flex-wrap">
               <span className="font-mono text-slate-500">{run.id}</span>
@@ -174,7 +181,8 @@ export default function ClientRunDetails({ id }: { id: string }) {
               url: run.start_url || 'https://',
               goalText: run.goal,
               device: run.device || 'desktop',
-              strictMode: Boolean(run.strict_mode)
+              strictMode: Boolean(run.strict_mode),
+              tags: run.tags || []
             }}
             triggerButton={(openModal) => (
               <button

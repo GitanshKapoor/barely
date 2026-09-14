@@ -58,6 +58,12 @@ def generate_report_html(run, steps) -> str:
         </div>
         """
 
+    tags_html = ""
+    if getattr(run, "tags", None):
+        tag_items = "".join([f'<span class="tag-pill">#{html_lib.escape(t.strip())}</span>' for t in run.tags.split(",") if t.strip()])
+        if tag_items:
+            tags_html = f'<div class="meta-item"><strong>Tags:</strong> {tag_items}</div>'
+
     return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -80,38 +86,35 @@ def generate_report_html(run, steps) -> str:
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
             background-color: var(--bg);
             color: var(--text-primary);
-            line-height: 1.5;
-            padding: 40px 20px;
+            padding: 32px 16px;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
         }}
         .container {{
-            max-width: 860px;
+            max-width: 960px;
             margin: 0 auto;
         }}
         .header {{
-            background-color: var(--card-bg);
+            background: var(--card-bg);
             border: 1px solid var(--border);
             border-radius: 12px;
             padding: 24px;
             margin-bottom: 24px;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.5);
         }}
         .header-top {{
             display: flex;
-            align-items: center;
             justify-content: space-between;
+            align-items: center;
             margin-bottom: 16px;
-            flex-wrap: wrap;
-            gap: 12px;
         }}
         .title {{
-            font-size: 22px;
+            font-size: 20px;
             font-weight: 700;
-            color: #fff;
         }}
         .status-badge {{
             background-color: {status_bg};
-            color: white;
-            font-size: 11px;
+            color: #ffffff;
+            font-size: 12px;
             font-weight: 800;
             padding: 4px 12px;
             border-radius: 20px;
@@ -128,6 +131,17 @@ def generate_report_html(run, steps) -> str:
             padding-top: 16px;
         }}
         .meta-item strong {{ color: #e2e8f0; }}
+        .tag-pill {{
+            display: inline-block;
+            font-size: 11px;
+            font-family: monospace;
+            padding: 2px 8px;
+            border-radius: 4px;
+            background: rgba(2, 120, 255, 0.15);
+            color: #60a5fa;
+            border: 1px solid rgba(2, 120, 255, 0.3);
+            margin-right: 4px;
+        }}
         .goal-box {{
             background-color: rgba(15, 23, 42, 0.6);
             border: 1px solid var(--border);
@@ -170,74 +184,73 @@ def generate_report_html(run, steps) -> str:
         .section-title {{
             font-size: 16px;
             font-weight: 700;
-            margin-bottom: 16px;
-            color: #cbd5e1;
+            margin: 32px 0 16px 0;
+            padding-bottom: 8px;
+            border-bottom: 1px solid var(--border);
         }}
         .step-card {{
-            background-color: var(--card-bg);
+            background: var(--card-bg);
             border: 1px solid var(--border);
             border-radius: 10px;
-            padding: 18px;
-            margin-bottom: 20px;
+            padding: 20px;
+            margin-bottom: 16px;
             page-break-inside: avoid;
             break-inside: avoid;
         }}
         .step-header {{
             display: flex;
             align-items: center;
-            gap: 10px;
-            margin-bottom: 10px;
+            gap: 12px;
+            margin-bottom: 12px;
         }}
         .step-pill {{
-            background-color: #1e293b;
-            color: #94a3b8;
+            background: #1e293b;
+            color: #38bdf8;
             font-size: 11px;
-            font-family: monospace;
             font-weight: 700;
-            padding: 2px 8px;
+            padding: 3px 10px;
             border-radius: 4px;
+            font-family: monospace;
         }}
         .step-action {{
-            font-family: monospace;
-            font-size: 13px;
+            font-size: 14px;
             font-weight: 600;
             color: #f1f5f9;
         }}
         .step-thought {{
             background: rgba(2, 120, 255, 0.08);
             border-left: 3px solid var(--accent);
-            padding: 8px 12px;
-            border-radius: 0 6px 6px 0;
-            margin-bottom: 12px;
+            border-radius: 4px;
+            padding: 10px 14px;
+            margin-bottom: 14px;
         }}
         .thought-tag {{
-            font-size: 9px;
-            font-weight: 800;
+            display: block;
+            font-size: 10px;
+            font-weight: 700;
             text-transform: uppercase;
             letter-spacing: 0.5px;
-            color: var(--accent);
-            display: block;
-            margin-bottom: 2px;
+            color: #38bdf8;
+            margin-bottom: 4px;
         }}
         .thought-text {{
-            font-size: 11px;
+            font-size: 12px;
             color: #94a3b8;
             font-style: italic;
+            line-height: 1.5;
         }}
         .step-screenshot {{
             border-radius: 8px;
             overflow: hidden;
             border: 1px solid var(--border);
             background: #000;
-            text-align: center;
-            padding: 10px;
         }}
         .step-screenshot img {{
-            max-width: 100%;
-            max-height: 480px;
+            display: block;
+            width: 100%;
             height: auto;
-            border-radius: 4px;
-            object-contain: contain;
+            max-height: 480px;
+            object-fit: contain;
         }}
         .footer {{
             text-align: center;
@@ -271,6 +284,7 @@ def generate_report_html(run, steps) -> str:
             .goal-box {{ color: #334155 !important; background: #f8fafc !important; }}
             .step-thought {{ background: #f1f5f9 !important; border-left: 3px solid #0278ff !important; }}
             .thought-text {{ color: #475569 !important; }}
+            .tag-pill {{ background: #eff6ff !important; color: #1d4ed8 !important; border: 1px solid #bfdbfe !important; }}
             .step-action {{ color: #0f172a !important; }}
             .step-screenshot {{ background: #f8fafc !important; border: 1px solid #cbd5e1 !important; }}
             .failure-content {{ background: #fff1f2 !important; color: #9f1239 !important; border: 1px solid #fecdd3 !important; }}
@@ -294,6 +308,7 @@ def generate_report_html(run, steps) -> str:
                 <div class="meta-item"><strong>Strict Mode:</strong> {'Enabled' if run.strict_mode else 'Disabled (Auto-Healing)'}</div>
                 <div class="meta-item"><strong>Executed At:</strong> {run.created_at}</div>
                 <div class="meta-item"><strong>Steps Executed:</strong> {len(steps)}</div>
+                {tags_html}
             </div>
             <div class="goal-box">{html_lib.escape(run.goal)}</div>
         </div>
@@ -319,19 +334,20 @@ def generate_report_html(run, steps) -> str:
 </html>"""
 
 @router.get("/api/runs/{run_id}/report", response_class=HTMLResponse)
-def view_run_report_html(run_id: str):
+def get_run_report(run_id: str):
     db = SessionLocal()
     try:
         run = db.query(RunRecord).filter(RunRecord.id == run_id).first()
         if not run:
             raise HTTPException(status_code=404, detail="Run not found")
+            
         steps = db.query(RunStep).filter(RunStep.run_id == run_id).order_by(RunStep.step_index).all()
         return generate_report_html(run, steps)
     finally:
         db.close()
 
 @router.get("/api/runs/{run_id}/download")
-def download_run_report(run_id: str):
+def download_report(run_id: str):
     db = SessionLocal()
     try:
         run = db.query(RunRecord).filter(RunRecord.id == run_id).first()
@@ -351,6 +367,7 @@ def download_run_report(run_id: str):
             "success": run.success,
             "failure_reason": run.failure_reason,
             "strict_mode": bool(run.strict_mode),
+            "tags": [t.strip() for t in run.tags.split(",") if t.strip()] if getattr(run, "tags", None) else [],
             "created_at": str(run.created_at),
             "total_steps": len(steps),
             "steps": [
@@ -371,10 +388,16 @@ def download_run_report(run_id: str):
             f"**Target URL:** {run.start_url}  ",
             f"**Device Profile:** {run.device}  ",
             f"**Strict Mode:** {'Enabled' if run.strict_mode else 'Disabled (Auto-Healing)'}  ",
+        ]
+        if getattr(run, "tags", None):
+            tags_str = ", ".join([f"`#{t.strip()}`" for t in run.tags.split(",") if t.strip()])
+            if tags_str:
+                md_lines.append(f"**Tags:** {tags_str}  ")
+        md_lines.extend([
             f"**Timestamp:** {run.created_at}  \n",
             "## 🎯 Test Goal & Instructions",
             f"```text\n{run.goal}\n```\n"
-        ]
+        ])
 
         if not run.success and run.failure_reason:
             md_lines.extend([

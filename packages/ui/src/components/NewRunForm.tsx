@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Play, Globe, Smartphone, Monitor, Tablet, X, Info, RotateCcw } from 'lucide-react';
+import { Play, Globe, Smartphone, Monitor, Tablet, X, Info, RotateCcw, Tag } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
 export interface RunConfigData {
@@ -10,6 +10,7 @@ export interface RunConfigData {
   goalText?: string;
   device?: string;
   strictMode?: boolean;
+  tags?: string[];
 }
 
 interface NewRunFormProps {
@@ -25,8 +26,31 @@ export default function NewRunForm({ initialData, triggerButton }: NewRunFormPro
   const [goalText, setGoalText] = useState(initialData?.goalText || '');
   const [device, setDevice] = useState(initialData?.device || 'desktop');
   const [strictMode, setStrictMode] = useState(Boolean(initialData?.strictMode));
+  const [tags, setTags] = useState<string[]>(initialData?.tags || []);
+  const [tagInput, setTagInput] = useState('');
 
   const router = useRouter();
+
+  const addTag = (rawTag: string) => {
+    const cleaned = rawTag.trim().replace(/^#+/, '').toLowerCase();
+    if (cleaned && !tags.includes(cleaned)) {
+      setTags(prev => [...prev, cleaned]);
+    }
+  };
+
+  const removeTag = (tagToRemove: string) => {
+    setTags(prev => prev.filter(t => t !== tagToRemove));
+  };
+
+  const handleTagKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' || e.key === ',') {
+      e.preventDefault();
+      if (tagInput.trim()) {
+        addTag(tagInput);
+        setTagInput('');
+      }
+    }
+  };
 
   const openModal = () => {
     if (initialData) {
@@ -35,6 +59,8 @@ export default function NewRunForm({ initialData, triggerButton }: NewRunFormPro
       setGoalText(initialData.goalText || '');
       setDevice(initialData.device || 'desktop');
       setStrictMode(Boolean(initialData.strictMode));
+      setTags(initialData.tags || []);
+      setTagInput('');
     }
     setIsOpen(true);
   };
@@ -51,14 +77,15 @@ export default function NewRunForm({ initialData, triggerButton }: NewRunFormPro
           url, 
           goal_text: goalText, 
           device,
-          strict_mode: strictMode
+          strict_mode: strictMode,
+          tags
         })
       });
       if (res.ok) {
         const data = await res.json();
         setIsOpen(false);
         if (!initialData) {
-          setName(''); setUrl('https://'); setGoalText(''); setDevice('desktop'); setStrictMode(false);
+          setName(''); setUrl('https://'); setGoalText(''); setDevice('desktop'); setStrictMode(false); setTags([]); setTagInput('');
         }
         if (data.job_id) {
           router.push(`/runs/${data.job_id}`);
@@ -132,6 +159,63 @@ export default function NewRunForm({ initialData, triggerButton }: NewRunFormPro
             <textarea required rows={4} value={goalText} onChange={e => setGoalText(e.target.value)}
               placeholder={"1. Type Artificial Intelligence into the search box\n2. Click search\n3. Verify the article title appears"}
               className="w-full bg-[#070b14] border border-slate-800 rounded-lg p-3 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:border-[#0278ff] focus:ring-1 focus:ring-[#0278ff] resize-none font-mono leading-relaxed" />
+          </div>
+
+          {/* Tags Configuration */}
+          <div className="space-y-2">
+            <div className="flex items-center justify-between">
+              <label className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                <Tag className="w-3.5 h-3.5 text-[#0278ff]" /> Tags
+              </label>
+              <span className="text-[11px] text-slate-500">Press Enter or comma to add</span>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-1.5 min-h-[42px] p-2 bg-[#070b14] border border-slate-800 rounded-lg focus-within:border-[#0278ff] focus-within:ring-1 focus-within:ring-[#0278ff] transition-all">
+              {tags.map((tag) => (
+                <span
+                  key={tag}
+                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-mono font-medium bg-[#0278ff]/15 text-[#0278ff] border border-[#0278ff]/30 group"
+                >
+                  <span>#{tag}</span>
+                  <button
+                    type="button"
+                    onClick={() => removeTag(tag)}
+                    className="text-slate-400 hover:text-white rounded transition-colors"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </span>
+              ))}
+              <input
+                type="text"
+                value={tagInput}
+                onChange={(e) => setTagInput(e.target.value)}
+                onKeyDown={handleTagKeyDown}
+                placeholder={tags.length === 0 ? "e.g. smoke, regression, auth, p0..." : "Add more..."}
+                className="flex-1 min-w-[140px] bg-transparent text-sm text-slate-200 placeholder-slate-600 focus:outline-none px-1"
+              />
+            </div>
+
+            <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
+              <span className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Presets:</span>
+              {['smoke', 'regression', 'auth', 'p0', 'e2e'].map((preset) => {
+                const isSelected = tags.includes(preset);
+                return (
+                  <button
+                    key={preset}
+                    type="button"
+                    onClick={() => isSelected ? removeTag(preset) : addTag(preset)}
+                    className={`text-[11px] font-mono px-2 py-0.5 rounded border transition-colors cursor-pointer ${
+                      isSelected
+                        ? 'bg-[#0278ff]/25 text-[#0278ff] border-[#0278ff]/50 font-bold'
+                        : 'bg-slate-900/60 text-slate-400 border-slate-800 hover:border-slate-700 hover:text-slate-300'
+                    }`}
+                  >
+                    {isSelected ? '✓ ' : '+ '}#{preset}
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
           <div className="space-y-1.5">
