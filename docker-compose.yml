@@ -1,0 +1,16 @@
+version: '3.8'
+
+services:
+  barely:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    # Mount the current directory so that the .barely/ workspace folder 
+    # (and generated PDFs) are saved directly to your Mac
+    volumes:
+      - ./:/workspace
+    # Automatically load API keys from the .env file
+    env_file:
+      - .env
+    # Default command when running `docker compose up`
+    command: ["--help"]
