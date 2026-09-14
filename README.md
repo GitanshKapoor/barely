@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="assets/mascot.png" alt="Barely Mascot" width="160" />
+
 # Barely 🧪
 
 **Declarative AI-driven end-to-end testing for modern web applications.**
