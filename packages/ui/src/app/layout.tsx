@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
-import { Activity, LayoutDashboard, Settings, Code2 } from "lucide-react";
+import { Activity, LayoutDashboard, Settings } from "lucide-react";
+import Image from "next/image";
 import "./globals.css";
 
 const inter = Inter({ subsets: ["latin"] });
@@ -20,11 +21,11 @@ export default function RootLayout({
       <body className={`${inter.className} flex h-screen bg-slate-950 text-slate-300 antialiased selection:bg-blue-900/30`}>
         {/* Modern SaaS Sidebar */}
         <aside className="w-64 flex-shrink-0 border-r border-slate-800/60 bg-slate-950/50 flex flex-col">
-          <div className="h-16 flex items-center px-6 border-b border-slate-800/60">
-            <div className="flex items-center gap-2 text-slate-100 font-semibold tracking-wide">
-              <Code2 className="w-5 h-5 text-blue-500" />
-              Barely<span className="text-slate-500 font-normal">.ai</span>
-            </div>
+          <div className="h-16 flex items-center px-4 border-b border-slate-800/60">
+            <a href="/" className="flex items-center gap-2.5">
+              <Image src="/logo.png" alt="Barely Logo" width={36} height={36} className="rounded-md" />
+              <span className="text-slate-100 font-semibold tracking-wide">Barely<span className="text-slate-500 font-normal">.ai</span></span>
+            </a>
           </div>
           <nav className="flex-1 py-6 px-3 space-y-1">
             <a href="/" className="flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-lg bg-blue-500/10 text-blue-400 border border-blue-500/20">
