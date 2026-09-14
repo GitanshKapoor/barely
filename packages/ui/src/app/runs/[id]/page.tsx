@@ -54,7 +54,13 @@ export default async function RunDetails({ params }: { params: { id: string } })
                 <span className="absolute left-3 top-3.5 w-4 h-4 rounded-full bg-slate-800 text-[9px] flex items-center justify-center font-mono text-slate-400 font-bold border border-slate-700">
                   {idx}
                 </span>
-                <p className="text-sm text-slate-300 leading-relaxed font-mono">{step.description}</p>
+                {step.thought && (
+                  <div className="mb-2 pb-2 border-b border-slate-800/60">
+                    <span className="text-[10px] font-bold tracking-widest uppercase text-slate-500 mb-1 block">AI Agent Log</span>
+                    <p className="text-xs text-slate-400 italic">"{step.thought}"</p>
+                  </div>
+                )}
+                <p className="text-sm text-slate-200 leading-relaxed font-mono">{step.description}</p>
               </div>
             ))}
             

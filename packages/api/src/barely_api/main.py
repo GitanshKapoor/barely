@@ -66,7 +66,7 @@ def get_run(run_id: str):
             "status": r.status,
             "success": r.success,
             "failure_reason": r.failure_reason,
-            "steps": [{"description": s.description, "screenshot": s.screenshot_base64} for s in steps]
+            "steps": [{"description": s.description, "thought": s.thought, "screenshot": s.screenshot_base64} for s in steps]
         }
     finally:
         db.close()

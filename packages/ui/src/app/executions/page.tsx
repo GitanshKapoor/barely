@@ -30,10 +30,10 @@ export default async function Home() {
         <table className="w-full text-sm text-left">
           <thead className="bg-slate-900/50 border-b border-slate-800 text-xs uppercase tracking-wider text-slate-500 font-semibold">
             <tr>
-              <th className="px-6 py-4 font-medium">Status</th>
               <th className="px-6 py-4 font-medium">Test Name</th>
               <th className="px-6 py-4 font-medium">Device</th>
               <th className="px-6 py-4 font-medium">Run ID</th>
+              <th className="px-6 py-4 font-medium">Status</th>
               <th className="px-6 py-4 font-medium text-right">Actions</th>
             </tr>
           </thead>
@@ -47,6 +47,13 @@ export default async function Home() {
             ) : (
               runs.map((run: any) => (
                 <tr key={run.id} className="hover:bg-slate-800/20 transition-colors group">
+                  <td className="px-6 py-4 font-medium text-slate-200">{run.name}</td>
+                  <td className="px-6 py-4">
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono font-medium bg-slate-800 text-slate-400 border border-slate-700 uppercase">
+                      {run.device || 'desktop'}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 font-mono text-xs text-slate-500">{run.id}</td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     {run.status === "pending" && (
                       <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-yellow-500/10 text-yellow-500 border border-yellow-500/20">
@@ -69,13 +76,6 @@ export default async function Home() {
                       </span>
                     )}
                   </td>
-                  <td className="px-6 py-4 font-medium text-slate-200">{run.name}</td>
-                  <td className="px-6 py-4">
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono font-medium bg-slate-800 text-slate-400 border border-slate-700 uppercase">
-                      {run.device || 'desktop'}
-                    </span>
-                  </td>
-                  <td className="px-6 py-4 font-mono text-xs text-slate-500">{run.id}</td>
                   <td className="px-6 py-4 text-right">
                     {run.status === "completed" && (
                       <Link href={`/runs/${run.id}`} className="inline-flex items-center gap-1 text-blue-400 hover:text-blue-300 font-medium transition-colors opacity-0 group-hover:opacity-100">

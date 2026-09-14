@@ -29,6 +29,7 @@ If you think the goal is achieved, output {"action": "finish"}.
 class StepRecord:
     description: str
     screenshot_base64: str = None
+    thought: str = None
 
 @dataclass
 class RunResult:
@@ -79,6 +80,7 @@ class AgentLoop:
                     print(f"Thought: {action_payload.get('thought')}")
                 
                 action = action_payload.get('action')
+                thought = action_payload.get('thought')
                 try:
                     desc = self._execute_action(action, action_payload)
                     
@@ -87,7 +89,7 @@ class AgentLoop:
                         b64_snap = self.engine.take_screenshot_base64()
                         
                     step_history.append(desc)
-                    rich_history.append(StepRecord(description=desc, screenshot_base64=b64_snap))
+                    rich_history.append(StepRecord(description=desc, screenshot_base64=b64_snap, thought=thought))
                     
                     if not cached_action and action not in ["fail", "finish"]:
                         self.cache.save_action(goal.name, dom_elements, action_payload)
@@ -177,6 +179,7 @@ class AgentLoop:
                     db_step = DBRunStep(
                         run_id=self.run_id,
                         step_index=i,
+                        thought=step.thought,
                         description=step.description,
                         screenshot_base64=step.screenshot_base64
                     )

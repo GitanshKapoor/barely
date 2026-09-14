@@ -19,6 +19,7 @@ class RunRecord(Base):
     success = Column(Boolean, nullable=True)
     failure_reason = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+    logs = Column(Text, nullable=True)
     
     steps = relationship("RunStep", back_populates="run", cascade="all, delete-orphan")
 
@@ -27,6 +28,7 @@ class RunStep(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     run_id = Column(String, ForeignKey("runs.id"))
     step_index = Column(Integer)
+    thought = Column(Text, nullable=True)
     description = Column(Text)
     screenshot_base64 = Column(Text, nullable=True)
     
