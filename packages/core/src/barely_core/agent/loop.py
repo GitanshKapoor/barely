@@ -2,8 +2,10 @@ import json
 import logging
 from typing import List, Dict, Any
 import litellm
-from barely_core.models.domain import Goal, Step
+
+from barely_core.models.domain import Goal
 from barely_core.browser.engine import BrowserEngine
+from barely_core.agent.cache import ActionCache
 
 logger = logging.getLogger(__name__)
 
@@ -31,9 +33,10 @@ class AgentLoop:
     def __init__(self, engine: BrowserEngine, model: str = "groq/llama3-70b-8192"):
         self.engine = engine
         self.model = model
+        self.cache = ActionCache()
 
     def run(self, goal: Goal, start_url: str):
-        """Executes the Plan -> Act -> Observe loop."""
+        """Executes the autonomous Plan -> Act -> Observe loop."""
         print(f"\n🚀 Starting Goal: {goal.name}")
         self.engine.start()
         
@@ -51,34 +54,61 @@ class AgentLoop:
                 # 1. OBSERVE
                 dom_elements = self.engine.extract_dom()
                 
-                # 2. PLAN
-                prompt = self._build_prompt(goal, dom_elements)
-                response = self._call_llm(prompt)
+                # 2. PLAN (Check Cache First)
+                cached_action = self.cache.get_action(goal.name, dom_elements)
                 
-                print(f"🧠 Thought: {response.get('thought')}")
+                if cached_action:
+                    print("⚡ Cache Hit: Bypassing LLM inference.")
+                    action_payload = cached_action
+                else:
+                    print("🧠 Cache Miss: Querying LLM...")
+                    prompt = self._build_prompt(goal, dom_elements)
+                    action_payload = self._call_llm(prompt)
+                    print(f"🧠 Thought: {action_payload.get('thought')}")
                 
                 # 3. ACT
-                action = response.get('action')
-                if action == "click":
-                    print(f"🖱️  Action: Click element [{response.get('element_id')}]")
-                    self.engine.click_element(response.get('element_id'))
-                elif action == "type":
-                    print(f"⌨️  Action: Type '{response.get('text')}' into [{response.get('element_id')}]")
-                    self.engine.type_element(response.get('element_id'), response.get('text'))
-                elif action == "navigate":
-                    print(f"🌐 Action: Navigate to {response.get('text')}")
-                    self.engine.navigate(response.get('text'))
-                elif action == "finish":
+                action = action_payload.get('action')
+                try:
+                    self._execute_action(action, action_payload)
+                    
+                    # If successful and it was an LLM decision, save it to cache
+                    if not cached_action:
+                        self.cache.save_action(goal.name, dom_elements, action_payload)
+                        
+                except Exception as e:
+                    logger.warning(f"Action execution failed: {e}")
+                    if cached_action:
+                        print("⚠️ Cached action failed. Invalidating cache and falling back to LLM...")
+                        self.cache.invalidate(goal.name, dom_elements)
+                        # and continue the loop to let the LLM try again.
+                        continue
+                    else:
+                        print("❌ Fatal Execution Error.")
+                        break
+
+                if action == "finish":
                     print("✅ Goal Accomplished Successfully!")
                     break
                 elif action == "fail":
-                    print(f"❌ Test Failed: {response.get('reasoning')}")
+                    print(f"❌ Test Failed: {action_payload.get('reasoning')}")
                     break
-                else:
-                    print(f"⚠️ Unknown action: {action}")
                     
         finally:
             self.engine.stop()
+
+    def _execute_action(self, action: str, payload: Dict[str, Any]):
+        """Executes the mapped action via the BrowserEngine."""
+        if action == "click":
+            print(f"🖱️  Action: Click element [{payload.get('element_id')}]")
+            self.engine.click_element(payload.get('element_id'))
+        elif action == "type":
+            print(f"⌨️  Action: Type '{payload.get('text')}' into [{payload.get('element_id')}]")
+            self.engine.type_element(payload.get('element_id'), payload.get('text'))
+        elif action == "navigate":
+            print(f"🌐 Action: Navigate to {payload.get('text')}")
+            self.engine.navigate(payload.get('text'))
+        elif action not in ["finish", "fail"]:
+            raise ValueError(f"Unknown action: {action}")
 
     def _build_prompt(self, goal: Goal, dom: List[Dict[str, Any]]) -> str:
         goal_text = f"GOAL: {goal.name}\nSTEPS:\n"
@@ -91,7 +121,6 @@ class AgentLoop:
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": prompt}
         ]
-        
         response = litellm.completion(model=self.model, messages=messages, temperature=0.0)
         raw_output = response.choices[0].message.content
         
