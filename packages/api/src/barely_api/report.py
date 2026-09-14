@@ -309,11 +309,11 @@ def generate_report_html(run, steps) -> str:
     </div>
 
     <script>
-        if (window.location.search.includes('print=true')) {
-            window.addEventListener('load', () => {
-                setTimeout(() => window.print(), 350);
-            });
-        }
+        if (window.location.search.includes('print=true')) {{
+            window.addEventListener('load', function() {{
+                setTimeout(function() {{ window.print(); }}, 400);
+            }});
+        }}
     </script>
 </body>
 </html>"""
