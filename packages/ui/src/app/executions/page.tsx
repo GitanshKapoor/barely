@@ -1,7 +1,7 @@
 import Link from 'next/link';
-import NewRunForm from "../components/NewRunForm";
+import NewRunForm from "../../components/NewRunForm";
 import { ArrowRight, CheckCircle2, XCircle } from 'lucide-react';
-import AutoRefresher from "../components/AutoRefresher";
+import AutoRefresher from "../../components/AutoRefresher";
 
 async function getRuns() {
   try {
