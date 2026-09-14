@@ -8,6 +8,7 @@ import litellm
 from barely_core.models.domain import Goal, RunResult, StepRecord
 from barely_core.browser.engine import BrowserEngine
 from barely_core.agent.cache import ActionCache
+from barely_core.vrt.engine import VRTEngine
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +37,7 @@ class AgentLoop:
         self.engine = engine
         self.model = model
         self.cache = ActionCache()
+        self.vrt = VRTEngine(threshold=0.05) # 5% visual difference allowed
 
     def run(self, goal: Goal, start_url: str) -> RunResult:
         print(f"\n🚀 Starting Goal: {goal.name}")
@@ -44,7 +46,6 @@ class AgentLoop:
         step_history = []
         rich_history = []
         
-        # Setup run directory for screenshots
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
         run_dir = Path(f".barely/runs/{goal.name}_{timestamp}")
         run_dir.mkdir(parents=True, exist_ok=True)
@@ -53,11 +54,14 @@ class AgentLoop:
             print(f"🌐 Navigating to {start_url}")
             self.engine.navigate(start_url)
             
-            # Initial screenshot
             snap_path = str(run_dir / "step_0.png")
             self.engine.take_screenshot(snap_path)
             step_history.append(f"Navigated to {start_url}")
             rich_history.append(StepRecord(description=f"Navigated to {start_url}", screenshot_path=snap_path))
+            
+            # Initial VRT check
+            if not self.vrt.assert_match(goal.name, 0, snap_path):
+                return RunResult(goal_name=goal.name, success=False, failure_reason="Visual Regression Failed on initial page load", step_history=step_history, rich_history=rich_history, run_dir=str(run_dir))
             
             step_count = 0
             max_steps = 20
@@ -80,11 +84,20 @@ class AgentLoop:
                 action = action_payload.get('action')
                 try:
                     desc = self._execute_action(action, action_payload)
-                    snap_path = str(run_dir / f"step_{step_count}.png")
-                    self.engine.take_screenshot(snap_path)
                     
+                    # Only take screenshot if it's an actionable step
+                    if action not in ["finish", "fail"]:
+                        snap_path = str(run_dir / f"step_{step_count}.png")
+                        self.engine.take_screenshot(snap_path)
+                        
+                        # Run Visual Regression Testing
+                        if not self.vrt.assert_match(goal.name, step_count, snap_path):
+                            step_history.append(f"Executed: {desc} (VRT FAILED)")
+                            rich_history.append(StepRecord(description=f"{desc} (VRT FAILED)", screenshot_path=snap_path))
+                            return RunResult(goal_name=goal.name, success=False, failure_reason=f"Visual Regression Failed at step {step_count}", step_history=step_history, rich_history=rich_history, run_dir=str(run_dir))
+                        
                     step_history.append(desc)
-                    rich_history.append(StepRecord(description=desc, screenshot_path=snap_path))
+                    rich_history.append(StepRecord(description=desc, screenshot_path=snap_path if action not in ["finish", "fail"] else None))
                     
                     if not cached_action and action not in ["fail", "finish"]:
                         self.cache.save_action(goal.name, dom_elements, action_payload)
