@@ -1,0 +1,14 @@
+[project]
+name = "barely-core"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+    "playwright>=1.47.0",
+    "litellm>=1.44.0",
+    "pydantic>=2.9.2",
+    "pyyaml>=6.0.2",
+    "markdown>=3.7"
+]
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

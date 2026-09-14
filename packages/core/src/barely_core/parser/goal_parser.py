@@ -2,7 +2,7 @@ import yaml
 import re
 from pathlib import Path
 from typing import Dict, Any, Tuple
-from barely.models.domain import Goal, Step
+from barely_core.models.domain import Goal, Step
 
 class GoalParser:
     """Parses Barely Markdown files with YAML frontmatter."""
