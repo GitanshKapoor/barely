@@ -7,6 +7,7 @@ class BrowserEngine:
     """
     Manages Playwright browser sessions and DOM distillation.
     Designed for Enterprise Concurrency (Bottleneck 4) and Speed (Bottleneck 1).
+    """
     IOS_VIEWPORT = {"width": 393, "height": 852} # iPhone 15
     ANDROID_VIEWPORT = {"width": 412, "height": 915} # Pixel 7
     DESKTOP_VIEWPORT = {"width": 1280, "height": 720}
