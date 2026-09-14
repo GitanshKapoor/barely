@@ -37,6 +37,7 @@ export default function NewRunForm() {
 
   const devices = [
     { id: 'desktop', label: 'Desktop', icon: Monitor, desc: '1280x720' },
+    { id: 'tablet',  label: 'Tablet',  icon: Tablet,  desc: '768x1024' },
     { id: 'ios',     label: 'iOS',     icon: Smartphone, desc: 'iPhone 15' },
     { id: 'android', label: 'Android', icon: Smartphone, desc: 'Pixel 7' },
   ];
@@ -89,7 +90,7 @@ export default function NewRunForm() {
 
           <div className="space-y-1.5">
             <label className="text-xs font-semibold text-slate-400 uppercase tracking-wider">Device Profile</label>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
               {devices.map(d => (
                 <button key={d.id} type="button" onClick={() => setDevice(d.id)}
                   className={"flex flex-col items-center gap-1.5 py-3 rounded-lg border text-xs font-medium transition-colors " +

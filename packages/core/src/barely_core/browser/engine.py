@@ -10,6 +10,7 @@ class BrowserEngine:
     """
     IOS_VIEWPORT = {"width": 393, "height": 852} # iPhone 15
     ANDROID_VIEWPORT = {"width": 412, "height": 915} # Pixel 7
+    TABLET_VIEWPORT = {"width": 768, "height": 1024} # iPad
     DESKTOP_VIEWPORT = {"width": 1280, "height": 720}
 
     def __init__(self, headless: bool = True, device: str = "desktop"):
@@ -34,6 +35,9 @@ class BrowserEngine:
         elif self.device == "android":
             viewport = self.ANDROID_VIEWPORT
             user_agent = "Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Mobile Safari/537.36"
+        elif self.device == "tablet":
+            viewport = self.TABLET_VIEWPORT
+            user_agent = "Mozilla/5.0 (iPad; CPU OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1"
         else:
             viewport = self.DESKTOP_VIEWPORT
             user_agent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
