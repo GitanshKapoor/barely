@@ -56,32 +56,36 @@ Barely is built for speed and simplicity. It can be launched instantly with Dock
 
 ### Option A: Quickstart with Docker Compose (Recommended)
 
-Clone the repository and launch the database, control plane API, background worker, and Next.js UI in seconds:
+Clone the repository and launch the full platform (PostgreSQL, Control Plane API, Background Worker, and Next.js UI) in seconds:
 
 ```bash
 git clone https://github.com/GitanshKapoor/barely.git
 cd barely
+cp .env.example .env    # Configure your LLM API keys
 docker compose up -d
 ```
 
+Once running, access:
 - 🌐 **Web Dashboard:** [http://localhost:3000](http://localhost:3000)
 - 🔌 **API Documentation:** [http://localhost:8000/docs](http://localhost:8000/docs)
 
+---
+
 ### Option B: Local CLI Installation
+
+Install Barely as a standalone Python CLI:
 
 ```bash
 # We recommend using uv for lightning-fast installation
 uv pip install barely
 ```
 
-#### 1. Initialize a Workspace
-Initialize a `.barely` workspace in your project repository:
+**1. Initialize a Workspace**
 ```bash
 barely init
 ```
 
-#### 2. Write a Test Goal
-Create a file at `.barely/goals/checkout.md`:
+**2. Write a Test Goal** (`.barely/goals/checkout.md`)
 ```markdown
 ---
 tags: [smoke, e2e]
@@ -94,7 +98,7 @@ timeout: 120
 4. Verify the cart badge displays "1"
 ```
 
-#### 3. Run the Agent
+**3. Run the Agent**
 ```bash
 barely run --url https://staging.myapp.com --goal .barely/goals/checkout.md
 ```
