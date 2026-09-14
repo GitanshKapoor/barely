@@ -46,3 +46,10 @@ coverage.xml
 *.swp
 *.swo
 .DS_Store
+
+# Barely runtime data
+.barely/runs/
+.barely/queue/
+.barely/goals/
+.barely/baselines/
+*.pid

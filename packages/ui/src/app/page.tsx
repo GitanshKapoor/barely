@@ -31,15 +31,16 @@ export default async function Home() {
           <thead className="bg-slate-900/50 border-b border-slate-800 text-xs uppercase tracking-wider text-slate-500 font-semibold">
             <tr>
               <th className="px-6 py-4 font-medium">Status</th>
+              <th className="px-6 py-4 font-medium">Test Name</th>
+              <th className="px-6 py-4 font-medium">Device</th>
               <th className="px-6 py-4 font-medium">Run ID</th>
-              <th className="px-6 py-4 font-medium">Goal</th>
               <th className="px-6 py-4 font-medium text-right">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-800/60">
             {runs.length === 0 ? (
               <tr>
-                <td colSpan={4} className="px-6 py-12 text-center text-slate-500">
+                <td colSpan={5} className="px-6 py-12 text-center text-slate-500">
                   No execution runs found. Run 'barely run' to start testing.
                 </td>
               </tr>
@@ -68,8 +69,13 @@ export default async function Home() {
                       </span>
                     )}
                   </td>
-                  <td className="px-6 py-4 font-mono text-xs text-slate-400">{run.id}</td>
-                  <td className="px-6 py-4 font-medium text-slate-200">{run.goal}</td>
+                  <td className="px-6 py-4 font-medium text-slate-200">{run.name}</td>
+                  <td className="px-6 py-4">
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono font-medium bg-slate-800 text-slate-400 border border-slate-700 uppercase">
+                      {run.device || 'desktop'}
+                    </span>
+                  </td>
+                  <td className="px-6 py-4 font-mono text-xs text-slate-500">{run.id}</td>
                   <td className="px-6 py-4 text-right">
                     {run.status === "completed" && (
                       <Link href={`/runs/${run.id}`} className="inline-flex items-center gap-1 text-blue-400 hover:text-blue-300 font-medium transition-colors opacity-0 group-hover:opacity-100">

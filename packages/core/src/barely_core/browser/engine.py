@@ -9,6 +9,7 @@ class BrowserEngine:
     Designed for Enterprise Concurrency (Bottleneck 4) and Speed (Bottleneck 1).
     """
     MOBILE_VIEWPORT = {"width": 390, "height": 844}
+    TABLET_VIEWPORT = {"width": 768, "height": 1024}
     DESKTOP_VIEWPORT = {"width": 1280, "height": 720}
 
     def __init__(self, headless: bool = True, device: str = "desktop"):
@@ -27,7 +28,7 @@ class BrowserEngine:
         """Initializes the browser."""
         self._playwright = sync_playwright().start()
         self._browser = self._playwright.chromium.launch(headless=self.headless)
-        viewport = self.MOBILE_VIEWPORT if self.device == "mobile" else self.DESKTOP_VIEWPORT
+        viewport = self.MOBILE_VIEWPORT if self.device == "mobile" else (self.TABLET_VIEWPORT if self.device == "tablet" else self.DESKTOP_VIEWPORT)
         user_agent = (
             "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"
             if self.device == "mobile" else

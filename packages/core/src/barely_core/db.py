@@ -11,7 +11,9 @@ Base = declarative_base()
 class RunRecord(Base):
     __tablename__ = "runs"
     id = Column(String, primary_key=True, index=True)
+    name = Column(String, nullable=True)
     goal = Column(Text)
+    device = Column(String, default="desktop")
     status = Column(String, default="pending")
     success = Column(Boolean, nullable=True)
     failure_reason = Column(Text, nullable=True)

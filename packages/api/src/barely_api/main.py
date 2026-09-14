@@ -28,6 +28,7 @@ app.mount("/static/runs", StaticFiles(directory=".barely/runs"), name="runs")
 
 class RunRequest(BaseModel):
     url: str
+    name: str = ""
     goal_text: str
     device: str = "desktop"
 
@@ -44,7 +45,9 @@ def list_runs():
         for r in records:
             runs.append({
                 "id": r.id,
+                "name": r.name or r.id,
                 "goal": r.goal,
+                "device": r.device,
                 "status": r.status,
                 "success": r.success,
                 "failure_reason": r.failure_reason
@@ -80,7 +83,7 @@ def trigger_run(req: RunRequest):
     # 1. DB Save
     db = SessionLocal()
     try:
-        new_run = RunRecord(id=job_id, goal=req.goal_text, status="pending")
+        new_run = RunRecord(id=job_id, name=req.name or job_id, goal=req.goal_text, device=req.device, status="pending")
         db.add(new_run)
         db.commit()
     finally:
