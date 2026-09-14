@@ -32,7 +32,7 @@ Barely is an open-source autonomous AI agent designed to replace manual QA testi
 
 Traditional end-to-end testing requires teams to write hundreds of lines of brittle automation code that breaks every time a button changes color or a div moves. Barely takes a different approach: **Declarative Goal-Based Autonomous QA**.
 
-You define the *goal* and the *assertions* in plain English. Barely figures out the *steps* to achieve it.
+You define the *test intent* and *assertions* in natural language — Barely's autonomous agent figures out the exact steps, elements, and browser actions to achieve and verify it.
 
 ### 🌟 Release 1.0 "Baby Kangaroo" Core Capabilities:
 - 🧠 **Autonomous AI Execution:** Leverages multi-modal LLMs (Anthropic Claude 3.5 Sonnet, OpenAI, Gemini, Groq) via LiteLLM to analyze the live DOM and execute steps via Playwright.
