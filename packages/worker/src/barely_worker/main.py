@@ -9,13 +9,12 @@ from barely_core.parser.goal_parser import Goal
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger("barely_worker")
 
-def process_job(run_id: str, goal_text: str, start_url: str, device: str):
+def process_job(run_id: str, test_name: str, goal_text: str, start_url: str, device: str):
     try:
-        logger.info(f"Picked up job: {run_id} targeting {start_url}")
+        logger.info(f"Picked up job: {run_id} ({test_name}) targeting {start_url}")
         
-        # We manually construct a Goal object since we don't have markdown files anymore
         parsed_goal = Goal(
-            name=f"Run {run_id}",
+            name=test_name or "Web Test",
             raw_content=goal_text,
             steps=[]
         )
@@ -57,12 +56,13 @@ def start_worker():
                 job.status = "running"
                 db.commit()
                 run_id = job.id
+                test_name = job.name or "Automated E2E Test"
                 goal_text = job.goal
                 start_url = job.start_url
                 device = job.device
                 db.close()
                 
-                process_job(run_id, goal_text, start_url, device)
+                process_job(run_id, test_name, goal_text, start_url, device)
             else:
                 db.close()
                 time.sleep(2)

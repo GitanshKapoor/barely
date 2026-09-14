@@ -12,17 +12,25 @@ from barely_core.db import SessionLocal, RunRecord, RunStep as DBRunStep
 
 logger = logging.getLogger("barely_agent")
 
-SYSTEM_PROMPT = """You are Barely, an autonomous QA agent.
-You are given a Goal and the current simplified DOM of a webpage.
-Return a JSON object with:
-- "thought": A brief explanation of what you are doing.
-- "action": One of ["click", "type", "navigate", "screenshot", "finish", "fail"]
-- "element_id": (For click/type) The integer ID of the element to interact with.
-- "text": (For type/navigate) The text to type or URL to navigate to.
-- "reasoning": (If failing) Why you couldn't accomplish the goal.
+SYSTEM_PROMPT = """You are Barely, an autonomous precision E2E QA testing agent.
+Your objective is to execute the user's test instructions sequentially and accurately.
+You will receive:
+1. USER TEST INSTRUCTIONS (the exact numbered steps you must follow)
+2. PAST ACTIONS ALREADY PERFORMED (actions you have already taken)
+3. CURRENT DOM ACCESSIBILITY TREE (the interactive elements on the page)
 
-Always double check the step history to avoid getting stuck in loops.
-If you think the goal is achieved, output {"action": "finish"}.
+Rules:
+- Strictly follow the numbered user instructions in sequence.
+- Once an instruction has been executed (e.g. taking a screenshot, clicking a button, or typing text), move on to the next instruction immediately.
+- If the current instruction says "Take a screenshot", execute {"action": "screenshot"}. Do NOT take multiple screenshots for the same instruction.
+- If the user instructions say "Test End", "Finish", "Done", or all steps have been executed, immediately output:
+  {"thought": "All steps completed.", "action": "finish"}
+- Return ONLY a JSON object with:
+  - "thought": A brief explanation of which instruction step you are addressing.
+  - "action": One of ["click", "type", "navigate", "screenshot", "finish", "fail"]
+  - "element_id": (Integer ID if clicking or typing)
+  - "text": (String if typing text or navigating to a URL)
+  - "reasoning": (If failing, why the test cannot proceed)
 """
 
 @dataclass
@@ -200,14 +208,29 @@ class AgentLoop:
             raise ValueError(f"Unknown action: {action}")
 
     def _build_prompt(self, goal, dom, history):
-        goal_text = f"GOAL: {goal.name}\nINSTRUCTIONS:\n{goal.raw_content}\n"
-        hist_text = "\nPAST ACTIONS HISTORY:\n"
+        prompt = f"""TEST NAME: {goal.name}
+
+USER TEST INSTRUCTIONS:
+{goal.raw_content}
+
+PAST ACTIONS ALREADY PERFORMED:
+"""
         if not history:
-            hist_text += "(No actions taken yet)\n"
+            prompt += "(None yet - this is Step 1)\n"
         else:
             for i, h in enumerate(history):
-                hist_text += f"Step {i}: {h}\n"
-        return goal_text + hist_text + f"\nCURRENT DOM:\n{json.dumps(dom, indent=2)}\n"
+                prompt += f"- Step {i + 1}: {h}\n"
+
+        prompt += f"""
+CURRENT DOM ACCESSIBILITY TREE:
+{json.dumps(dom, indent=2)}
+
+INSTRUCTION:
+Review PAST ACTIONS ALREADY PERFORMED against USER TEST INSTRUCTIONS.
+- If the current step or all instructions have already been completed, IMMEDIATELY return: {{"thought": "All user instructions are complete. Finishing test.", "action": "finish"}}
+- Otherwise, execute the single NEXT pending user instruction without repeating past actions.
+"""
+        return prompt
 
     def _call_llm(self, prompt: str) -> Dict[str, Any]:
         import re
