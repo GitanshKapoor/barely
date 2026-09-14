@@ -92,7 +92,7 @@ export default function ExecutionsPage() {
             ) : (
               runs.map((run: any) => (
                 <tr key={run.id} className="hover:bg-slate-800/30 transition-colors group">
-                  <td className="px-6 py-4 font-medium text-slate-200">
+                  <td className="px-6 py-4 font-medium text-slate-200 align-middle">
                     <div className="flex items-center gap-2.5">
                       {run.status === "completed" && run.success && <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />}
                       {run.status === "completed" && !run.success && <XCircle className="w-4 h-4 text-rose-400 flex-shrink-0" />}
@@ -116,13 +116,13 @@ export default function ExecutionsPage() {
                       </div>
                     )}
                   </td>
-                  <td className="px-6 py-4">
+                  <td className="px-6 py-4 align-middle">
                     <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-slate-800 text-slate-300 border border-slate-700 uppercase">
                       {run.device || 'desktop'}
                     </span>
                   </td>
-                  <td className="px-6 py-4 font-mono text-xs text-slate-400">{run.id}</td>
-                  <td className="px-6 py-4 whitespace-nowrap">
+                  <td className="px-6 py-4 font-mono text-xs text-slate-400 align-middle">{run.id}</td>
+                  <td className="px-6 py-4 whitespace-nowrap align-middle">
                     <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold border ${
                       run.status === 'completed' && run.success ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' :
                       run.status === 'completed' && !run.success ? 'bg-rose-500/10 text-rose-400 border-rose-500/20' :
@@ -137,10 +137,11 @@ export default function ExecutionsPage() {
                       {run.status === "cancelled" && "⊘ Cancelled"}
                     </span>
                   </td>
-                  <td className="px-6 py-4 text-right whitespace-nowrap">
+                  <td className="px-6 py-4 text-right whitespace-nowrap align-middle">
                     <div className="flex items-center justify-end gap-2">
                       {(run.status === "running" || run.status === "pending") && (
                         <button
+                          type="button"
                           onClick={(e) => handleCancel(run.id, e)}
                           disabled={cancellingId === run.id}
                           className="px-2.5 py-1 text-xs font-medium text-rose-400 hover:text-rose-200 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 rounded-lg transition-colors flex items-center gap-1"
@@ -160,7 +161,8 @@ export default function ExecutionsPage() {
                         }}
                         triggerButton={(openModal) => (
                           <button
-                            onClick={openModal}
+                            type="button"
+                            onClick={(e) => openModal(e)}
                             title="Re-run & Reconfigure"
                             className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 rounded-lg text-xs font-semibold flex items-center gap-1 transition-all shadow-sm cursor-pointer"
                           >

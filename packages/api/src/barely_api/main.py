@@ -46,12 +46,14 @@ def list_runs():
                 "id": r.id,
                 "name": r.name or r.id,
                 "goal": r.goal,
+                "start_url": r.start_url,
                 "device": r.device,
                 "status": r.status,
                 "success": r.success,
                 "failure_reason": r.failure_reason,
                 "strict_mode": bool(r.strict_mode),
-                "tags": [t for t in r.tags.split(",") if t] if r.tags else []
+                "tags": [t for t in r.tags.split(",") if t] if r.tags else [],
+                "created_at": r.created_at.isoformat() if r.created_at else None
             })
         return {"runs": runs}
     finally:
