@@ -31,6 +31,18 @@ def process_job(run_id: str, goal_text: str, start_url: str, device: str):
         
     except Exception as e:
         logger.error(f"Job {run_id} failed: {e}")
+        db = SessionLocal()
+        try:
+            run = db.query(RunRecord).filter(RunRecord.id == run_id).first()
+            if run:
+                run.status = "completed"
+                run.success = False
+                run.failure_reason = f"Fatal Worker Crash: {str(e)}"
+            db.commit()
+        except Exception as dbe:
+            logger.error(f"Failed to update job status after crash: {dbe}")
+        finally:
+            db.close()
 
 def start_worker():
     init_db()

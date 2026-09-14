@@ -152,18 +152,23 @@ class AgentLoop:
         return goal_text + hist_text + f"\nCURRENT DOM:\n{json.dumps(dom, indent=2)}\n"
 
     def _call_llm(self, prompt: str) -> Dict[str, Any]:
+        import re
         messages = [
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": prompt}
         ]
         response = litellm.completion(model=self.model, messages=messages, temperature=0.0)
         raw_output = response.choices[0].message.content
-        if raw_output.startswith("```json"):
-            raw_output = raw_output.replace("```json", "").replace("```", "").strip()
+        
+        # More robust JSON extraction using regex to find the first { and last }
+        json_match = re.search(r'\{.*\}', raw_output, re.DOTALL)
+        if json_match:
+            raw_output = json_match.group(0)
+            
         try:
             return json.loads(raw_output)
         except json.JSONDecodeError:
-            return {"action": "fail", "reasoning": "LLM output invalid JSON"}
+            return {"action": "fail", "reasoning": "LLM output invalid JSON: " + raw_output[:100]}
 
     def _save_result_db(self, success: bool, reason: str, rich_history: list):
         if not self.run_id:
