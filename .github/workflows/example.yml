@@ -1,0 +1,31 @@
+name: CI / Barely AI Tests
+
+on:
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      # Example of how a developer runs Barely on their own codebase!
+      - name: Run Barely E2E Test
+        uses: GitanshKapoor/barely@main
+        with:
+          goal: .barely/goals/example.md
+          api_key: ${{ secrets.GROQ_API_KEY }}
+          jira_domain: ${{ secrets.JIRA_DOMAIN }}
+          jira_email: ${{ secrets.JIRA_EMAIL }}
+          jira_api_token: ${{ secrets.JIRA_API_TOKEN }}
+          jira_project_key: "BUG"
+
+      # Always upload the generated PDF report as a workflow artifact
+      - name: Upload Test Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: barely-test-report
+          path: .barely/runs/**/execution_report.pdf

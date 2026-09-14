@@ -1,0 +1,40 @@
+name: 'Barely AI Testing'
+description: 'Autonomous AI-driven end-to-end testing for web applications.'
+branding:
+  icon: 'check-circle'
+  color: 'blue'
+inputs:
+  goal:
+    description: 'Path to the goal markdown file (e.g. .barely/goals/checkout.md)'
+    required: true
+  url:
+    description: 'Override the starting URL (optional)'
+    required: false
+  api_key:
+    description: 'The API key for the AI provider (e.g. GROQ_API_KEY)'
+    required: true
+  jira_domain:
+    description: 'Jira Domain for auto-bug filing (optional)'
+    required: false
+  jira_email:
+    description: 'Jira Email (optional)'
+    required: false
+  jira_api_token:
+    description: 'Jira API Token (optional)'
+    required: false
+  jira_project_key:
+    description: 'Jira Project Key (optional)'
+    required: false
+runs:
+  using: 'docker'
+  image: 'Dockerfile'
+  args:
+    - "run"
+    - "${{ inputs.goal }}"
+    - "--headless"
+  env:
+    GROQ_API_KEY: ${{ inputs.api_key }}
+    JIRA_DOMAIN: ${{ inputs.jira_domain }}
+    JIRA_EMAIL: ${{ inputs.jira_email }}
+    JIRA_API_TOKEN: ${{ inputs.jira_api_token }}
+    JIRA_PROJECT_KEY: ${{ inputs.jira_project_key }}
