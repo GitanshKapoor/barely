@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import NewRunForm from "../../components/NewRunForm";
-import { CheckCircle2, XCircle, Clock, FileText, Ban, RotateCw } from 'lucide-react';
+import { CheckCircle2, XCircle, Clock, FileText, Ban, RotateCw, RotateCcw } from 'lucide-react';
 
 export default function ExecutionsPage() {
   const [runs, setRuns] = useState<any[]>([]);
@@ -140,6 +140,24 @@ export default function ExecutionsPage() {
                           {cancellingId === run.id ? 'Cancelling...' : 'Cancel'}
                         </button>
                       )}
+                      <NewRunForm
+                        initialData={{
+                          name: run.name || run.id,
+                          url: run.start_url || 'https://',
+                          goalText: run.goal,
+                          device: run.device || 'desktop',
+                          strictMode: Boolean(run.strict_mode)
+                        }}
+                        triggerButton={(openModal) => (
+                          <button
+                            onClick={openModal}
+                            title="Re-run & Reconfigure"
+                            className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 rounded-lg text-xs font-semibold flex items-center gap-1 transition-all shadow-sm cursor-pointer"
+                          >
+                            <RotateCcw className="w-3 h-3 text-[#0278ff]" /> Re-run
+                          </button>
+                        )}
+                      />
                       <Link 
                         href={`/runs/${run.id}`} 
                         className="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white border border-slate-700 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all shadow-sm"

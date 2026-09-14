@@ -1,19 +1,43 @@
 'use client';
 
 import { useState } from 'react';
-import { Play, Globe, Smartphone, Monitor, Tablet, X, Info } from 'lucide-react';
+import { Play, Globe, Smartphone, Monitor, Tablet, X, Info, RotateCcw } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
-export default function NewRunForm() {
+export interface RunConfigData {
+  name?: string;
+  url?: string;
+  goalText?: string;
+  device?: string;
+  strictMode?: boolean;
+}
+
+interface NewRunFormProps {
+  initialData?: RunConfigData;
+  triggerButton?: (open: () => void) => React.ReactNode;
+}
+
+export default function NewRunForm({ initialData, triggerButton }: NewRunFormProps) {
   const [loading, setLoading] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
-  const [name, setName] = useState('');
-  const [url, setUrl] = useState('https://');
-  const [goalText, setGoalText] = useState('');
-  const [device, setDevice] = useState('desktop');
-  const [strictMode, setStrictMode] = useState(false);
+  const [name, setName] = useState(initialData?.name || '');
+  const [url, setUrl] = useState(initialData?.url || 'https://');
+  const [goalText, setGoalText] = useState(initialData?.goalText || '');
+  const [device, setDevice] = useState(initialData?.device || 'desktop');
+  const [strictMode, setStrictMode] = useState(Boolean(initialData?.strictMode));
 
   const router = useRouter();
+
+  const openModal = () => {
+    if (initialData) {
+      setName(initialData.name || '');
+      setUrl(initialData.url || 'https://');
+      setGoalText(initialData.goalText || '');
+      setDevice(initialData.device || 'desktop');
+      setStrictMode(Boolean(initialData.strictMode));
+    }
+    setIsOpen(true);
+  };
 
   const handleRun = async (e: any) => {
     e.preventDefault();
@@ -31,9 +55,16 @@ export default function NewRunForm() {
         })
       });
       if (res.ok) {
+        const data = await res.json();
         setIsOpen(false);
-        setName(''); setUrl('https://'); setGoalText(''); setDevice('desktop'); setStrictMode(false);
-        router.refresh();
+        if (!initialData) {
+          setName(''); setUrl('https://'); setGoalText(''); setDevice('desktop'); setStrictMode(false);
+        }
+        if (data.job_id) {
+          router.push(`/runs/${data.job_id}`);
+        } else {
+          router.refresh();
+        }
       } else {
         alert('Failed to queue the test. Check API logs.');
       }
@@ -51,9 +82,12 @@ export default function NewRunForm() {
   ];
 
   if (!isOpen) {
+    if (triggerButton) {
+      return <>{triggerButton(openModal)}</>;
+    }
     return (
-      <button onClick={() => setIsOpen(true)}
-        className="flex items-center gap-2 px-4 py-2 bg-[#0278ff] hover:bg-[#0062d6] text-white text-sm font-semibold rounded-lg shadow-lg shadow-[#0278ff]/20 transition-all">
+      <button onClick={openModal}
+        className="flex items-center gap-2 px-4 py-2 bg-[#0278ff] hover:bg-[#0062d6] text-white text-sm font-semibold rounded-lg shadow-lg shadow-[#0278ff]/20 transition-all cursor-pointer">
         <Play className="w-4 h-4 fill-current" /> Start New Test
       </button>
     );
@@ -64,10 +98,14 @@ export default function NewRunForm() {
       <form onSubmit={handleRun} className="bg-[#0d1322] border border-slate-800 rounded-xl p-6 w-full max-w-lg shadow-2xl space-y-5">
         <div className="flex items-center justify-between pb-3 border-b border-slate-800/80">
           <div>
-            <h3 className="text-lg font-bold text-slate-100">Configure Test Run</h3>
-            <p className="text-xs text-slate-400 mt-0.5">The autonomous AI agent will execute your test instructions.</p>
+            <h3 className="text-lg font-bold text-slate-100">
+              {initialData ? 'Re-run & Reconfigure Test' : 'Configure Test Run'}
+            </h3>
+            <p className="text-xs text-slate-400 mt-0.5">
+              {initialData ? 'Tweak any test parameters and launch a new execution.' : 'The autonomous AI agent will execute your test instructions.'}
+            </p>
           </div>
-          <button type="button" onClick={() => setIsOpen(false)} className="p-1.5 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-white transition-colors">
+          <button type="button" onClick={() => setIsOpen(false)} className="p-1.5 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-white transition-colors cursor-pointer">
             <X className="w-4 h-4" />
           </button>
         </div>
@@ -101,7 +139,7 @@ export default function NewRunForm() {
             <div className="grid grid-cols-2 lg:grid-cols-4 gap-2">
               {devices.map(d => (
                 <button key={d.id} type="button" onClick={() => setDevice(d.id)}
-                  className={"flex flex-col items-center gap-1.5 py-3 rounded-lg border text-xs font-medium transition-colors " +
+                  className={"flex flex-col items-center gap-1.5 py-3 rounded-lg border text-xs font-medium transition-colors cursor-pointer " +
                     (device === d.id
                       ? 'bg-[#0278ff]/15 border-[#0278ff] text-[#0278ff] font-bold'
                       : 'bg-[#070b14] border-slate-800 text-slate-400 hover:text-slate-200 hover:border-slate-700')}>
@@ -151,14 +189,14 @@ export default function NewRunForm() {
         </div>
 
         <div className="flex items-center gap-3 justify-end pt-2 border-t border-slate-800/80">
-          <button type="button" onClick={() => setIsOpen(false)} className="px-4 py-2 text-sm font-semibold text-slate-400 hover:text-white transition-colors">
+          <button type="button" onClick={() => setIsOpen(false)} className="px-4 py-2 text-sm font-semibold text-slate-400 hover:text-white transition-colors cursor-pointer">
             Cancel
           </button>
           <button type="submit" disabled={loading}
-            className="flex items-center gap-2 px-5 py-2.5 bg-[#0278ff] hover:bg-[#0062d6] text-white text-sm font-semibold rounded-lg shadow-lg shadow-[#0278ff]/20 transition-all disabled:opacity-50">
+            className="flex items-center gap-2 px-5 py-2.5 bg-[#0278ff] hover:bg-[#0062d6] text-white text-sm font-semibold rounded-lg shadow-lg shadow-[#0278ff]/20 transition-all disabled:opacity-50 cursor-pointer">
             {loading
               ? <><span className="animate-spin inline-block w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full" /> Queuing Test...</>
-              : <><Play className="w-3.5 h-3.5 fill-current" /> Run Test</>}
+              : <><Play className="w-3.5 h-3.5 fill-current" /> {initialData ? 'Re-run Now' : 'Run Test'}</>}
           </button>
         </div>
       </form>

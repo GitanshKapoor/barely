@@ -14,8 +14,10 @@ import {
   Terminal, 
   Layers, 
   ExternalLink,
-  RotateCw
+  RotateCw,
+  RotateCcw
 } from 'lucide-react';
+import NewRunForm from '../../../components/NewRunForm';
 
 interface RunStep {
   description: string;
@@ -32,6 +34,7 @@ interface RunData {
   status: string;
   success: boolean | null;
   failure_reason: string | null;
+  strict_mode?: boolean;
   created_at: string | null;
   logs: string;
   steps: RunStep[];
@@ -165,6 +168,25 @@ export default function ClientRunDetails({ id }: { id: string }) {
 
         {/* Action Controls */}
         <div className="flex items-center gap-2.5 flex-wrap">
+          <NewRunForm
+            initialData={{
+              name: run.name || run.id,
+              url: run.start_url || 'https://',
+              goalText: run.goal,
+              device: run.device || 'desktop',
+              strictMode: Boolean(run.strict_mode)
+            }}
+            triggerButton={(openModal) => (
+              <button
+                onClick={openModal}
+                className="flex items-center gap-1.5 px-3.5 py-2 bg-[#0278ff]/15 hover:bg-[#0278ff]/25 text-[#0278ff] hover:text-white border border-[#0278ff]/30 text-xs font-semibold rounded-lg transition-all shadow-sm cursor-pointer"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                Re-run & Reconfigure
+              </button>
+            )}
+          />
+
           {isRunning && (
             <button
               onClick={handleCancel}
