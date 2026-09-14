@@ -1,12 +1,14 @@
 import json
+import uuid
+import datetime
 from pathlib import Path
-from fastapi import FastAPI
+from fastapi import FastAPI, BackgroundTasks, HTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
 
 app = FastAPI(title="Barely Control Plane API")
 
-# Enable CORS for the Next.js frontend
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -14,15 +16,19 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Serve the raw screenshots and PDFs directly from the workspace
 runs_dir = Path(".barely/runs")
-if not runs_dir.exists():
-    runs_dir.mkdir(parents=True)
+queue_dir = Path(".barely/queue/pending")
+
+for d in [runs_dir, queue_dir]:
+    d.mkdir(parents=True, exist_ok=True)
+
 app.mount("/static/runs", StaticFiles(directory=".barely/runs"), name="runs")
+
+class RunRequest(BaseModel):
+    goal_file: str
 
 @app.get("/api/runs")
 def list_runs():
-    """Returns a list of all historical test runs for the Dashboard."""
     runs = []
     for run_folder in runs_dir.iterdir():
         if run_folder.is_dir():
@@ -34,15 +40,25 @@ def list_runs():
                     runs.append(data)
                 except Exception:
                     pass
-    
-    # Sort newest first
     runs.sort(key=lambda x: x["id"], reverse=True)
     return {"runs": runs}
 
 @app.get("/api/runs/{run_id}")
 def get_run(run_id: str):
-    """Returns detailed step-by-step history for a specific run."""
     result_file = runs_dir / run_id / "result.json"
     if result_file.exists():
         return json.loads(result_file.read_text())
-    return {"error": "Run not found"}
+    raise HTTPException(status_code=404, detail="Run not found")
+
+@app.post("/api/runs")
+def trigger_run(req: RunRequest):
+    """Phase 4: API pushes the execution job to the Queue for the Worker to pick up."""
+    job_id = f"job_{uuid.uuid4().hex[:8]}"
+    job_payload = {
+        "job_id": job_id,
+        "goal_file": req.goal_file,
+        "status": "pending",
+        "timestamp": datetime.datetime.now().isoformat()
+    }
+    (queue_dir / f"{job_id}.json").write_text(json.dumps(job_payload))
+    return {"message": "Job queued successfully", "job_id": job_id}

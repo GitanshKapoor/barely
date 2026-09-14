@@ -1,16 +1,34 @@
 version: '3.8'
 
 services:
-  barely:
-    build:
+  barely-api:
+    build: 
       context: .
       dockerfile: Dockerfile
-    # Mount the current directory so that the .barely/ workspace folder 
-    # (and generated PDFs) are saved directly to your Mac
+    command: ["uv", "run", "--directory", "packages/api", "uvicorn", "barely_api.main:app", "--host", "0.0.0.0", "--port", "8000"]
+    ports:
+      - "8000:8000"
     volumes:
       - ./:/workspace
-    # Automatically load API keys from the .env file
     env_file:
       - .env
-    # Default command when running `docker compose up`
-    command: ["--help"]
+
+  barely-worker:
+    build: 
+      context: .
+      dockerfile: Dockerfile
+    command: ["uv", "run", "--directory", "packages/worker", "python", "src/barely_worker/main.py"]
+    volumes:
+      - ./:/workspace
+    env_file:
+      - .env
+
+  # The UI uses a node-based image for production build
+  barely-ui:
+    image: node:20-alpine
+    working_dir: /workspace/packages/ui
+    command: sh -c "npm install && npm run dev"
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./:/workspace
