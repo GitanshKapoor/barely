@@ -113,10 +113,14 @@ class AgentLoop:
                         return RunResult(goal_name=goal.name, success=False, failure_reason=str(e), step_history=step_history, rich_history=rich_history, run_dir=str(run_dir))
 
                 if action == "finish":
+                    self._save_result_json(run_dir, goal.name, True, None, step_history, rich_history)
+
                     print("✅ Goal Accomplished Successfully!")
                     return RunResult(goal_name=goal.name, success=True, step_history=step_history, rich_history=rich_history, run_dir=str(run_dir))
                 elif action == "fail":
                     reason = action_payload.get('reasoning', 'Unknown AI Failure')
+                    self._save_result_json(run_dir, goal.name, False, reason, step_history, rich_history)
+
                     print(f"❌ Test Failed: {reason}")
                     return RunResult(goal_name=goal.name, success=False, failure_reason=reason, step_history=step_history, rich_history=rich_history, run_dir=str(run_dir))
                     
@@ -169,3 +173,13 @@ class AgentLoop:
             return json.loads(raw_output)
         except json.JSONDecodeError:
             return {"action": "fail", "reasoning": "LLM output invalid JSON"}
+
+    def _save_result_json(self, run_dir: Path, goal_name: str, success: bool, reason: str, step_history: list, rich_history: list):
+        """Saves the run metadata for the Web Dashboard to consume."""
+        data = {
+            "goal": goal_name,
+            "success": success,
+            "failure_reason": reason,
+            "steps": [{"description": s.description, "screenshot": s.screenshot_path} for s in rich_history]
+        }
+        (run_dir / "result.json").write_text(json.dumps(data, indent=2))
