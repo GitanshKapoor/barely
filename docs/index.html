@@ -1,0 +1,663 @@
+<!DOCTYPE html>
+<html lang="en" class="dark scroll-smooth">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Barely | Autonomous AI Agent for End-to-End Web Testing</title>
+  <meta name="description" content="Barely is an open-source autonomous AI agent designed to replace brittle manual QA and Selenium/Cypress scripts with natural language goal execution." />
+  <link rel="icon" type="image/png" href="./assets/logo.png" />
+
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet" />
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', 'sans-serif'],
+            mono: ['JetBrains Mono', 'monospace'],
+          },
+          colors: {
+            brand: {
+              50: '#eef8ff',
+              100: '#d8eeff',
+              400: '#38bdf8',
+              500: '#0278ff',
+              600: '#0062d6',
+              700: '#004eb0',
+            },
+            k8s: '#326CE5',
+            docker: '#2496ED',
+            dark: {
+              900: '#070b12',
+              850: '#0a0f1d',
+              800: '#0f172a',
+              750: '#15203b',
+              700: '#1e293b',
+              600: '#334155',
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <style>
+    body {
+      background-color: #070b12;
+      color: #f1f5f9;
+      font-family: 'Inter', sans-serif;
+    }
+    .hero-glow {
+      background: radial-gradient(circle 500px at 50% 20%, rgba(2, 120, 255, 0.18), transparent 75%);
+    }
+    .grid-bg {
+      background-size: 40px 40px;
+      background-image: 
+        linear-gradient(to right, rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+    }
+    .k8s-badge {
+      background: linear-gradient(135deg, rgba(50, 108, 229, 0.15) 0%, rgba(2, 120, 255, 0.05) 100%);
+      border: 1px solid rgba(50, 108, 229, 0.35);
+    }
+    .code-glow {
+      box-shadow: 0 0 50px -10px rgba(2, 120, 255, 0.25);
+    }
+  </style>
+</head>
+<body class="min-h-screen grid-bg text-slate-200 antialiased selection:bg-brand-500 selection:text-white">
+
+  <!-- Navigation Bar -->
+  <nav class="sticky top-0 z-50 backdrop-blur-xl bg-dark-900/80 border-b border-dark-700/60 transition-all">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      <div class="flex items-center space-x-4">
+        <a href="#" class="flex items-center space-x-3 group">
+          <img src="./assets/logo.png" alt="Barely Logo" class="h-9 w-auto rounded-lg shadow-md group-hover:scale-105 transition-transform" />
+          <div class="flex flex-col">
+            <span class="text-xl font-bold tracking-tight text-white flex items-center gap-2">
+              Barely<span class="text-brand-500">.ai</span>
+            </span>
+          </div>
+        </a>
+        <div class="hidden md:flex items-center pl-3">
+          <span class="text-xs font-semibold px-2.5 py-0.5 rounded-full k8s-badge text-sky-400">
+            v1.0 "Baby Kangaroo"
+          </span>
+        </div>
+      </div>
+
+      <!-- Nav Links -->
+      <div class="hidden lg:flex items-center space-x-8 text-sm font-medium text-slate-300">
+        <a href="#features" class="hover:text-white transition-colors">Features</a>
+        <a href="#architecture" class="hover:text-white transition-colors">Architecture</a>
+        <a href="#workflow" class="hover:text-white transition-colors">How It Works</a>
+        <a href="#quickstart" class="hover:text-white transition-colors">Quickstart</a>
+        <a href="#roadmap" class="hover:text-white transition-colors">Roadmap</a>
+        <a href="https://github.com/GitanshKapoor/barely#readme" target="_blank" class="hover:text-white transition-colors flex items-center gap-1">
+          Docs <i data-lucide="external-link" class="w-3.5 h-3.5"></i>
+        </a>
+      </div>
+
+      <!-- Action Buttons -->
+      <div class="flex items-center space-x-3">
+        <a href="https://github.com/GitanshKapoor/barely" target="_blank" class="flex items-center gap-2 px-3.5 py-1.5 rounded-lg text-xs sm:text-sm font-medium bg-dark-800 hover:bg-dark-700 border border-dark-600 text-slate-100 transition-all shadow-sm group">
+          <i data-lucide="github" class="w-4 h-4 text-slate-300 group-hover:text-white"></i>
+          <span>GitHub</span>
+          <span class="hidden sm:inline-flex items-center px-1.5 py-0.2 rounded bg-dark-700 text-slate-300 text-xs border border-dark-600">Star</span>
+        </a>
+        <a href="#quickstart" class="flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs sm:text-sm font-semibold bg-brand-500 hover:bg-brand-600 text-white shadow-lg shadow-brand-500/25 transition-all">
+          <i data-lucide="terminal" class="w-4 h-4"></i>
+          <span>Launch</span>
+        </a>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Hero Section -->
+  <section class="relative pt-20 pb-24 overflow-hidden hero-glow">
+    <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+      
+      <!-- Release Announcement Pill -->
+      <div class="inline-flex items-center gap-2 px-4 py-1.5 rounded-full k8s-badge text-xs sm:text-sm text-sky-300 mb-8 animate-pulse">
+        <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+        <span class="font-semibold tracking-wide">Release 1.0 General Availability</span>
+        <span class="text-slate-500">•</span>
+        <a href="#quickstart" class="hover:underline text-white flex items-center gap-1">Deploy with Docker <i data-lucide="arrow-right" class="w-3.5 h-3.5"></i></a>
+      </div>
+
+      <!-- Main Headline -->
+      <h1 class="text-4xl sm:text-6xl lg:text-7xl font-extrabold tracking-tight text-white mb-6 leading-tight">
+        Autonomous AI Agent for <br class="hidden sm:block" />
+        <span class="bg-clip-text text-transparent bg-gradient-to-r from-blue-400 via-sky-300 to-indigo-300">
+          End-to-End Web Testing
+        </span>
+      </h1>
+
+      <!-- Tagline matching README -->
+      <p class="max-w-3xl mx-auto text-lg sm:text-xl text-slate-300 font-normal leading-relaxed mb-10">
+        You define the <span class="text-sky-300 font-medium italic">test intent</span> and <span class="text-sky-300 font-medium italic">assertions</span> in natural language — Barely's autonomous agent figures out the exact steps, elements, and browser actions to achieve and verify it.
+      </p>
+
+      <!-- CTA Buttons -->
+      <div class="flex flex-col sm:flex-row items-center justify-center gap-4 mb-12">
+        <a href="#quickstart" class="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl font-semibold text-white bg-brand-500 hover:bg-brand-600 shadow-xl shadow-brand-500/30 transition-all">
+          <i data-lucide="play" class="w-4 h-4 fill-current"></i>
+          <span>Get Started with Docker</span>
+        </a>
+        <a href="https://github.com/GitanshKapoor/barely" target="_blank" class="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-xl font-semibold text-slate-200 bg-dark-800 hover:bg-dark-700 border border-dark-600 transition-all">
+          <i data-lucide="github" class="w-4 h-4"></i>
+          <span>Explore Repository</span>
+        </a>
+      </div>
+
+      <!-- Copyable Quickstart Hero Command -->
+      <div class="max-w-2xl mx-auto mb-16">
+        <div class="relative flex items-center justify-between px-4 py-3 bg-dark-900/90 border border-dark-700/80 rounded-xl font-mono text-xs sm:text-sm text-slate-300 shadow-2xl">
+          <div class="flex items-center gap-3 overflow-x-auto py-0.5">
+            <span class="text-brand-400 font-bold">$</span>
+            <span class="select-all">git clone https://github.com/GitanshKapoor/barely.git && cd barely && docker compose up -d</span>
+          </div>
+          <button onclick="copyCommand(this, 'git clone https://github.com/GitanshKapoor/barely.git && cd barely && docker compose up -d')" class="ml-3 px-2.5 py-1.5 bg-dark-800 hover:bg-dark-700 text-slate-200 rounded-lg text-xs font-sans transition-all flex items-center gap-1 shrink-0 border border-dark-700">
+            <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+            <span>Copy</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Hero Visual Showcase / Banner -->
+      <div class="relative max-w-5xl mx-auto rounded-2xl p-1 bg-gradient-to-b from-blue-500/20 via-sky-500/10 to-transparent code-glow">
+        <div class="rounded-xl overflow-hidden bg-dark-850 border border-dark-700/80 shadow-2xl">
+          <!-- Window Bar -->
+          <div class="flex items-center justify-between px-4 py-3 bg-dark-900 border-b border-dark-700/70">
+            <div class="flex items-center space-x-2">
+              <div class="w-3 h-3 rounded-full bg-rose-500/80"></div>
+              <div class="w-3 h-3 rounded-full bg-amber-500/80"></div>
+              <div class="w-3 h-3 rounded-full bg-emerald-500/80"></div>
+              <span class="text-xs font-mono text-slate-500 ml-2">barely-web-dashboard • http://localhost:3000</span>
+            </div>
+            <div class="flex items-center gap-3 text-xs text-slate-400 font-mono">
+              <span class="flex items-center gap-1.5"><span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>Worker Active</span>
+              <span class="px-2 py-0.5 bg-dark-800 rounded border border-dark-700">PostgreSQL 15</span>
+            </div>
+          </div>
+          <!-- Banner Image -->
+          <img src="./assets/banner.png" alt="Barely Dashboard Preview" class="w-full h-auto object-cover" />
+        </div>
+      </div>
+
+      <!-- Enterprise Badges Row -->
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 max-w-4xl mx-auto mt-12 text-center text-xs font-mono text-slate-400">
+        <div class="p-3 rounded-lg bg-dark-850/60 border border-dark-700/50">
+          <div class="text-lg font-bold text-white mb-0.5">$0 Caching</div>
+          <div>Instant Cached Re-Runs</div>
+        </div>
+        <div class="p-3 rounded-lg bg-dark-850/60 border border-dark-700/50">
+          <div class="text-lg font-bold text-white mb-0.5">Multi-Device</div>
+          <div>Desktop, iOS & Android VRT</div>
+        </div>
+        <div class="p-3 rounded-lg bg-dark-850/60 border border-dark-700/50">
+          <div class="text-lg font-bold text-white mb-0.5">Auto-Healing</div>
+          <div>Strict & Resilient Locators</div>
+        </div>
+        <div class="p-3 rounded-lg bg-dark-850/60 border border-dark-700/50">
+          <div class="text-lg font-bold text-white mb-0.5">Zero-Disk</div>
+          <div>PostgreSQL Persisted Engine</div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- Architecture Pipeline Section (Kubernetes/Argo Style) -->
+  <section id="architecture" class="py-20 border-t border-dark-800 bg-dark-900/40">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="text-center max-w-3xl mx-auto mb-16">
+        <span class="text-xs font-bold uppercase tracking-wider text-brand-400">Architecture</span>
+        <h2 class="text-3xl sm:text-4xl font-extrabold text-white mt-2 mb-4">
+          The Declarative Autonomous Pipeline
+        </h2>
+        <p class="text-slate-400 text-sm sm:text-base">
+          From human intent to bulletproof verification. Barely combines intelligent DOM distillation with multi-modal LLM reasoning and deterministic Playwright execution.
+        </p>
+      </div>
+
+      <!-- Step Cards Pipeline -->
+      <div class="grid grid-cols-1 md:grid-cols-5 gap-4 relative">
+        
+        <!-- Step 1 -->
+        <div class="p-5 rounded-xl bg-dark-850 border border-dark-700/70 hover:border-brand-500/50 transition-all flex flex-col justify-between">
+          <div>
+            <div class="flex items-center justify-between mb-4">
+              <span class="w-8 h-8 rounded-lg bg-blue-500/10 border border-blue-500/30 flex items-center justify-center text-blue-400 font-mono font-bold text-xs">01</span>
+              <i data-lucide="file-text" class="w-5 h-5 text-slate-400"></i>
+            </div>
+            <h3 class="text-base font-semibold text-white mb-1">Intent Specification</h3>
+            <p class="text-xs text-slate-400 leading-relaxed">
+              Write test goals in Markdown with metadata tags (<code class="text-sky-300">#smoke</code>, <code class="text-sky-300">#regression</code>) and plain-English actions.
+            </p>
+          </div>
+          <div class="mt-4 pt-3 border-t border-dark-700/40 text-[11px] font-mono text-slate-500">
+            input: checkout.md
+          </div>
+        </div>
+
+        <!-- Step 2 -->
+        <div class="p-5 rounded-xl bg-dark-850 border border-dark-700/70 hover:border-brand-500/50 transition-all flex flex-col justify-between">
+          <div>
+            <div class="flex items-center justify-between mb-4">
+              <span class="w-8 h-8 rounded-lg bg-sky-500/10 border border-sky-500/30 flex items-center justify-center text-sky-400 font-mono font-bold text-xs">02</span>
+              <i data-lucide="cpu" class="w-5 h-5 text-slate-400"></i>
+            </div>
+            <h3 class="text-base font-semibold text-white mb-1">DOM Distillation</h3>
+            <p class="text-xs text-slate-400 leading-relaxed">
+              Prunes thousands of bloated DOM nodes down to essential interactable trees with ARIA roles and bounding box scores.
+            </p>
+          </div>
+          <div class="mt-4 pt-3 border-t border-dark-700/40 text-[11px] font-mono text-slate-500">
+            engine: barely_core.parser
+          </div>
+        </div>
+
+        <!-- Step 3 -->
+        <div class="p-5 rounded-xl bg-dark-850 border border-dark-700/70 hover:border-brand-500/50 transition-all flex flex-col justify-between">
+          <div>
+            <div class="flex items-center justify-between mb-4">
+              <span class="w-8 h-8 rounded-lg bg-indigo-500/10 border border-indigo-500/30 flex items-center justify-center text-indigo-400 font-mono font-bold text-xs">03</span>
+              <i data-lucide="brain-circuit" class="w-5 h-5 text-slate-400"></i>
+            </div>
+            <h3 class="text-base font-semibold text-white mb-1">Multi-LLM Reasoning</h3>
+            <p class="text-xs text-slate-400 leading-relaxed">
+              Claude 3.5 Sonnet, Groq, OpenAI, or Gemini formulate deterministic execution steps via LiteLLM abstraction.
+            </p>
+          </div>
+          <div class="mt-4 pt-3 border-t border-dark-700/40 text-[11px] font-mono text-slate-500">
+            runtime: LiteLLM agent
+          </div>
+        </div>
+
+        <!-- Step 4 -->
+        <div class="p-5 rounded-xl bg-dark-850 border border-dark-700/70 hover:border-brand-500/50 transition-all flex flex-col justify-between">
+          <div>
+            <div class="flex items-center justify-between mb-4">
+              <span class="w-8 h-8 rounded-lg bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 font-mono font-bold text-xs">04</span>
+              <i data-lucide="wrench" class="w-5 h-5 text-slate-400"></i>
+            </div>
+            <h3 class="text-base font-semibold text-white mb-1">Playwright & Healing</h3>
+            <p class="text-xs text-slate-400 leading-relaxed">
+              Clicks, types, and asserts in Chromium. If a selector breaks, autonomous healing kicks in to find the updated target.
+            </p>
+          </div>
+          <div class="mt-4 pt-3 border-t border-dark-700/40 text-[11px] font-mono text-slate-500">
+            browser: Chromium async
+          </div>
+        </div>
+
+        <!-- Step 5 -->
+        <div class="p-5 rounded-xl bg-dark-850 border border-dark-700/70 hover:border-brand-500/50 transition-all flex flex-col justify-between">
+          <div>
+            <div class="flex items-center justify-between mb-4">
+              <span class="w-8 h-8 rounded-lg bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 font-mono font-bold text-xs">05</span>
+              <i data-lucide="package-check" class="w-5 h-5 text-slate-400"></i>
+            </div>
+            <h3 class="text-base font-semibold text-white mb-1">Audit Deliverables</h3>
+            <p class="text-xs text-slate-400 leading-relaxed">
+              Generates executive multi-page PDF audit reports, golden visual baselines, and downloadable .zip run bundles.
+            </p>
+          </div>
+          <div class="mt-4 pt-3 border-t border-dark-700/40 text-[11px] font-mono text-slate-500">
+            output: PDF / HTML / Zip
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- Core Features Grid (Docker-like capabilities) -->
+  <section id="features" class="py-24">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="text-center max-w-3xl mx-auto mb-16">
+        <span class="text-xs font-bold uppercase tracking-wider text-brand-400">Core Capabilities</span>
+        <h2 class="text-3xl sm:text-4xl font-extrabold text-white mt-2 mb-4">
+          Engineered for Enterprise Reliability
+        </h2>
+        <p class="text-slate-400 text-sm sm:text-base">
+          Everything you need to replace brittle QA scripts with resilient, self-maintaining agentic pipelines.
+        </p>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        
+        <!-- Feature 1 -->
+        <div class="p-6 rounded-xl bg-dark-850 border border-dark-700/70 hover:border-dark-600 transition-all">
+          <div class="w-10 h-10 rounded-lg bg-blue-500/10 text-brand-400 flex items-center justify-center mb-4">
+            <i data-lucide="zap" class="w-5 h-5"></i>
+          </div>
+          <h3 class="text-lg font-bold text-white mb-2">$0 Action Plan Caching</h3>
+          <p class="text-sm text-slate-400 leading-relaxed">
+            The AI reasons through the test once and compiles a deterministic action plan directly to PostgreSQL. Subsequent test runs cost $0 and execute in milliseconds.
+          </p>
+        </div>
+
+        <!-- Feature 2 -->
+        <div class="p-6 rounded-xl bg-dark-850 border border-dark-700/70 hover:border-dark-600 transition-all">
+          <div class="w-10 h-10 rounded-lg bg-emerald-500/10 text-emerald-400 flex items-center justify-center mb-4">
+            <i data-lucide="shield-check" class="w-5 h-5"></i>
+          </div>
+          <h3 class="text-lg font-bold text-white mb-2">Strict Mode & Auto-Healing</h3>
+          <p class="text-sm text-slate-400 leading-relaxed">
+            Toggle strict uniqueness checking to catch ambiguous UI selectors, or enable autonomous auto-healing so tests never break from dynamic CSS classes or DOM shifts.
+          </p>
+        </div>
+
+        <!-- Feature 3 -->
+        <div class="p-6 rounded-xl bg-dark-850 border border-dark-700/70 hover:border-dark-600 transition-all">
+          <div class="w-10 h-10 rounded-lg bg-purple-500/10 text-purple-400 flex items-center justify-center mb-4">
+            <i data-lucide="monitor-smartphone" class="w-5 h-5"></i>
+          </div>
+          <h3 class="text-lg font-bold text-white mb-2">Autonomous Visual Baselines</h3>
+          <p class="text-sm text-slate-400 leading-relaxed">
+            Automatically capture and maintain golden UI viewport snapshots across Desktop (1920x1080), Tablet, iPhone 15 Pro, and Android device profiles.
+          </p>
+        </div>
+
+        <!-- Feature 4 -->
+        <div class="p-6 rounded-xl bg-dark-850 border border-dark-700/70 hover:border-dark-600 transition-all">
+          <div class="w-10 h-10 rounded-lg bg-amber-500/10 text-amber-400 flex items-center justify-center mb-4">
+            <i data-lucide="tags" class="w-5 h-5"></i>
+          </div>
+          <h3 class="text-lg font-bold text-white mb-2">Test Suite Tags & Filtering</h3>
+          <p class="text-sm text-slate-400 leading-relaxed">
+            Categorize and filter test executions with suite tags like <code class="text-sky-300">#smoke</code>, <code class="text-sky-300">#regression</code>, <code class="text-sky-300">#auth</code>, and <code class="text-sky-300">#p0</code> with instant quick-toggle presets.
+          </p>
+        </div>
+
+        <!-- Feature 5 -->
+        <div class="p-6 rounded-xl bg-dark-850 border border-dark-700/70 hover:border-dark-600 transition-all">
+          <div class="w-10 h-10 rounded-lg bg-rose-500/10 text-rose-400 flex items-center justify-center mb-4">
+            <i data-lucide="file-check-2" class="w-5 h-5"></i>
+          </div>
+          <h3 class="text-lg font-bold text-white mb-2">Executive PDF Reports & Zip Bundles</h3>
+          <p class="text-sm text-slate-400 leading-relaxed">
+            Generate print-ready multi-page PDF audit reports with executive summaries, step timelines, and download complete bundles containing <code class="text-slate-300">REPORT.md</code>, <code class="text-slate-300">report.html</code>, and screenshots.
+          </p>
+        </div>
+
+        <!-- Feature 6 -->
+        <div class="p-6 rounded-xl bg-dark-850 border border-dark-700/70 hover:border-dark-600 transition-all">
+          <div class="w-10 h-10 rounded-lg bg-sky-500/10 text-sky-400 flex items-center justify-center mb-4">
+            <i data-lucide="database" class="w-5 h-5"></i>
+          </div>
+          <h3 class="text-lg font-bold text-white mb-2">Zero-Disk Runtime Architecture</h3>
+          <p class="text-sm text-slate-400 leading-relaxed">
+            100% of test runs, console logs, visual baselines, screenshots, and cached action plans persist directly in PostgreSQL 15, decoupling workers from local filesystem storage.
+          </p>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- Interactive Tabbed Quickstart Section (Kubernetes / Docker Docs style) -->
+  <section id="quickstart" class="py-20 border-t border-dark-800 bg-dark-900/60">
+    <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="text-center max-w-2xl mx-auto mb-12">
+        <span class="text-xs font-bold uppercase tracking-wider text-brand-400">Quickstart</span>
+        <h2 class="text-3xl sm:text-4xl font-extrabold text-white mt-2 mb-4">
+          Up and Running in 60 Seconds
+        </h2>
+        <p class="text-slate-400 text-sm sm:text-base">
+          Deploy the complete stack via Docker Compose or run the native Python worker for visual browser execution.
+        </p>
+      </div>
+
+      <!-- Tabs Navigation -->
+      <div class="flex items-center justify-center space-x-2 mb-6">
+        <button onclick="switchTab('docker')" id="tab-btn-docker" class="tab-btn active px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold bg-brand-500 text-white shadow-lg transition-all flex items-center gap-2">
+          <i data-lucide="container" class="w-4 h-4"></i>
+          <span>Docker Compose (Recommended)</span>
+        </button>
+        <button onclick="switchTab('cli')" id="tab-btn-cli" class="tab-btn px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold bg-dark-800 text-slate-300 hover:bg-dark-700 transition-all flex items-center gap-2 border border-dark-700">
+          <i data-lucide="terminal" class="w-4 h-4"></i>
+          <span>Native CLI (uv)</span>
+        </button>
+        <button onclick="switchTab('goal')" id="tab-btn-goal" class="tab-btn px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold bg-dark-800 text-slate-300 hover:bg-dark-700 transition-all flex items-center gap-2 border border-dark-700">
+          <i data-lucide="file-code" class="w-4 h-4"></i>
+          <span>Sample Goal (.md)</span>
+        </button>
+      </div>
+
+      <!-- Tab 1: Docker Compose -->
+      <div id="tab-content-docker" class="tab-panel block">
+        <div class="rounded-xl overflow-hidden bg-dark-850 border border-dark-700/80 shadow-2xl">
+          <div class="flex items-center justify-between px-4 py-3 bg-dark-900 border-b border-dark-700/60 font-mono text-xs text-slate-400">
+            <span>docker-compose.yml • Control Plane + Worker + Postgres + UI</span>
+            <button onclick="copyCommand(this, 'git clone https://github.com/GitanshKapoor/barely.git\ncd barely\ncp .env.example .env\ndocker compose up -d')" class="flex items-center gap-1 text-slate-300 hover:text-white">
+              <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+              <span>Copy</span>
+            </button>
+          </div>
+          <pre class="p-5 font-mono text-xs sm:text-sm text-slate-200 overflow-x-auto leading-relaxed"><code><span class="text-slate-500"># 1. Clone repository</span>
+<span class="text-brand-400">git</span> clone https://github.com/GitanshKapoor/barely.git
+<span class="text-brand-400">cd</span> barely
+
+<span class="text-slate-500"># 2. Configure API Key (Groq, Anthropic, or OpenAI)</span>
+<span class="text-brand-400">cp</span> .env.example .env
+
+<span class="text-slate-500"># 3. Boot database, control plane API, worker, and web dashboard</span>
+<span class="text-brand-400">docker</span> compose up -d
+
+<span class="text-emerald-400">✔</span> [barely-db]     PostgreSQL 15 running on port 5432
+<span class="text-emerald-400">✔</span> [barely-api]    FastAPI Control Plane running on http://localhost:8000
+<span class="text-emerald-400">✔</span> [barely-worker] Autonomous Playwright Engine active
+<span class="text-emerald-400">✔</span> [barely-ui]     Next.js Web Dashboard ready on http://localhost:3000</code></pre>
+        </div>
+      </div>
+
+      <!-- Tab 2: Native CLI -->
+      <div id="tab-content-cli" class="tab-panel hidden">
+        <div class="rounded-xl overflow-hidden bg-dark-850 border border-dark-700/80 shadow-2xl">
+          <div class="flex items-center justify-between px-4 py-3 bg-dark-900 border-b border-dark-700/60 font-mono text-xs text-slate-400">
+            <span>terminal • Native Python Workspace via uv</span>
+            <button onclick="copyCommand(this, 'uv sync\nuv run playwright install chromium\nHEADLESS=false uv run barely run .barely/goals/example.md')" class="flex items-center gap-1 text-slate-300 hover:text-white">
+              <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+              <span>Copy</span>
+            </button>
+          </div>
+          <pre class="p-5 font-mono text-xs sm:text-sm text-slate-200 overflow-x-auto leading-relaxed"><code><span class="text-slate-500"># 1. Install dependencies with uv</span>
+<span class="text-brand-400">uv</span> sync
+
+<span class="text-slate-500"># 2. Install Chromium browser binaries</span>
+<span class="text-brand-400">uv</span> run playwright install chromium
+
+<span class="text-slate-500"># 3. Run with visible head to watch AI control the browser</span>
+<span class="text-brand-400">HEADLESS</span>=false uv run barely run .barely/goals/example.md</code></pre>
+        </div>
+      </div>
+
+      <!-- Tab 3: Goal File -->
+      <div id="tab-content-goal" class="tab-panel hidden">
+        <div class="rounded-xl overflow-hidden bg-dark-850 border border-dark-700/80 shadow-2xl">
+          <div class="flex items-center justify-between px-4 py-3 bg-dark-900 border-b border-dark-700/60 font-mono text-xs text-slate-400">
+            <span>.barely/goals/checkout.md • Declarative Natural Language Goal</span>
+            <button onclick="copyCommand(this, '---\ntags: [smoke, e2e, checkout]\ntimeout: 120\nstrict_mode: false\n---\n# Test Checkout Flow\n1. Navigate to https://shop.example.com\n2. Search for \'Wireless Headphones\'\n3. Click the first product card and click \'Add to Cart\'\n4. Verify the cart badge displays \'1\'\n5. Proceed to checkout and assert total price matches $99')" class="flex items-center gap-1 text-slate-300 hover:text-white">
+              <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+              <span>Copy</span>
+            </button>
+          </div>
+          <pre class="p-5 font-mono text-xs sm:text-sm text-slate-200 overflow-x-auto leading-relaxed"><code><span class="text-slate-500">---</span>
+<span class="text-sky-400">tags:</span> [smoke, e2e, checkout]
+<span class="text-sky-400">timeout:</span> 120
+<span class="text-sky-400">strict_mode:</span> false
+<span class="text-slate-500">---</span>
+<span class="text-brand-400"># Test Checkout Flow</span>
+1. Navigate to https://shop.example.com
+2. Search for <span class="text-amber-300">"Wireless Headphones"</span>
+3. Click the first product card and click <span class="text-amber-300">"Add to Cart"</span>
+4. Verify the cart badge displays <span class="text-amber-300">"1"</span>
+5. Proceed to checkout and assert total price matches <span class="text-amber-300">"$99"</span></code></pre>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- Release 2.0 Roadmap (Kubernetes / Argo style) -->
+  <section id="roadmap" class="py-20 border-t border-dark-800">
+    <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="text-center max-w-2xl mx-auto mb-12">
+        <span class="text-xs font-bold uppercase tracking-wider text-purple-400">Roadmap</span>
+        <h2 class="text-3xl sm:text-4xl font-extrabold text-white mt-2 mb-4">
+          Coming in Release 2.0
+        </h2>
+        <p class="text-slate-400 text-sm sm:text-base">
+          Expanding from single-node autonomous execution to enterprise cloud orchestration.
+        </p>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        
+        <div class="p-5 rounded-xl bg-dark-850 border border-dark-700/70 flex items-start gap-3">
+          <div class="w-8 h-8 rounded-lg bg-purple-500/10 text-purple-400 flex items-center justify-center shrink-0 mt-0.5">
+            <i data-lucide="cloud" class="w-4 h-4"></i>
+          </div>
+          <div>
+            <h4 class="text-sm font-semibold text-white">AWS EKS & ECS Deployments</h4>
+            <p class="text-xs text-slate-400 mt-1">
+              Production-ready Helm charts and ECS task definitions for horizontally autoscaling agent runners in AWS cloud.
+            </p>
+          </div>
+        </div>
+
+        <div class="p-5 rounded-xl bg-dark-850 border border-dark-700/70 flex items-start gap-3">
+          <div class="w-8 h-8 rounded-lg bg-blue-500/10 text-blue-400 flex items-center justify-center shrink-0 mt-0.5">
+            <i data-lucide="bug" class="w-4 h-4"></i>
+          </div>
+          <div>
+            <h4 class="text-sm font-semibold text-white">Automated Jira & GitHub Defect Sync</h4>
+            <p class="text-xs text-slate-400 mt-1">
+              Auto-create rich bug tickets with reproduction steps, error logs, and failure screenshots when visual or assertion regressions occur.
+            </p>
+          </div>
+        </div>
+
+        <div class="p-5 rounded-xl bg-dark-850 border border-dark-700/70 flex items-start gap-3">
+          <div class="w-8 h-8 rounded-lg bg-emerald-500/10 text-emerald-400 flex items-center justify-center shrink-0 mt-0.5">
+            <i data-lucide="key" class="w-4 h-4"></i>
+          </div>
+          <div>
+            <h4 class="text-sm font-semibold text-white">Enterprise Secrets Management</h4>
+            <p class="text-xs text-slate-400 mt-1">
+              Native integration with AWS Secrets Manager, HashiCorp Vault, and encrypted secret stores so credentials are never hardcoded.
+            </p>
+          </div>
+        </div>
+
+        <div class="p-5 rounded-xl bg-dark-850 border border-dark-700/70 flex items-start gap-3">
+          <div class="w-8 h-8 rounded-lg bg-amber-500/10 text-amber-400 flex items-center justify-center shrink-0 mt-0.5">
+            <i data-lucide="network" class="w-4 h-4"></i>
+          </div>
+          <div>
+            <h4 class="text-sm font-semibold text-white">Distributed Multi-Agent Fleet</h4>
+            <p class="text-xs text-slate-400 mt-1">
+              Coordinated fleet of parallel autonomous agents executing across sharded test suites with intelligent task balancing.
+            </p>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- Community & Open Source CTA -->
+  <section class="py-20 border-t border-dark-800 bg-gradient-to-b from-dark-900/60 to-dark-900">
+    <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
+      <h2 class="text-3xl font-extrabold text-white mb-4">
+        Proudly Open Source under the MIT License
+      </h2>
+      <p class="text-slate-400 text-sm sm:text-base max-w-2xl mx-auto mb-8">
+        Built for engineers, QA teams, and DevOps practitioners. Contributions, issues, and feature requests are welcome.
+      </p>
+      <div class="flex flex-wrap items-center justify-center gap-4">
+        <a href="https://github.com/GitanshKapoor/barely" target="_blank" class="inline-flex items-center gap-2 px-6 py-3 rounded-xl font-semibold text-white bg-brand-500 hover:bg-brand-600 shadow-lg shadow-brand-500/30 transition-all">
+          <i data-lucide="star" class="w-4 h-4 fill-current"></i>
+          <span>Star on GitHub</span>
+        </a>
+        <a href="https://github.com/GitanshKapoor/barely/issues" target="_blank" class="inline-flex items-center gap-2 px-6 py-3 rounded-xl font-semibold text-slate-200 bg-dark-800 hover:bg-dark-700 border border-dark-600 transition-all">
+          <i data-lucide="git-pull-request" class="w-4 h-4"></i>
+          <span>Contribute</span>
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer class="py-12 border-t border-dark-800 bg-dark-900 text-xs text-slate-500 font-mono">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col sm:flex-row items-center justify-between gap-4">
+      <div class="flex items-center space-x-3">
+        <img src="./assets/logo.png" alt="Barely" class="h-6 w-auto rounded opacity-80" />
+        <span>© 2026 Barely.ai Project • MIT Licensed</span>
+      </div>
+      <div class="flex items-center space-x-6 text-slate-400">
+        <a href="https://github.com/GitanshKapoor/barely" target="_blank" class="hover:text-white transition-colors">GitHub</a>
+        <a href="https://github.com/GitanshKapoor/barely/releases" target="_blank" class="hover:text-white transition-colors">Releases</a>
+        <a href="https://github.com/GitanshKapoor/barely/blob/main/LICENSE" target="_blank" class="hover:text-white transition-colors">License</a>
+        <a href="#quickstart" class="hover:text-white transition-colors">Quickstart</a>
+      </div>
+    </div>
+  </footer>
+
+  <!-- Script for Interactivity -->
+  <script>
+    lucide.createIcons();
+
+    function switchTab(tabKey) {
+      // Hide all panels
+      document.querySelectorAll('.tab-panel').forEach(el => el.classList.add('hidden'));
+      document.querySelectorAll('.tab-panel').forEach(el => el.classList.remove('block'));
+
+      // Deactivate all buttons
+      document.querySelectorAll('.tab-btn').forEach(el => {
+        el.classList.remove('bg-brand-500', 'text-white', 'shadow-lg');
+        el.classList.add('bg-dark-800', 'text-slate-300');
+      });
+
+      // Show selected panel
+      const targetPanel = document.getElementById('tab-content-' + tabKey);
+      if (targetPanel) {
+        targetPanel.classList.remove('hidden');
+        targetPanel.classList.add('block');
+      }
+
+      // Activate selected button
+      const targetBtn = document.getElementById('tab-btn-' + tabKey);
+      if (targetBtn) {
+        targetBtn.classList.remove('bg-dark-800', 'text-slate-300');
+        targetBtn.classList.add('bg-brand-500', 'text-white', 'shadow-lg');
+      }
+    }
+
+    function copyCommand(btn, text) {
+      navigator.clipboard.writeText(text).then(() => {
+        const originalHtml = btn.innerHTML;
+        btn.innerHTML = '<i data-lucide="check" class="w-3.5 h-3.5 text-emerald-400"></i><span class="text-emerald-400">Copied!</span>';
+        lucide.createIcons();
+        setTimeout(() => {
+          btn.innerHTML = originalHtml;
+          lucide.createIcons();
+        }, 2000);
+      });
+    }
+  </script>
+</body>
+</html>

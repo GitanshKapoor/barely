@@ -47,6 +47,7 @@ You define the *test intent* and *assertions* in natural language — Barely's a
 ## 🗺️ Coming in Release 2.0 (Roadmap)
 - 🐛 **Automated Defect Management (Jira / GitHub Issues):** Auto-create rich bug tickets with reproduction steps, error logs, and failure screenshots.
 - 🔐 **Enterprise Secrets Management:** Native integration with AWS Secrets Manager, HashiCorp Vault, and encrypted secret stores so credentials are never hardcoded.
+- ☁️ **Cloud Native Deployments (AWS EKS & ECS):** Production-ready Helm charts and ECS task definitions for horizontally autoscaling agent runners in AWS cloud.
 - 🤝 **Distributed Multi-Agent Fleet:** Coordinated fleet of parallel autonomous agents executing across sharded test suites.
 - 🔔 **Real-Time Webhook & Slack Alerts:** Instant notifications on test completions, visual regressions, and pipeline failures.
 
