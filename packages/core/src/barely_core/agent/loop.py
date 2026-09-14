@@ -46,56 +46,113 @@ class AgentLoop:
         self.cache = ActionCache()
         self.run_id = run_id
 
+    def _append_log(self, text: str):
+        if not self.run_id:
+            return
+        import datetime
+        timestamp = datetime.datetime.now().strftime("%H:%M:%S")
+        formatted = f"[{timestamp}] {text}\n"
+        db = SessionLocal()
+        try:
+            r = db.query(RunRecord).filter(RunRecord.id == self.run_id).first()
+            if r:
+                r.logs = (r.logs or "") + formatted
+                db.commit()
+        except Exception as e:
+            logger.debug(f"Failed to append log: {e}")
+        finally:
+            db.close()
+
+    def _is_cancelled(self) -> bool:
+        if not self.run_id:
+            return False
+        db = SessionLocal()
+        try:
+            r = db.query(RunRecord).filter(RunRecord.id == self.run_id).first()
+            return bool(r and r.status == "cancelled")
+        finally:
+            db.close()
+
     def run(self, goal: Goal, start_url: str) -> RunResult:
         step_history = []
         rich_history = []
+        self._append_log(f"🚀 Initializing Barely Agent Runner on {start_url}...")
         
         try:
             self.engine.start()
+            self._append_log("🌐 Browser instance launched successfully.")
             self.engine.navigate(start_url)
+            self._append_log(f"📍 Navigated to initial URL: {start_url}")
             
             step_count = 0
             max_steps = 20
             
             while step_count < max_steps:
+                if self._is_cancelled():
+                    self._append_log("🛑 Execution interrupted: Run cancelled by user.")
+                    return RunResult(goal_name=goal.name, success=False, failure_reason="Cancelled by user", step_history=step_history, rich_history=rich_history)
+
                 step_count += 1
                 dom_elements = self.engine.extract_dom()
                 
                 # Infinite loop prevention
                 current_dom_hash = hash(str(dom_elements))
                 if step_count > 1 and getattr(self, "_last_dom_hash", None) == current_dom_hash:
-                    print("DOM unchanged since last step. Bypassing cache to prevent infinite loop.")
+                    self._append_log("⚠️ DOM unchanged since last action. Bypassing action cache.")
                     cached_action = None
                 else:
                     cached_action = self.cache.get_action(goal.name, dom_elements)
                 self._last_dom_hash = current_dom_hash
                 
                 if cached_action:
-                    print(f"\n--- Step {step_count} [⚡ CACHED] ---")
+                    self._append_log(f"⚡ Step {step_count}: Cached decision match retrieved.")
                     action_payload = cached_action
                 else:
-                    print(f"\n--- Step {step_count} [🧠 AI] ---")
+                    self._append_log(f"🧠 Step {step_count}: Analyzing DOM and prompting AI agent...")
                     prompt = self._build_prompt(goal, dom_elements, step_history)
                     action_payload = self._call_llm(prompt)
-                    print(f"Thought: {action_payload.get('thought')}")
+                    thought_log = action_payload.get('thought') or 'No thought provided'
+                    self._append_log(f"💭 Agent Thought: {thought_log}")
                 
                 action = action_payload.get('action')
                 thought = action_payload.get('thought')
                 try:
                     desc = self._execute_action(action, action_payload)
+                    self._append_log(f"▶️ Executed: {desc}")
                     
                     b64_snap = None
                     if action not in ["finish", "fail"]:
                         b64_snap = self.engine.take_screenshot_base64()
                         
+                    step_record = StepRecord(description=desc, screenshot_base64=b64_snap, thought=thought)
                     step_history.append(desc)
-                    rich_history.append(StepRecord(description=desc, screenshot_base64=b64_snap, thought=thought))
+                    rich_history.append(step_record)
                     
+                    # Persist step to database immediately in real-time
+                    if self.run_id:
+                        db = SessionLocal()
+                        try:
+                            db_step = DBRunStep(
+                                run_id=self.run_id,
+                                step_index=len(rich_history) - 1,
+                                thought=thought,
+                                description=desc,
+                                screenshot_base64=b64_snap
+                            )
+                            db.add(db_step)
+                            db.commit()
+                        except Exception as dbe:
+                            logger.error(f"Error persisting real-time step: {dbe}")
+                        finally:
+                            db.close()
+
                     if not cached_action and action not in ["fail", "finish"]:
                         self.cache.save_action(goal.name, dom_elements, action_payload)
                         
                 except Exception as e:
-                    logger.warning(f"Action execution failed: {e}")
+                    err_msg = f"Action execution failed: {str(e)}"
+                    logger.warning(err_msg)
+                    self._append_log(f"❌ Error: {err_msg}")
                     if cached_action:
                         self.cache.invalidate(goal.name, dom_elements)
                         continue
@@ -104,15 +161,16 @@ class AgentLoop:
                         return RunResult(goal_name=goal.name, success=False, failure_reason=str(e), step_history=step_history, rich_history=rich_history)
 
                 if action == "finish":
+                    self._append_log("✅ Goal accomplished successfully. Test passed!")
                     self._save_result_db(success=True, reason=None, rich_history=rich_history)
-                    print("✅ Goal Accomplished Successfully!")
                     return RunResult(goal_name=goal.name, success=True, step_history=step_history, rich_history=rich_history)
                 elif action == "fail":
                     reason = action_payload.get('reasoning', 'Unknown AI Failure')
+                    self._append_log(f"❌ Test marked as failed by agent: {reason}")
                     self._save_result_db(success=False, reason=reason, rich_history=rich_history)
-                    print(f"❌ Test Failed: {reason}")
                     return RunResult(goal_name=goal.name, success=False, failure_reason=reason, step_history=step_history, rich_history=rich_history)
                     
+            self._append_log("⏱️ Max steps (20) exceeded before goal completion.")
             self._save_result_db(success=False, reason="Max steps (20) exceeded", rich_history=rich_history)
             return RunResult(goal_name=goal.name, success=False, failure_reason="Max steps (20) exceeded", step_history=step_history, rich_history=rich_history)
                     
@@ -177,18 +235,10 @@ class AgentLoop:
         try:
             run_rec = db.query(RunRecord).filter(RunRecord.id == self.run_id).first()
             if run_rec:
-                run_rec.status = "completed"
-                run_rec.success = success
-                run_rec.failure_reason = reason
-                for i, step in enumerate(rich_history):
-                    db_step = DBRunStep(
-                        run_id=self.run_id,
-                        step_index=i,
-                        thought=step.thought,
-                        description=step.description,
-                        screenshot_base64=step.screenshot_base64
-                    )
-                    db.add(db_step)
+                if run_rec.status != "cancelled":
+                    run_rec.status = "completed"
+                    run_rec.success = success
+                    run_rec.failure_reason = reason
                 db.commit()
         except Exception as e:
             logger.error(f"DB Save Error: {e}")

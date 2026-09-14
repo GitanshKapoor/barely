@@ -81,9 +81,10 @@ class BrowserEngine:
         self.page.screenshot(path=path, full_page=True)
         
     def take_screenshot_base64(self) -> str:
-        """Takes a base64 encoded jpeg screenshot for the DB."""
+        """Takes a compressed base64 encoded jpeg viewport screenshot for the DB."""
         import base64
-        bytes_data = self.page.screenshot(type="jpeg", quality=60, full_page=True)
+        # Viewport-only with quality=50 reduces image size by ~80% while retaining high visual fidelity
+        bytes_data = self.page.screenshot(type="jpeg", quality=50, full_page=False)
         return base64.b64encode(bytes_data).decode("utf-8")
 
     def stop(self):

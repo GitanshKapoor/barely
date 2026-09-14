@@ -1,87 +1,152 @@
+'use client';
+
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import NewRunForm from "../../components/NewRunForm";
-import { ArrowRight, CheckCircle2, XCircle } from 'lucide-react';
-import AutoRefresher from "../../components/AutoRefresher";
+import { CheckCircle2, XCircle, Clock, FileText, Ban, RotateCw } from 'lucide-react';
 
-async function getRuns() {
-  try {
-    const apiUrl = process.env.API_URL || 'http://barely-api:8000';
-    const res = await fetch(`${apiUrl}/api/runs`, { cache: 'no-store' });
-    if (!res.ok) return { runs: [] };
-    return res.json();
-  } catch (e) {
-    return { runs: [] };
-  }
-}
+export default function ExecutionsPage() {
+  const [runs, setRuns] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [cancellingId, setCancellingId] = useState<string | null>(null);
 
-export default async function Home() {
-  const data = await getRuns();
-  const runs = data.runs || [];
+  const fetchRuns = async () => {
+    try {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+      const res = await fetch(`${apiUrl}/api/runs`, { cache: 'no-store' });
+      if (res.ok) {
+        const data = await res.json();
+        setRuns(data.runs || []);
+      }
+    } catch (e) {
+      console.error("Failed to fetch runs:", e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchRuns();
+    const interval = setInterval(fetchRuns, 2500);
+    return () => clearInterval(interval);
+  }, []);
+
+  const handleCancel = async (id: string, e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!confirm("Are you sure you want to cancel this execution run?")) return;
+    setCancellingId(id);
+    try {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+      const res = await fetch(`${apiUrl}/api/runs/${id}/cancel`, { method: 'POST' });
+      if (res.ok) {
+        await fetchRuns();
+      }
+    } catch (err) {
+      console.error("Error cancelling run:", err);
+    } finally {
+      setCancellingId(null);
+    }
+  };
 
   return (
     <div className="max-w-6xl mx-auto space-y-6">
-      <AutoRefresher />
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between pb-2 border-b border-slate-800/80">
+        <div>
+          <div className="flex items-center gap-2">
+            <span className="inline-block w-2.5 h-2.5 rounded-full bg-[#0278ff]"></span>
+            <h2 className="text-2xl font-bold text-slate-100 tracking-tight">Execution History</h2>
+          </div>
+          <p className="text-sm text-slate-400 mt-1">Real-time status of all autonomous QA pipelines and jobs.</p>
+        </div>
         <NewRunForm />
-        <h2 className="text-xl font-semibold text-slate-100 tracking-tight">Recent Runs</h2>
       </div>
 
-      <div className="rounded-xl border border-slate-800 bg-slate-900/20 overflow-hidden">
+      <div className="rounded-xl border border-slate-800 bg-[#0d1322] overflow-hidden shadow-xl">
         <table className="w-full text-sm text-left">
-          <thead className="bg-slate-900/50 border-b border-slate-800 text-xs uppercase tracking-wider text-slate-500 font-semibold">
+          <thead className="bg-slate-900/60 border-b border-slate-800 text-[11px] uppercase tracking-wider text-slate-400 font-bold">
             <tr>
-              <th className="px-6 py-4 font-medium">Test Name</th>
-              <th className="px-6 py-4 font-medium">Device</th>
-              <th className="px-6 py-4 font-medium">Run ID</th>
-              <th className="px-6 py-4 font-medium">Status</th>
-              <th className="px-6 py-4 font-medium text-right">Actions</th>
+              <th className="px-6 py-4 font-semibold">Pipeline / Test Name</th>
+              <th className="px-6 py-4 font-semibold">Device</th>
+              <th className="px-6 py-4 font-semibold">Run ID</th>
+              <th className="px-6 py-4 font-semibold">Status</th>
+              <th className="px-6 py-4 font-semibold text-right">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-800/60">
-            {runs.length === 0 ? (
+            {loading && runs.length === 0 ? (
               <tr>
                 <td colSpan={5} className="px-6 py-12 text-center text-slate-500">
-                  No execution runs found. Run 'barely run' to start testing.
+                  <div className="flex items-center justify-center gap-2">
+                    <RotateCw className="w-4 h-4 animate-spin text-[#0278ff]" />
+                    <span>Loading pipeline executions...</span>
+                  </div>
+                </td>
+              </tr>
+            ) : runs.length === 0 ? (
+              <tr>
+                <td colSpan={5} className="px-6 py-12 text-center text-slate-500">
+                  No execution runs found. Click "Start New Test" to begin testing.
                 </td>
               </tr>
             ) : (
               runs.map((run: any) => (
-                <tr key={run.id} className="hover:bg-slate-800/20 transition-colors group">
-                  <td className="px-6 py-4 font-medium text-slate-200">{run.name}</td>
+                <tr key={run.id} className="hover:bg-slate-800/30 transition-colors group">
+                  <td className="px-6 py-4 font-medium text-slate-200">
+                    <div className="flex items-center gap-2.5">
+                      {run.status === "completed" && run.success && <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />}
+                      {run.status === "completed" && !run.success && <XCircle className="w-4 h-4 text-rose-400 flex-shrink-0" />}
+                      {run.status === "cancelled" && <Ban className="w-4 h-4 text-slate-400 flex-shrink-0" />}
+                      {run.status === "running" && (
+                        <span className="relative flex h-3 w-3 flex-shrink-0">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#0278ff] opacity-75"></span>
+                          <span className="relative inline-flex rounded-full h-3 w-3 bg-[#0278ff]"></span>
+                        </span>
+                      )}
+                      {run.status === "pending" && <Clock className="w-4 h-4 text-amber-400 flex-shrink-0" />}
+                      <span className="truncate max-w-xs">{run.name || run.id}</span>
+                    </div>
+                  </td>
                   <td className="px-6 py-4">
-                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-mono font-medium bg-slate-800 text-slate-400 border border-slate-700 uppercase">
+                    <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-slate-800 text-slate-300 border border-slate-700 uppercase">
                       {run.device || 'desktop'}
                     </span>
                   </td>
-                  <td className="px-6 py-4 font-mono text-xs text-slate-500">{run.id}</td>
+                  <td className="px-6 py-4 font-mono text-xs text-slate-400">{run.id}</td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    {run.status === "pending" && (
-                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-yellow-500/10 text-yellow-500 border border-yellow-500/20">
-                        ⏳ Pending
-                      </span>
-                    )}
-                    {run.status === "running" && (
-                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-blue-500/10 text-blue-400 border border-blue-500/20">
-                        <span className="animate-pulse">🔄</span> Running...
-                      </span>
-                    )}
-                    {run.status === "completed" && run.success && (
-                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-green-500/10 text-green-400 border border-green-500/20">
-                        <CheckCircle2 className="w-3.5 h-3.5" /> Pass
-                      </span>
-                    )}
-                    {run.status === "completed" && !run.success && (
-                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-red-500/10 text-red-400 border border-red-500/20">
-                        <XCircle className="w-3.5 h-3.5" /> Fail
-                      </span>
-                    )}
+                    <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold border ${
+                      run.status === 'completed' && run.success ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' :
+                      run.status === 'completed' && !run.success ? 'bg-rose-500/10 text-rose-400 border-rose-500/20' :
+                      run.status === 'running' ? 'bg-[#0278ff]/10 text-[#0278ff] border-[#0278ff]/30 animate-pulse' :
+                      run.status === 'cancelled' ? 'bg-slate-800 text-slate-400 border-slate-700' :
+                      'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                    }`}>
+                      {run.status === "pending" && "⏳ Pending"}
+                      {run.status === "running" && "🔄 Running..."}
+                      {run.status === "completed" && run.success && "✓ Passed"}
+                      {run.status === "completed" && !run.success && "✕ Failed"}
+                      {run.status === "cancelled" && "⊘ Cancelled"}
+                    </span>
                   </td>
-                  <td className="px-6 py-4 text-right">
-                    {run.status === "completed" && (
-                      <Link href={`/runs/${run.id}`} className="inline-flex items-center gap-1 text-blue-400 hover:text-blue-300 font-medium transition-colors opacity-0 group-hover:opacity-100">
-                        View Audit <ArrowRight className="w-4 h-4" />
+                  <td className="px-6 py-4 text-right whitespace-nowrap">
+                    <div className="flex items-center justify-end gap-2">
+                      {(run.status === "running" || run.status === "pending") && (
+                        <button
+                          onClick={(e) => handleCancel(run.id, e)}
+                          disabled={cancellingId === run.id}
+                          className="px-2.5 py-1 text-xs font-medium text-rose-400 hover:text-rose-200 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 rounded-lg transition-colors flex items-center gap-1"
+                        >
+                          <Ban className="w-3 h-3" />
+                          {cancellingId === run.id ? 'Cancelling...' : 'Cancel'}
+                        </button>
+                      )}
+                      <Link 
+                        href={`/runs/${run.id}`} 
+                        className="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white border border-slate-700 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all shadow-sm"
+                      >
+                        <FileText className="w-3.5 h-3.5 text-[#0278ff]" /> Audit
                       </Link>
-                    )}
+                    </div>
                   </td>
                 </tr>
               ))

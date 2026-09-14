@@ -1,5 +1,6 @@
 import Link from 'next/link';
-import { CheckCircle2, XCircle, Clock, Activity, ArrowRight, Play } from 'lucide-react';
+import { CheckCircle2, XCircle, Clock, Activity, ArrowRight, Play, FileText, Ban } from 'lucide-react';
+import AutoRefresher from "../components/AutoRefresher";
 
 async function getStats() {
   try {
@@ -19,98 +20,140 @@ export default async function Home() {
 
   const total     = runs.length;
   const passed    = runs.filter((r: any) => r.status === 'completed' && r.success).length;
-  const failed    = runs.filter((r: any) => r.status === 'completed' && !r.success).length;
+  const failed    = runs.filter((r: any) => (r.status === 'completed' && !r.success) || r.status === 'cancelled').length;
   const running   = runs.filter((r: any) => r.status === 'running').length;
   const pending   = runs.filter((r: any) => r.status === 'pending').length;
-  const passRate  = total > 0 ? Math.round((passed / total) * 100) : 0;
+  const completed = passed + failed;
+  const passRate  = completed > 0 ? Math.round((passed / completed) * 100) : (total > 0 && running + pending > 0 ? 0 : 100);
 
-  const recentRuns = runs.slice(0, 5);
+  const recentRuns = runs.slice(0, 6);
 
   const stats = [
-    { label: 'Total Runs',   value: total,    icon: Activity,     color: 'text-blue-400',   bg: 'bg-blue-500/10',   border: 'border-blue-500/20' },
-    { label: 'Passed',       value: passed,   icon: CheckCircle2, color: 'text-green-400',  bg: 'bg-green-500/10',  border: 'border-green-500/20' },
-    { label: 'Failed',       value: failed,   icon: XCircle,      color: 'text-red-400',    bg: 'bg-red-500/10',    border: 'border-red-500/20' },
-    { label: 'In Progress',  value: running + pending, icon: Clock, color: 'text-yellow-400', bg: 'bg-yellow-500/10', border: 'border-yellow-500/20' },
+    { label: 'Total Executions', value: total, icon: Activity, color: 'text-[#0278ff]', bg: 'bg-[#0278ff]/10', border: 'border-[#0278ff]/25' },
+    { label: 'Passed Tests',     value: passed, icon: CheckCircle2, color: 'text-emerald-400', bg: 'bg-emerald-500/10', border: 'border-emerald-500/25' },
+    { label: 'Failed Tests',     value: failed, icon: XCircle, color: 'text-rose-400', bg: 'bg-rose-500/10', border: 'border-rose-500/25' },
+    { label: 'Active Pipeline',  value: running + pending, icon: Clock, color: 'text-amber-400', bg: 'bg-amber-500/10', border: 'border-amber-500/25' },
   ];
 
   return (
     <div className="max-w-6xl mx-auto space-y-8">
+      <AutoRefresher />
+
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between pb-2 border-b border-slate-800/80">
         <div>
-          <h2 className="text-2xl font-bold text-slate-100">Overview</h2>
-          <p className="text-sm text-slate-500 mt-1">Your AI testing platform at a glance.</p>
+          <div className="flex items-center gap-2">
+            <span className="inline-block w-2.5 h-2.5 rounded-full bg-[#0278ff]"></span>
+            <h2 className="text-2xl font-bold text-slate-100 tracking-tight">Pipeline Overview</h2>
+          </div>
+          <p className="text-sm text-slate-400 mt-1">Autonomous E2E test execution metrics and pipeline health.</p>
         </div>
-        <Link href="/executions" className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium rounded-lg transition-colors">
-          <Play className="w-4 h-4 fill-current" /> New Test Run
+        <Link 
+          href="/executions" 
+          className="flex items-center gap-2 px-4 py-2.5 bg-[#0278ff] hover:bg-[#0062d6] text-white text-sm font-semibold rounded-lg shadow-lg shadow-[#0278ff]/20 transition-all"
+        >
+          <Play className="w-4 h-4 fill-current" /> Trigger Test Run
         </Link>
       </div>
 
-      {/* Stat Cards */}
+      {/* Stat Cards - Harness style */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {stats.map((s) => (
-          <div key={s.label} className={`rounded-xl border ${s.border} ${s.bg} p-5 space-y-3`}>
+          <div key={s.label} className={`rounded-xl border ${s.border} ${s.bg} p-5 space-y-3 backdrop-blur-sm`}>
             <div className="flex items-center justify-between">
-              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider">{s.label}</p>
+              <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">{s.label}</p>
               <s.icon className={`w-4 h-4 ${s.color}`} />
             </div>
-            <p className={`text-4xl font-bold ${s.color}`}>{s.value}</p>
+            <p className={`text-4xl font-extrabold ${s.color} font-mono tracking-tight`}>{s.value}</p>
           </div>
         ))}
       </div>
 
-      {/* Pass Rate Bar */}
-      <div className="rounded-xl border border-slate-800 bg-slate-900/20 p-6 space-y-3">
+      {/* Pass Rate Bar - Harness visual widget */}
+      <div className="rounded-xl border border-slate-800 bg-[#0d1322] p-6 space-y-4 shadow-xl">
         <div className="flex items-center justify-between">
-          <p className="text-sm font-semibold text-slate-300">Overall Pass Rate</p>
-          <p className="text-2xl font-bold text-slate-100">{passRate}%</p>
+          <div>
+            <p className="text-sm font-semibold text-slate-200">Overall Pass Rate</p>
+            <p className="text-xs text-slate-400 mt-0.5">Calculated across all completed test pipelines</p>
+          </div>
+          <div className="flex items-baseline gap-1">
+            <span className="text-3xl font-extrabold text-slate-100 font-mono">{passRate}%</span>
+            <span className="text-xs text-slate-500 font-medium">success</span>
+          </div>
         </div>
-        <div className="w-full h-3 bg-slate-800 rounded-full overflow-hidden">
+        <div className="w-full h-3 bg-slate-900 rounded-full overflow-hidden p-0.5 border border-slate-800">
           <div
             className="h-full rounded-full transition-all duration-700"
             style={{
-              width: `${passRate}%`,
-              background: passRate >= 70 ? '#22c55e' : passRate >= 40 ? '#eab308' : '#ef4444'
+              width: `${Math.max(passRate, total === 0 ? 0 : 4)}%`,
+              background: passRate >= 80 ? 'linear-gradient(90deg, #0278ff 0%, #10b981 100%)' : passRate >= 50 ? '#f59e0b' : '#f43f5e'
             }}
           />
         </div>
-        <p className="text-xs text-slate-500">{passed} passed · {failed} failed · {total} total runs</p>
+        <div className="flex items-center justify-between text-xs text-slate-400 pt-1 font-mono">
+          <span className="text-emerald-400 font-medium">{passed} passed</span>
+          <span className="text-rose-400 font-medium">{failed} failed/cancelled</span>
+          <span className="text-amber-400 font-medium">{running + pending} in-flight</span>
+          <span className="text-slate-500">{total} total runs</span>
+        </div>
       </div>
 
-      {/* Recent Runs */}
-      <div className="rounded-xl border border-slate-800 bg-slate-900/20 overflow-hidden">
-        <div className="px-6 py-4 border-b border-slate-800 flex items-center justify-between">
-          <p className="text-sm font-semibold text-slate-300">Recent Runs</p>
-          <Link href="/executions" className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1">
-            View all <ArrowRight className="w-3 h-3" />
+      {/* Recent Runs Table */}
+      <div className="rounded-xl border border-slate-800 bg-[#0d1322] overflow-hidden shadow-xl">
+        <div className="px-6 py-4 border-b border-slate-800/80 flex items-center justify-between bg-slate-900/40">
+          <div className="flex items-center gap-2">
+            <Activity className="w-4 h-4 text-[#0278ff]" />
+            <p className="text-sm font-semibold text-slate-200">Recent Executions</p>
+          </div>
+          <Link href="/executions" className="text-xs text-[#0278ff] hover:text-[#3b82f6] font-medium flex items-center gap-1 transition-colors">
+            View full execution history <ArrowRight className="w-3.5 h-3.5" />
           </Link>
         </div>
         {recentRuns.length === 0 ? (
           <div className="px-6 py-12 text-center text-slate-500 text-sm">
-            No runs yet. <Link href="/executions" className="text-blue-400 hover:underline">Start your first test →</Link>
+            No pipeline runs yet. <Link href="/executions" className="text-[#0278ff] hover:underline font-medium">Start your first test →</Link>
           </div>
         ) : (
           <div className="divide-y divide-slate-800/60">
             {recentRuns.map((run: any) => (
-              <div key={run.id} className="px-6 py-3 flex items-center gap-4 hover:bg-slate-800/20 transition-colors group">
+              <div key={run.id} className="px-6 py-3.5 flex items-center gap-4 hover:bg-slate-800/30 transition-colors">
                 <div className="flex-shrink-0">
-                  {run.status === 'completed' && run.success && <CheckCircle2 className="w-4 h-4 text-green-400" />}
-                  {run.status === 'completed' && !run.success && <XCircle className="w-4 h-4 text-red-400" />}
-                  {run.status === 'running' && <span className="animate-pulse inline-block w-4 h-4 text-blue-400">🔄</span>}
-                  {run.status === 'pending' && <Clock className="w-4 h-4 text-yellow-500" />}
+                  {run.status === 'completed' && run.success && <CheckCircle2 className="w-4 h-4 text-emerald-400" />}
+                  {run.status === 'completed' && !run.success && <XCircle className="w-4 h-4 text-rose-400" />}
+                  {run.status === 'cancelled' && <Ban className="w-4 h-4 text-slate-400" />}
+                  {run.status === 'running' && (
+                    <span className="relative flex h-3 w-3">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#0278ff] opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-3 w-3 bg-[#0278ff]"></span>
+                    </span>
+                  )}
+                  {run.status === 'pending' && <Clock className="w-4 h-4 text-amber-400" />}
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-slate-200 truncate">{run.name || run.id}</p>
-                  <p className="text-xs text-slate-500 font-mono truncate">{run.id}</p>
+                  <p className="text-xs text-slate-500 font-mono truncate mt-0.5">{run.id}</p>
                 </div>
-                <span className="text-[10px] font-mono font-medium px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 border border-slate-700 uppercase flex-shrink-0">
+                <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700 uppercase flex-shrink-0">
                   {run.device || 'desktop'}
                 </span>
-                {run.status === 'completed' && (
-                  <Link href={`/runs/${run.id}`} className="text-blue-400 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
-                    <ArrowRight className="w-4 h-4" />
-                  </Link>
-                )}
+                <span className={`text-[11px] font-semibold px-2.5 py-1 rounded-md border flex-shrink-0 ${
+                  run.status === 'completed' && run.success ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' :
+                  run.status === 'completed' && !run.success ? 'bg-rose-500/10 text-rose-400 border-rose-500/20' :
+                  run.status === 'running' ? 'bg-[#0278ff]/10 text-[#0278ff] border-[#0278ff]/30 animate-pulse' :
+                  run.status === 'cancelled' ? 'bg-slate-800 text-slate-400 border-slate-700' :
+                  'bg-amber-500/10 text-amber-400 border-amber-500/20'
+                }`}>
+                  {run.status === 'completed' && run.success ? 'PASS' :
+                   run.status === 'completed' && !run.success ? 'FAIL' :
+                   run.status === 'running' ? 'RUNNING' :
+                   run.status === 'cancelled' ? 'CANCELLED' : 'PENDING'}
+                </span>
+                <Link 
+                  href={`/runs/${run.id}`} 
+                  className="text-slate-300 hover:text-white bg-slate-800 hover:bg-slate-700 border border-slate-700 px-3 py-1.5 rounded-lg text-xs font-medium flex items-center gap-1.5 transition-all shadow-sm flex-shrink-0"
+                >
+                  <FileText className="w-3.5 h-3.5 text-[#0278ff]" /> Audit
+                </Link>
               </div>
             ))}
           </div>

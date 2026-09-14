@@ -62,12 +62,36 @@ def get_run(run_id: str):
         steps = db.query(RunStep).filter(RunStep.run_id == run_id).order_by(RunStep.step_index).all()
         return {
             "id": r.id,
+            "name": r.name or r.id,
             "goal": r.goal,
+            "start_url": r.start_url,
+            "device": r.device,
             "status": r.status,
             "success": r.success,
             "failure_reason": r.failure_reason,
+            "created_at": r.created_at.isoformat() if r.created_at else None,
+            "logs": r.logs or "",
             "steps": [{"description": s.description, "thought": s.thought, "screenshot": s.screenshot_base64} for s in steps]
         }
+    finally:
+        db.close()
+
+@app.post("/api/runs/{run_id}/cancel")
+def cancel_run(run_id: str):
+    db = SessionLocal()
+    try:
+        r = db.query(RunRecord).filter(RunRecord.id == run_id).first()
+        if not r:
+            raise HTTPException(status_code=404, detail="Run not found")
+        if r.status in ["completed", "cancelled"]:
+            return {"message": f"Run is already {r.status}", "status": r.status}
+        
+        r.status = "cancelled"
+        r.success = False
+        r.failure_reason = "Cancelled by user"
+        r.logs = (r.logs or "") + f"[{datetime.datetime.now().strftime('%H:%M:%S')}] 🛑 Run cancelled via API.\n"
+        db.commit()
+        return {"message": "Run cancelled successfully", "status": "cancelled"}
     finally:
         db.close()
 
