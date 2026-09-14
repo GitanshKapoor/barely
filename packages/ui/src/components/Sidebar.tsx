@@ -41,8 +41,12 @@ export default function Sidebar() {
           );
         })}
       </nav>
-      <div className="px-4 py-4 border-t border-slate-800/60">
-        <p className="text-[10px] text-slate-600 font-mono">barely v0.1.0-alpha</p>
+      <div className="px-4 py-4 border-t border-slate-800/80 space-y-0.5">
+        <div className="flex items-center gap-1.5">
+          <span className="w-1.5 h-1.5 rounded-full bg-[#0278ff]"></span>
+          <p className="text-[11px] text-slate-300 font-mono font-semibold">Barely v1.0</p>
+        </div>
+        <p className="text-[10px] text-slate-500 font-mono">"Jumping Joey" (Baby Kangaroo)</p>
       </div>
     </aside>
   );
