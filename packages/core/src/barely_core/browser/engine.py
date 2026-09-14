@@ -26,28 +26,46 @@ class BrowserEngine:
         self._distiller_script = script_path.read_text(encoding="utf-8")
 
     def start(self):
-        """Initializes the browser."""
+        """Initializes the browser with realistic browser profiles."""
         self._playwright = sync_playwright().start()
-        self._browser = self._playwright.chromium.launch(headless=self.headless)
+        self._browser = self._playwright.chromium.launch(
+            headless=self.headless,
+            args=[
+                "--disable-blink-features=AutomationControlled",
+                "--no-sandbox",
+                "--disable-setuid-sandbox",
+                "--disable-infobars"
+            ]
+        )
         
         if self.device == "ios":
             viewport = self.IOS_VIEWPORT
             user_agent = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1"
         elif self.device == "android":
             viewport = self.ANDROID_VIEWPORT
-            user_agent = "Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Mobile Safari/537.36"
+            user_agent = "Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
         elif self.device == "tablet":
             viewport = self.TABLET_VIEWPORT
             user_agent = "Mozilla/5.0 (iPad; CPU OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1"
         else:
             viewport = self.DESKTOP_VIEWPORT
-            user_agent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            user_agent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+            
         self._context = self._browser.new_context(
             viewport=viewport,
             user_agent=user_agent,
+            locale="en-US",
+            timezone_id="America/New_York",
             ignore_https_errors=True
         )
         self.page = self._context.new_page()
+        
+        # Prevent web pages from detecting automation flags
+        self.page.add_init_script("""
+            Object.defineProperty(navigator, 'webdriver', {
+                get: () => undefined
+            });
+        """)
 
     def navigate(self, url: str):
         """Navigate to a URL and wait for network to idle."""
