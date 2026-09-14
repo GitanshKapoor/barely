@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { ArrowLeft, PlayCircle } from 'lucide-react';
+import { ArrowLeft, PlayCircle, Download } from 'lucide-react';
 
 async function getRunDetails(id: string) {
   try {
@@ -21,14 +21,25 @@ export default async function RunDetails({ params }: { params: { id: string } })
 
   return (
     <div className="max-w-7xl mx-auto space-y-6 h-full flex flex-col">
-      <div className="flex items-center gap-4">
-        <Link href="/" className="p-2 hover:bg-slate-800 rounded-lg text-slate-400 transition-colors">
-          <ArrowLeft className="w-5 h-5" />
-        </Link>
-        <div>
-          <h2 className="text-xl font-semibold text-slate-100 tracking-tight">{run.goal}</h2>
-          <p className="text-sm font-mono text-slate-500 mt-1">{params.id}</p>
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-4">
+          <Link href="/" className="p-2 hover:bg-slate-800 rounded-lg text-slate-400 transition-colors">
+            <ArrowLeft className="w-5 h-5" />
+          </Link>
+          <div>
+            <h2 className="text-xl font-semibold text-slate-100 tracking-tight">{run.goal}</h2>
+            <p className="text-sm font-mono text-slate-500 mt-1">{params.id}</p>
+          </div>
         </div>
+        
+        <a 
+          href={`http://localhost:8000/api/runs/${params.id}/download`}
+          download
+          className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-sm font-medium rounded-lg transition-colors border border-slate-700"
+        >
+          <Download className="w-4 h-4" />
+          Download Report
+        </a>
       </div>
 
       <div className="flex gap-6 h-[calc(100vh-12rem)]">

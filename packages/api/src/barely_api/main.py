@@ -8,6 +8,8 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
+from barely_api.report import router as report_router
+
 app = FastAPI(title="Barely Control Plane API")
 
 app.add_middleware(
@@ -16,6 +18,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(report_router)
 
 class RunRequest(BaseModel):
     url: str
