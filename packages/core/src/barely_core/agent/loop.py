@@ -30,7 +30,7 @@ Rules:
   - "action": One of ["click", "type", "navigate", "screenshot", "finish", "fail"]
   - "element_id": (Integer ID if clicking or typing)
   - "text": (String if typing text or navigating to a URL)
-  - "reasoning": (If failing, why the test cannot proceed)
+  - "reasoning": (Required if action is "fail") A comprehensive root-cause analysis explaining exactly why the test failed, which expected element or state was missing, and what occurred instead.
 """
 
 @dataclass
