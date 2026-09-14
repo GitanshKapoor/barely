@@ -4,6 +4,12 @@
  * Solves Bottleneck 2: Context Window Overload.
  */
 function distillDOM() {
+    // Clear old tags from previous steps to prevent duplicate IDs
+    document.querySelectorAll('[barely-id]').forEach(el => {
+        el.removeAttribute('barely-id');
+        el.style.outline = '';
+    });
+
     let elementIdCounter = 1;
     const elementsMap = new Map();
     const interactiveElements = [];

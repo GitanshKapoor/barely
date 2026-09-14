@@ -66,15 +66,20 @@ class BrowserEngine:
     def click_element(self, element_id: int):
         """Clicks an element based on its generated barely-id."""
         selector = f"[barely-id='{element_id}']"
-        self.page.locator(selector).scroll_into_view_if_needed()
-        self.page.locator(selector).click()
-        self.page.wait_for_load_state("networkidle")
+        loc = self.page.locator(selector).first
+        loc.scroll_into_view_if_needed()
+        loc.click()
+        try:
+            self.page.wait_for_load_state("networkidle", timeout=4000)
+        except Exception:
+            pass
 
     def type_element(self, element_id: int, text: str):
         """Types text into an element."""
         selector = f"[barely-id='{element_id}']"
-        self.page.locator(selector).scroll_into_view_if_needed()
-        self.page.locator(selector).fill(text)
+        loc = self.page.locator(selector).first
+        loc.scroll_into_view_if_needed()
+        loc.fill(text)
 
     def take_screenshot(self, path: str):
         """Takes a full page screenshot."""
