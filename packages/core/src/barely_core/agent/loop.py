@@ -5,7 +5,7 @@ from typing import Dict, Any, List
 from dataclasses import dataclass, field
 from barely_core.browser.engine import BrowserEngine
 from barely_core.parser.goal_parser import Goal
-from barely_core.agent.cache import ExperienceCache
+from barely_core.agent.cache import ActionCache
 import litellm
 import base64
 from barely_core.db import SessionLocal, RunRecord, RunStep as DBRunStep
@@ -42,7 +42,7 @@ class AgentLoop:
     def __init__(self, engine: BrowserEngine, model: str = "anthropic/claude-sonnet-4-5", run_id: str = None):
         self.engine = engine
         self.model = model
-        self.cache = ExperienceCache()
+        self.cache = ActionCache()
         self.run_id = run_id
 
     def run(self, goal: Goal, start_url: str) -> RunResult:
