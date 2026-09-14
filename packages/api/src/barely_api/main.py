@@ -17,15 +17,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-runs_dir = Path(".barely/runs")
-queue_dir = Path(".barely/queue/pending")
-goals_dir = Path(".barely/goals")
-
-for d in [runs_dir, queue_dir, goals_dir]:
-    d.mkdir(parents=True, exist_ok=True)
-
-app.mount("/static/runs", StaticFiles(directory=".barely/runs"), name="runs")
-
 class RunRequest(BaseModel):
     url: str
     name: str = ""
@@ -71,7 +62,7 @@ def get_run(run_id: str):
             "status": r.status,
             "success": r.success,
             "failure_reason": r.failure_reason,
-            "steps": [{"description": s.description, "screenshot": s.screenshot_path} for s in steps]
+            "steps": [{"description": s.description, "screenshot": s.screenshot_base64} for s in steps]
         }
     finally:
         db.close()
@@ -80,26 +71,19 @@ def get_run(run_id: str):
 def trigger_run(req: RunRequest):
     job_id = f"job_{uuid.uuid4().hex[:8]}"
     
-    # 1. DB Save
     db = SessionLocal()
     try:
-        new_run = RunRecord(id=job_id, name=req.name or job_id, goal=req.goal_text, device=req.device, status="pending")
+        new_run = RunRecord(
+            id=job_id, 
+            name=req.name or job_id, 
+            goal=req.goal_text,
+            start_url=req.url,
+            device=req.device, 
+            status="pending"
+        )
         db.add(new_run)
         db.commit()
     finally:
         db.close()
         
-    # Generate the Markdown Goal File dynamically from the UI Form
-    goal_file = goals_dir / f"{job_id}.md"
-    markdown_content = f"---\nname: \"Dynamic UI Run {job_id}\"\n---\n{req.goal_text}"
-    goal_file.write_text(markdown_content)
-
-    job_payload = {
-        "job_id": job_id,
-        "goal_file": str(goal_file),
-        "start_url": req.url,
-        "device": req.device,
-    }
-    
-    (queue_dir / f"{job_id}.json").write_text(json.dumps(job_payload))
     return {"message": "Job queued successfully", "job_id": job_id}

@@ -74,7 +74,12 @@ class BrowserEngine:
     def take_screenshot(self, path: str):
         """Takes a full page screenshot."""
         self.page.screenshot(path=path, full_page=True)
-
+        
+    def take_screenshot_base64(self) -> str:
+        """Takes a base64 encoded jpeg screenshot for the DB."""
+        import base64
+        bytes_data = self.page.screenshot(type="jpeg", quality=60, full_page=True)
+        return base64.b64encode(bytes_data).decode("utf-8")
 
     def stop(self):
         """Cleans up browser resources."""

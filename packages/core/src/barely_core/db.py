@@ -13,6 +13,7 @@ class RunRecord(Base):
     id = Column(String, primary_key=True, index=True)
     name = Column(String, nullable=True)
     goal = Column(Text)
+    start_url = Column(String, nullable=True)
     device = Column(String, default="desktop")
     status = Column(String, default="pending")
     success = Column(Boolean, nullable=True)
@@ -27,7 +28,7 @@ class RunStep(Base):
     run_id = Column(String, ForeignKey("runs.id"))
     step_index = Column(Integer)
     description = Column(Text)
-    screenshot_path = Column(String, nullable=True)
+    screenshot_base64 = Column(Text, nullable=True)
     
     run = relationship("RunRecord", back_populates="steps")
 

@@ -72,7 +72,7 @@ export default async function RunDetails({ params }: { params: { id: string } })
              {run.steps.length > 0 && run.steps[run.steps.length - 1].screenshot ? (
                 // eslint-disable-next-line @next/next/no-img-element
                <img 
-                 src={`http://127.0.0.1:8000/static/runs/${run.steps[run.steps.length - 1].screenshot.split('.barely/runs/')[1]}`} 
+                 src={`data:image/jpeg;base64,${run.steps[run.steps.length - 1].screenshot}`} 
                  alt="Latest step screenshot"
                  className="rounded border border-slate-800 shadow-2xl shadow-black/50 max-h-full object-contain"
                />
