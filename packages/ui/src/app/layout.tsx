@@ -8,6 +8,9 @@ const inter = Inter({ subsets: ["latin"] });
 export const metadata: Metadata = {
   title: "Barely | AI Testing Platform",
   description: "AI-driven autonomous E2E testing dashboard.",
+  icons: {
+    icon: "/logo.png",
+  },
 };
 
 export default function RootLayout({
