@@ -1,8 +1,12 @@
 <div align="center">
 
-<img src="assets/mascot.png" alt="Barely Mascot" width="160" />
+<img src="assets/banner.png" alt="Barely Banner" width="100%" />
 
-# Barely 🧪
+<br/>
+
+<img src="assets/logo.png" alt="Barely Logo" width="180" />
+
+<br/>
 
 **Declarative AI-driven end-to-end testing for modern web applications.**
 
