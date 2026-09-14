@@ -3,128 +3,62 @@ import json
 import zipfile
 import html as html_lib
 from fastapi import APIRouter, HTTPException
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, HTMLResponse
 from barely_core.db import SessionLocal, RunRecord, RunStep
 
 router = APIRouter()
 
-@router.get("/api/runs/{run_id}/download")
-def download_run_report(run_id: str):
-    db = SessionLocal()
-    try:
-        run = db.query(RunRecord).filter(RunRecord.id == run_id).first()
-        if not run:
-            raise HTTPException(status_code=404, detail="Run not found")
-            
-        steps = db.query(RunStep).filter(RunStep.run_id == run_id).order_by(RunStep.step_index).all()
-        
-        # 1. Generate JSON payload
-        run_data = {
-            "id": run.id,
-            "name": run.name,
-            "goal": run.goal,
-            "start_url": run.start_url,
-            "device": run.device,
-            "status": run.status,
-            "success": run.success,
-            "failure_reason": run.failure_reason,
-            "strict_mode": bool(run.strict_mode),
-            "created_at": str(run.created_at),
-            "total_steps": len(steps),
-            "steps": [
-                {
-                    "step_index": s.step_index,
-                    "description": s.description,
-                    "thought": s.thought
-                } for s in steps
-            ]
-        }
-        
-        # 2. Generate Markdown Report (REPORT.md)
-        status_badge = "✅ PASSED" if run.success else "❌ FAILED" if run.status == "completed" else f"⚠️ {run.status.upper()}"
-        
-        md_lines = [
-            f"# Barely Test Execution Report: {run.name or run.id}",
-            f"\n**Status:** {status_badge}  ",
-            f"**Run ID:** `{run.id}`  ",
-            f"**Target URL:** {run.start_url}  ",
-            f"**Device Profile:** {run.device}  ",
-            f"**Strict Mode:** {'Enabled' if run.strict_mode else 'Disabled (Auto-Healing)'}  ",
-            f"**Timestamp:** {run.created_at}  \n",
-            "## 🎯 Test Goal & Instructions",
-            f"```text\n{run.goal}\n```\n"
-        ]
+def generate_report_html(run, steps) -> str:
+    is_success = run.status == "completed" and run.success
+    status_bg = "#10b981" if is_success else "#f43f5e" if run.status == "completed" else "#64748b" if run.status == "cancelled" else "#f59e0b"
+    status_label = "PASSED" if is_success else "FAILED" if run.status == "completed" else run.status.upper()
 
-        if not run.success and run.failure_reason:
-            md_lines.extend([
-                "## 🚨 Failure Analysis & Root Cause",
-                "> **The agent halted execution with the following diagnostic reason:**",
-                f"```text\n{run.failure_reason}\n```\n"
-            ])
+    failure_html = ""
+    if not run.success and run.failure_reason:
+        escaped_reason = html_lib.escape(run.failure_reason)
+        failure_html = f"""
+        <div class="failure-box">
+            <div class="failure-title">
+                <span>🚨</span>
+                <span>Root Cause Diagnostic & Failure Reason</span>
+            </div>
+            <div class="failure-content">
+                {escaped_reason}
+            </div>
+        </div>
+        """
 
-        md_lines.append("## 📋 Execution Steps Audit")
-        if steps:
-            for s in steps:
-                md_lines.append(f"### Step {s.step_index + 1}")
-                if s.thought:
-                    md_lines.append(f"*AI Agent Thought:* _{s.thought}_")
-                md_lines.append(f"**Action:** `{s.description}`\n")
-        else:
-            md_lines.append("*(No execution steps were recorded)*\n")
-
-        markdown_content = "\n".join(md_lines)
-
-        # 3. Generate High-Fidelity Standalone HTML Report (report.html)
-        is_success = run.status == "completed" and run.success
-        status_bg = "#10b981" if is_success else "#f43f5e" if run.status == "completed" else "#64748b" if run.status == "cancelled" else "#f59e0b"
-        status_label = "PASSED" if is_success else "FAILED" if run.status == "completed" else run.status.upper()
-
-        failure_html = ""
-        if not run.success and run.failure_reason:
-            escaped_reason = html_lib.escape(run.failure_reason)
-            failure_html = f"""
-            <div class="failure-box">
-                <div class="failure-title">
-                    <span>🚨</span>
-                    <span>Root Cause & Failure Diagnostic</span>
-                </div>
-                <div class="failure-content">
-                    {escaped_reason}
-                </div>
+    steps_html = ""
+    for s in steps:
+        thought_snippet = ""
+        if s.thought:
+            thought_snippet = f"""
+            <div class="step-thought">
+                <span class="thought-tag">AI Agent Thought</span>
+                <p class="thought-text">"{html_lib.escape(s.thought)}"</p>
             </div>
             """
 
-        steps_html = ""
-        for s in steps:
-            thought_snippet = ""
-            if s.thought:
-                thought_snippet = f"""
-                <div class="step-thought">
-                    <span class="thought-tag">AI Agent Thought</span>
-                    <p class="thought-text">"{html_lib.escape(s.thought)}"</p>
-                </div>
-                """
-
-            img_snippet = ""
-            if s.screenshot_base64:
-                img_snippet = f"""
-                <div class="step-screenshot">
-                    <img src="data:image/jpeg;base64,{s.screenshot_base64}" alt="Step {s.step_index + 1} Visual" />
-                </div>
-                """
-
-            steps_html += f"""
-            <div class="step-card">
-                <div class="step-header">
-                    <span class="step-pill">Step {s.step_index + 1}</span>
-                    <span class="step-action">{html_lib.escape(s.description)}</span>
-                </div>
-                {thought_snippet}
-                {img_snippet}
+        img_snippet = ""
+        if s.screenshot_base64:
+            img_snippet = f"""
+            <div class="step-screenshot">
+                <img src="data:image/jpeg;base64,{s.screenshot_base64}" alt="Step {s.step_index + 1} Visual" />
             </div>
             """
 
-        html_content = f"""<!DOCTYPE html>
+        steps_html += f"""
+        <div class="step-card">
+            <div class="step-header">
+                <span class="step-pill">Step {s.step_index + 1}</span>
+                <span class="step-action">{html_lib.escape(s.description)}</span>
+            </div>
+            {thought_snippet}
+            {img_snippet}
+        </div>
+        """
+
+    return f"""<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -150,7 +84,7 @@ def download_run_report(run_id: str):
             padding: 40px 20px;
         }}
         .container {{
-            max-width: 900px;
+            max-width: 860px;
             margin: 0 auto;
         }}
         .header {{
@@ -186,7 +120,7 @@ def download_run_report(run_id: str):
         }}
         .meta-grid {{
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
             gap: 12px;
             font-size: 12px;
             color: var(--text-secondary);
@@ -216,7 +150,7 @@ def download_run_report(run_id: str):
             display: flex;
             align-items: center;
             gap: 8px;
-            font-size: 14px;
+            font-size: 13px;
             font-weight: 700;
             color: var(--danger);
             text-transform: uppercase;
@@ -225,7 +159,7 @@ def download_run_report(run_id: str):
         }}
         .failure-content {{
             font-family: monospace;
-            font-size: 13px;
+            font-size: 12px;
             color: #fecdd3;
             background: rgba(0,0,0,0.3);
             padding: 12px;
@@ -238,16 +172,15 @@ def download_run_report(run_id: str):
             font-weight: 700;
             margin-bottom: 16px;
             color: #cbd5e1;
-            display: flex;
-            align-items: center;
-            gap: 8px;
         }}
         .step-card {{
             background-color: var(--card-bg);
             border: 1px solid var(--border);
             border-radius: 10px;
-            padding: 16px;
-            margin-bottom: 16px;
+            padding: 18px;
+            margin-bottom: 20px;
+            page-break-inside: avoid;
+            break-inside: avoid;
         }}
         .step-header {{
             display: flex;
@@ -297,12 +230,14 @@ def download_run_report(run_id: str):
             border: 1px solid var(--border);
             background: #000;
             text-align: center;
-            padding: 8px;
+            padding: 10px;
         }}
         .step-screenshot img {{
             max-width: 100%;
+            max-height: 480px;
             height: auto;
             border-radius: 4px;
+            object-contain: contain;
         }}
         .footer {{
             text-align: center;
@@ -310,6 +245,38 @@ def download_run_report(run_id: str):
             font-size: 11px;
             color: var(--text-secondary);
             font-family: monospace;
+        }}
+
+        @media print {{
+            @page {{
+                margin: 15mm;
+                size: portrait;
+            }}
+            body {{
+                background: #ffffff !important;
+                color: #0f172a !important;
+                padding: 0 !important;
+            }}
+            .header, .step-card, .goal-box {{
+                background: #ffffff !important;
+                border: 1px solid #cbd5e1 !important;
+                color: #0f172a !important;
+                box-shadow: none !important;
+                page-break-inside: avoid;
+                break-inside: avoid;
+            }}
+            .title {{ color: #0f172a !important; }}
+            .meta-item strong {{ color: #0f172a !important; }}
+            .meta-item {{ color: #475569 !important; }}
+            .goal-box {{ color: #334155 !important; background: #f8fafc !important; }}
+            .step-thought {{ background: #f1f5f9 !important; border-left: 3px solid #0278ff !important; }}
+            .thought-text {{ color: #475569 !important; }}
+            .step-action {{ color: #0f172a !important; }}
+            .step-screenshot {{ background: #f8fafc !important; border: 1px solid #cbd5e1 !important; }}
+            .failure-content {{ background: #fff1f2 !important; color: #9f1239 !important; border: 1px solid #fecdd3 !important; }}
+            .step-pill {{ background: #e2e8f0 !important; color: #334155 !important; }}
+            .section-title {{ color: #0f172a !important; }}
+            .footer {{ color: #94a3b8 !important; }}
         }}
     </style>
 </head>
@@ -333,17 +300,103 @@ def download_run_report(run_id: str):
 
         {failure_html}
 
-        <div class="section-title">Execution Steps ({len(steps)})</div>
+        <div class="section-title">Execution Steps & Visual Timeline ({len(steps)})</div>
         {steps_html if steps_html else '<p style="color: #64748b; font-size: 13px;">No execution steps were recorded.</p>'}
 
         <div class="footer">
             Generated by Barely v1.0 "Jumping Joey" Autonomous E2E QA Agent
         </div>
     </div>
+
+    <script>
+        if (window.location.search.includes('print=true')) {
+            window.addEventListener('load', () => {
+                setTimeout(() => window.print(), 350);
+            });
+        }
+    </script>
 </body>
 </html>"""
 
-        # 4. Pack into ZIP archive
+@router.get("/api/runs/{run_id}/report", response_class=HTMLResponse)
+def view_run_report_html(run_id: str):
+    db = SessionLocal()
+    try:
+        run = db.query(RunRecord).filter(RunRecord.id == run_id).first()
+        if not run:
+            raise HTTPException(status_code=404, detail="Run not found")
+        steps = db.query(RunStep).filter(RunStep.run_id == run_id).order_by(RunStep.step_index).all()
+        return generate_report_html(run, steps)
+    finally:
+        db.close()
+
+@router.get("/api/runs/{run_id}/download")
+def download_run_report(run_id: str):
+    db = SessionLocal()
+    try:
+        run = db.query(RunRecord).filter(RunRecord.id == run_id).first()
+        if not run:
+            raise HTTPException(status_code=404, detail="Run not found")
+            
+        steps = db.query(RunStep).filter(RunStep.run_id == run_id).order_by(RunStep.step_index).all()
+        
+        # 1. JSON payload
+        run_data = {
+            "id": run.id,
+            "name": run.name,
+            "goal": run.goal,
+            "start_url": run.start_url,
+            "device": run.device,
+            "status": run.status,
+            "success": run.success,
+            "failure_reason": run.failure_reason,
+            "strict_mode": bool(run.strict_mode),
+            "created_at": str(run.created_at),
+            "total_steps": len(steps),
+            "steps": [
+                {
+                    "step_index": s.step_index,
+                    "description": s.description,
+                    "thought": s.thought
+                } for s in steps
+            ]
+        }
+        
+        # 2. Markdown Report
+        status_badge = "✅ PASSED" if (run.status == "completed" and run.success) else "❌ FAILED" if run.status == "completed" else f"⚠️ {run.status.upper()}"
+        md_lines = [
+            f"# Barely Test Execution Report: {run.name or run.id}",
+            f"\n**Status:** {status_badge}  ",
+            f"**Run ID:** `{run.id}`  ",
+            f"**Target URL:** {run.start_url}  ",
+            f"**Device Profile:** {run.device}  ",
+            f"**Strict Mode:** {'Enabled' if run.strict_mode else 'Disabled (Auto-Healing)'}  ",
+            f"**Timestamp:** {run.created_at}  \n",
+            "## 🎯 Test Goal & Instructions",
+            f"```text\n{run.goal}\n```\n"
+        ]
+
+        if not run.success and run.failure_reason:
+            md_lines.extend([
+                "## 🚨 Failure Analysis & Root Cause",
+                "> **The agent halted execution with the following diagnostic reason:**",
+                f"```text\n{run.failure_reason}\n```\n"
+            ])
+
+        md_lines.append("## 📋 Execution Steps Audit")
+        if steps:
+            for s in steps:
+                md_lines.append(f"### Step {s.step_index + 1}")
+                if s.thought:
+                    md_lines.append(f"*AI Agent Thought:* _{s.thought}_")
+                md_lines.append(f"**Action:** `{s.description}`\n")
+        else:
+            md_lines.append("*(No execution steps were recorded)*\n")
+
+        markdown_content = "\n".join(md_lines)
+        html_content = generate_report_html(run, steps)
+
+        # 3. Create Zip archive
         zip_buffer = io.BytesIO()
         with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
             zip_file.writestr('run_data.json', json.dumps(run_data, indent=2))

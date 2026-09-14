@@ -177,8 +177,8 @@ export default function ClientRunDetails({ id }: { id: string }) {
           )}
 
           <button
-            onClick={() => window.print()}
-            className="flex items-center gap-1.5 px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 text-xs font-semibold rounded-lg transition-all shadow-sm"
+            onClick={() => window.open(`http://localhost:8000/api/runs/${run.id}/report?print=true`, '_blank')}
+            className="flex items-center gap-1.5 px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 text-xs font-semibold rounded-lg transition-all shadow-sm cursor-pointer"
           >
             <Printer className="w-3.5 h-3.5 text-slate-400" />
             Export PDF
