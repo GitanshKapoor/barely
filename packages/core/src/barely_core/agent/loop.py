@@ -140,7 +140,7 @@ class AgentLoop:
             raise ValueError(f"Unknown action: {action}")
 
     def _build_prompt(self, goal, dom, history):
-        goal_text = f"GOAL: {goal.name}\nINSTRUCTIONS:\n{goal.description}\n"
+        goal_text = f"GOAL: {goal.name}\nINSTRUCTIONS:\n{goal.raw_content}\n"
         hist_text = "\nPAST ACTIONS HISTORY:\n"
         if not history:
             hist_text += "(No actions taken yet)\n"

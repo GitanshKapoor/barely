@@ -16,8 +16,7 @@ def process_job(run_id: str, goal_text: str, start_url: str, device: str):
         # We manually construct a Goal object since we don't have markdown files anymore
         parsed_goal = Goal(
             name=f"Run {run_id}",
-            description=goal_text,
-            start_url=start_url,
+            raw_content=goal_text,
             steps=[]
         )
         
