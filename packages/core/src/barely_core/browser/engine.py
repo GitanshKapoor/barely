@@ -1,6 +1,6 @@
 import os
 from pathlib import Path
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from playwright.sync_api import sync_playwright, Browser, Page, BrowserContext
 
 class BrowserEngine:
@@ -75,12 +75,42 @@ class BrowserEngine:
         except Exception:
             pass
 
-    def type_element(self, element_id: int, text: str):
-        """Types text into an element."""
+    def type_element(self, element_id: int, text: str, press_enter: bool = False):
+        """Types text into an element. Accurately handles newlines and Enter submissions."""
         selector = f"[barely-id='{element_id}']"
         loc = self.page.locator(selector) if self.strict_mode else self.page.locator(selector).first
         loc.scroll_into_view_if_needed()
-        loc.fill(text)
+        
+        # If the text is just a newline, press Enter on the element
+        if text == "\n" or text == "\\n":
+            loc.press("Enter")
+        elif text.endswith("\n"):
+            loc.fill(text.rstrip("\n"))
+            loc.press("Enter")
+        else:
+            loc.fill(text)
+            if press_enter:
+                loc.press("Enter")
+                
+        try:
+            self.page.wait_for_timeout(1200)
+            self.page.wait_for_load_state("networkidle", timeout=3000)
+        except Exception:
+            pass
+
+    def press_key(self, key: str = "Enter", element_id: Optional[int] = None):
+        """Presses a keyboard key like Enter, Tab, Escape."""
+        if element_id:
+            selector = f"[barely-id='{element_id}']"
+            loc = self.page.locator(selector) if self.strict_mode else self.page.locator(selector).first
+            loc.press(key)
+        else:
+            self.page.keyboard.press(key)
+        try:
+            self.page.wait_for_timeout(1200)
+            self.page.wait_for_load_state("networkidle", timeout=3000)
+        except Exception:
+            pass
 
     def take_screenshot(self, path: str):
         """Takes a full page screenshot."""

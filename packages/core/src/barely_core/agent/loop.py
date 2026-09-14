@@ -27,9 +27,11 @@ Rules:
   {"thought": "All steps completed.", "action": "finish"}
 - Return ONLY a JSON object with:
   - "thought": A brief explanation of which instruction step you are addressing.
-  - "action": One of ["click", "type", "navigate", "screenshot", "finish", "fail"]
-  - "element_id": (Integer ID if clicking or typing)
+  - "action": One of ["click", "type", "press_key", "navigate", "screenshot", "finish", "fail"]
+  - "element_id": (Integer ID if clicking, typing, or targeting an element)
   - "text": (String if typing text or navigating to a URL)
+  - "press_enter": (Optional boolean for "type") Set to true to submit/press Enter immediately after typing (recommended for search bars & forms)
+  - "key": (String for "press_key", e.g. "Enter", "Tab", "Escape")
   - "reasoning": (Required if action is "fail") A comprehensive root-cause analysis explaining exactly why the test failed, which expected element or state was missing, and what occurred instead.
 """
 
@@ -191,8 +193,16 @@ class AgentLoop:
             self.engine.click_element(payload.get('element_id'))
             return desc
         elif action == "type":
-            desc = f"Typed '{payload.get('text')}' into [{payload.get('element_id')}]"
-            self.engine.type_element(payload.get('element_id'), payload.get('text'))
+            press_enter = bool(payload.get('press_enter', False))
+            text = str(payload.get('text', ''))
+            desc = f"Typed '{text}' into [{payload.get('element_id')}]" + (" and pressed Enter" if press_enter else "")
+            self.engine.type_element(payload.get('element_id'), text, press_enter=press_enter)
+            return desc
+        elif action == "press_key":
+            key = payload.get('key', 'Enter')
+            elem_id = payload.get('element_id')
+            desc = f"Pressed key '{key}'" + (f" on [{elem_id}]" if elem_id else "")
+            self.engine.press_key(key=key, element_id=elem_id)
             return desc
         elif action == "navigate":
             desc = f"Navigated to {payload.get('text')}"
