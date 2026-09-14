@@ -32,5 +32,10 @@ class RunStep(Base):
     
     run = relationship("RunRecord", back_populates="steps")
 
+class CacheRecord(Base):
+    __tablename__ = "cache_records"
+    hash = Column(String, primary_key=True, index=True)
+    payload = Column(Text) # JSON string of the action
+
 def init_db():
     Base.metadata.create_all(bind=engine)

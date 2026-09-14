@@ -1,8 +1,8 @@
 import hashlib
 import json
 import logging
-from pathlib import Path
 from typing import Optional, Dict, Any, List
+from barely_core.db import SessionLocal, CacheRecord
 
 logger = logging.getLogger(__name__)
 
@@ -10,10 +10,10 @@ class ActionCache:
     """
     Production-grade deterministic cache for AI actions.
     Stores successful LLM decisions based on the exact DOM state and goal instruction.
+    Now uses PostgreSQL instead of local files.
     """
-    def __init__(self, workspace_dir: str = ".barely"):
-        self.cache_dir = Path(workspace_dir) / "cache"
-        self.cache_dir.mkdir(parents=True, exist_ok=True)
+    def __init__(self):
+        pass
         
     def _generate_hash(self, goal_name: str, dom_elements: List[Dict[str, Any]]) -> str:
         state = {
@@ -25,14 +25,15 @@ class ActionCache:
 
     def get_action(self, goal_name: str, dom_elements: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
         state_hash = self._generate_hash(goal_name, dom_elements)
-        cache_file = self.cache_dir / f"{state_hash}.json"
-        
-        if cache_file.exists():
-            try:
-                return json.loads(cache_file.read_text(encoding="utf-8"))
-            except Exception as e:
-                logger.warning(f"Failed to read cache file {cache_file}: {e}")
-                return None
+        db = SessionLocal()
+        try:
+            record = db.query(CacheRecord).filter(CacheRecord.hash == state_hash).first()
+            if record:
+                return json.loads(record.payload)
+        except Exception as e:
+            logger.warning(f"Failed to read cache from DB: {e}")
+        finally:
+            db.close()
         return None
 
     def save_action(self, goal_name: str, dom_elements: List[Dict[str, Any]], action: Dict[str, Any]):
@@ -40,17 +41,32 @@ class ActionCache:
             return
             
         state_hash = self._generate_hash(goal_name, dom_elements)
-        cache_file = self.cache_dir / f"{state_hash}.json"
-        
+        db = SessionLocal()
         try:
-            cache_file.write_text(json.dumps(action, indent=2), encoding="utf-8")
+            # Upsert
+            record = db.query(CacheRecord).filter(CacheRecord.hash == state_hash).first()
+            if record:
+                record.payload = json.dumps(action)
+            else:
+                new_record = CacheRecord(hash=state_hash, payload=json.dumps(action))
+                db.add(new_record)
+            db.commit()
         except Exception as e:
-            logger.error(f"Failed to write to cache: {e}")
+            logger.error(f"Failed to write to cache DB: {e}")
+        finally:
+            db.close()
 
     def invalidate(self, goal_name: str, dom_elements: List[Dict[str, Any]]):
         """Deletes a cached action. Used when a cached action fails to execute."""
         state_hash = self._generate_hash(goal_name, dom_elements)
-        cache_file = self.cache_dir / f"{state_hash}.json"
-        if cache_file.exists():
-            cache_file.unlink()
-            logger.info(f"Invalidated cache entry {state_hash}")
+        db = SessionLocal()
+        try:
+            record = db.query(CacheRecord).filter(CacheRecord.hash == state_hash).first()
+            if record:
+                db.delete(record)
+                db.commit()
+                logger.info(f"Invalidated cache entry {state_hash}")
+        except Exception as e:
+            logger.error(f"Failed to invalidate cache DB: {e}")
+        finally:
+            db.close()
