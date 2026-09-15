@@ -40,7 +40,8 @@ You define the *test intent* and *assertions* in natural language — Barely's a
 - 🏷️ **Test Suite Tags & Classification:** Categorize test runs (`#smoke`, `#regression`, `#auth`, `#p0`, `#e2e`) with quick-toggle presets and multi-suite filtering.
 - 🎯 **Strict Mode & Autonomous Auto-Healing:** Strict locator uniqueness enforcement or resilient autonomous auto-healing for dynamic selectors.
 - 🖼️ **Autonomous Visual Baselines:** Capture and preview golden UI viewport snapshots across Desktop, Tablet, iOS, and Android device profiles.
-- 📊 **Executive PDF Reports & Artifact Bundles:** One-click export of print-ready multi-page PDF audit reports and downloadable `.zip` bundles (`REPORT.md`, `report.html`, `run_data.json`).
+- 📊 **Executive PDF Reports & Artifact Bundles:** One-click export of print-ready multi-page PDF audit reports and downloadable `.zip` bundles (`REPORT.md`, `report.html`, `run_data.json`) with structured 4-tier step auditing (Target Goal Step, AI Agent Reasoning, Human-Readable Action Executed, and Viewport Snapshot).
+- 🧩 **Human-Readable Element Abstraction:** Automatically translates low-level DOM IDs into clean, business-level UI labels (e.g. `Clicked "Google Search" button`, `Typed 'Gitansh Kapoor' into "Search" input field`) for non-technical stakeholders.
 - 🔄 **Live CI/CD Audit Timeline:** Real-time console log streaming, step-by-step DOM timelines, and one-click re-run & reconfigure modal.
 - 🗄️ **Zero-Disk Runtime Architecture:** 100% of runs, logs, screenshots, and cached action plans persist directly in PostgreSQL.
 

@@ -1,14 +1,32 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import Link from 'next/link';
 import NewRunForm from "../../components/NewRunForm";
-import { CheckCircle2, XCircle, Clock, FileText, Ban, RotateCw, RotateCcw } from 'lucide-react';
+import { 
+  CheckCircle2, 
+  XCircle, 
+  Clock, 
+  FileText, 
+  Ban, 
+  RotateCw, 
+  RotateCcw, 
+  Search, 
+  X, 
+  Tag, 
+  Monitor
+} from 'lucide-react';
 
 export default function ExecutionsPage() {
   const [runs, setRuns] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [cancellingId, setCancellingId] = useState<string | null>(null);
+
+  // Filters State
+  const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'passed' | 'failed' | 'in_flight' | 'cancelled'>('all');
+  const [deviceFilter, setDeviceFilter] = useState<string>('all');
+  const [tagFilter, setTagFilter] = useState<string>('all');
 
   const fetchRuns = async () => {
     try {
@@ -49,6 +67,77 @@ export default function ExecutionsPage() {
     }
   };
 
+  // Base filtered runs (matches search, device, and tag before status filter)
+  const baseFilteredRuns = useMemo(() => {
+    return runs.filter(run => {
+      // Search text
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase();
+        const matchesName = (run.name || '').toLowerCase().includes(q);
+        const matchesId = (run.id || '').toLowerCase().includes(q);
+        const matchesUrl = (run.start_url || '').toLowerCase().includes(q);
+        const matchesGoal = (run.goal || '').toLowerCase().includes(q);
+        if (!matchesName && !matchesId && !matchesUrl && !matchesGoal) return false;
+      }
+
+      // Device filter
+      if (deviceFilter !== 'all') {
+        if ((run.device || 'desktop').toLowerCase() !== deviceFilter.toLowerCase()) return false;
+      }
+
+      // Tag filter
+      if (tagFilter !== 'all') {
+        if (!run.tags || !run.tags.includes(tagFilter)) return false;
+      }
+
+      return true;
+    });
+  }, [runs, searchQuery, deviceFilter, tagFilter]);
+
+  // Dynamic metrics counts based on active search, device, and tag filters
+  const totalCount = baseFilteredRuns.length;
+  const passedCount = baseFilteredRuns.filter(r => r.status === 'completed' && r.success).length;
+  const failedCount = baseFilteredRuns.filter(r => r.status === 'completed' && !r.success).length;
+  const inFlightCount = baseFilteredRuns.filter(r => r.status === 'running' || r.status === 'pending').length;
+  const cancelledCount = baseFilteredRuns.filter(r => r.status === 'cancelled').length;
+
+  // Available unique tags across all runs
+  const availableTags = useMemo(() => {
+    const tags = new Set<string>();
+    runs.forEach(r => {
+      if (Array.isArray(r.tags)) {
+        r.tags.forEach((t: string) => t && tags.add(t));
+      }
+    });
+    return Array.from(tags).sort();
+  }, [runs]);
+
+  // Final filtered runs (after applying statusFilter)
+  const filteredRuns = useMemo(() => {
+    if (statusFilter === 'all') return baseFilteredRuns;
+    return baseFilteredRuns.filter(run => {
+      if (statusFilter === 'passed') {
+        return run.status === 'completed' && run.success;
+      } else if (statusFilter === 'failed') {
+        return run.status === 'completed' && !run.success;
+      } else if (statusFilter === 'in_flight') {
+        return run.status === 'running' || run.status === 'pending';
+      } else if (statusFilter === 'cancelled') {
+        return run.status === 'cancelled';
+      }
+      return true;
+    });
+  }, [baseFilteredRuns, statusFilter]);
+
+  const hasActiveFilters = searchQuery !== '' || statusFilter !== 'all' || deviceFilter !== 'all' || tagFilter !== 'all';
+
+  const resetFilters = () => {
+    setSearchQuery('');
+    setStatusFilter('all');
+    setDeviceFilter('all');
+    setTagFilter('all');
+  };
+
   return (
     <div className="max-w-6xl mx-auto space-y-6">
       <div className="flex items-center justify-between pb-2 border-b border-slate-800/80">
@@ -59,7 +148,172 @@ export default function ExecutionsPage() {
           </div>
           <p className="text-sm text-slate-400 mt-1">Real-time status of all autonomous QA pipelines and jobs.</p>
         </div>
-        <NewRunForm />
+        <NewRunForm onRunCreated={() => fetchRuns()} />
+      </div>
+
+      {/* Filter Controls Bar */}
+      <div className="rounded-xl border border-slate-800 bg-[#0d1322] p-4 space-y-3.5 shadow-xl">
+        {/* Top Filter Row: Search & Status Tabs */}
+        <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
+          {/* Search Box */}
+          <div className="relative flex-1 max-w-md">
+            <Search className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2" />
+            <input
+              type="text"
+              placeholder="Search by test name, ID, or URL..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full bg-slate-900/80 border border-slate-700/80 rounded-lg pl-9 pr-8 py-1.5 text-xs text-slate-200 placeholder-slate-500 focus:outline-none focus:border-[#0278ff] transition-colors"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-200"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
+
+          {/* Status Quick Filter Buttons */}
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 md:pb-0">
+            <button
+              onClick={() => setStatusFilter('all')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
+                statusFilter === 'all'
+                  ? 'bg-[#0278ff] text-white shadow-sm'
+                  : 'bg-slate-900/60 text-slate-400 hover:text-slate-200 hover:bg-slate-800/80 border border-slate-800'
+              }`}
+            >
+              All <span className="text-[10px] opacity-80 font-mono">({totalCount})</span>
+            </button>
+            <button
+              onClick={() => setStatusFilter('passed')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
+                statusFilter === 'passed'
+                  ? 'bg-emerald-600 text-white shadow-sm'
+                  : 'bg-slate-900/60 text-emerald-400/80 hover:text-emerald-300 hover:bg-slate-800/80 border border-slate-800'
+              }`}
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+              Passed <span className="text-[10px] opacity-80 font-mono">({passedCount})</span>
+            </button>
+            <button
+              onClick={() => setStatusFilter('failed')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
+                statusFilter === 'failed'
+                  ? 'bg-rose-600 text-white shadow-sm'
+                  : 'bg-slate-900/60 text-rose-400/80 hover:text-rose-300 hover:bg-slate-800/80 border border-slate-800'
+              }`}
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-rose-400"></span>
+              Failed <span className="text-[10px] opacity-80 font-mono">({failedCount})</span>
+            </button>
+            <button
+              onClick={() => setStatusFilter('in_flight')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
+                statusFilter === 'in_flight'
+                  ? 'bg-amber-600 text-white shadow-sm'
+                  : 'bg-slate-900/60 text-amber-400/80 hover:text-amber-300 hover:bg-slate-800/80 border border-slate-800'
+              }`}
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-400"></span>
+              In-Flight <span className="text-[10px] opacity-80 font-mono">({inFlightCount})</span>
+            </button>
+            <button
+              onClick={() => setStatusFilter('cancelled')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
+                statusFilter === 'cancelled'
+                  ? 'bg-slate-700 text-white shadow-sm'
+                  : 'bg-slate-900/60 text-slate-400 hover:text-slate-200 hover:bg-slate-800/80 border border-slate-800'
+              }`}
+            >
+              Cancelled <span className="text-[10px] opacity-80 font-mono">({cancelledCount})</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Dynamic Segmented Distribution Mini-bar */}
+        {totalCount > 0 && (
+          <div className="w-full h-1.5 bg-slate-900/90 rounded-full overflow-hidden flex gap-0.5 border border-slate-800">
+            {passedCount > 0 && (
+              <div 
+                className="h-full bg-emerald-500 rounded-full transition-all duration-300"
+                style={{ width: `${(passedCount / totalCount) * 100}%` }}
+                title={`${passedCount} Passed`}
+              />
+            )}
+            {failedCount > 0 && (
+              <div 
+                className="h-full bg-rose-500 rounded-full transition-all duration-300"
+                style={{ width: `${(failedCount / totalCount) * 100}%` }}
+                title={`${failedCount} Failed / Cancelled`}
+              />
+            )}
+            {inFlightCount > 0 && (
+              <div 
+                className="h-full bg-amber-400 rounded-full animate-pulse transition-all duration-300"
+                style={{ width: `${(inFlightCount / totalCount) * 100}%` }}
+                title={`${inFlightCount} In-Flight`}
+              />
+            )}
+          </div>
+        )}
+
+        {/* Bottom Filter Row: Secondary Selectors (Device, Tags, Clear) */}
+        <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-slate-800/60 text-xs">
+          <div className="flex items-center gap-3 flex-wrap">
+            {/* Device Selector */}
+            <div className="flex items-center gap-1.5 bg-slate-900/60 border border-slate-800 rounded-lg px-2.5 py-1">
+              <Monitor className="w-3.5 h-3.5 text-slate-400" />
+              <span className="text-slate-400 font-medium">Device:</span>
+              <select
+                value={deviceFilter}
+                onChange={(e) => setDeviceFilter(e.target.value)}
+                className="bg-transparent text-slate-200 font-semibold focus:outline-none cursor-pointer"
+              >
+                <option value="all" className="bg-[#0d1322]">All Devices</option>
+                <option value="desktop" className="bg-[#0d1322]">Desktop</option>
+                <option value="tablet" className="bg-[#0d1322]">Tablet</option>
+                <option value="ios" className="bg-[#0d1322]">iOS</option>
+                <option value="android" className="bg-[#0d1322]">Android</option>
+              </select>
+            </div>
+
+            {/* Tag Filter */}
+            {availableTags.length > 0 && (
+              <div className="flex items-center gap-1.5 bg-slate-900/60 border border-slate-800 rounded-lg px-2.5 py-1">
+                <Tag className="w-3.5 h-3.5 text-slate-400" />
+                <span className="text-slate-400 font-medium">Tag:</span>
+                <select
+                  value={tagFilter}
+                  onChange={(e) => setTagFilter(e.target.value)}
+                  className="bg-transparent text-slate-200 font-semibold focus:outline-none cursor-pointer"
+                >
+                  <option value="all" className="bg-[#0d1322]">All Tags</option>
+                  {availableTags.map(tag => (
+                    <option key={tag} value={tag} className="bg-[#0d1322]">#{tag}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {/* Reset Filters */}
+            {hasActiveFilters && (
+              <button
+                onClick={resetFilters}
+                className="text-slate-400 hover:text-rose-400 flex items-center gap-1 text-xs font-medium transition-colors"
+              >
+                <X className="w-3.5 h-3.5" /> Clear filters
+              </button>
+            )}
+          </div>
+
+          {/* Results Counter */}
+          <div className="text-slate-400 font-mono text-[11px]">
+            Showing <strong className="text-slate-200">{filteredRuns.length}</strong> of {totalCount} runs {totalCount !== runs.length && <span className="text-slate-500">({runs.length} total)</span>}
+          </div>
+        </div>
       </div>
 
       <div className="rounded-xl border border-slate-800 bg-[#0d1322] overflow-hidden shadow-xl">
@@ -83,14 +337,26 @@ export default function ExecutionsPage() {
                   </div>
                 </td>
               </tr>
-            ) : runs.length === 0 ? (
+            ) : filteredRuns.length === 0 ? (
               <tr>
                 <td colSpan={5} className="px-6 py-12 text-center text-slate-500">
-                  No execution runs found. Click "Start New Test" to begin testing.
+                  {hasActiveFilters ? (
+                    <div className="space-y-2">
+                      <p className="text-slate-300 font-medium">No execution runs match the selected filters.</p>
+                      <button
+                        onClick={resetFilters}
+                        className="text-xs text-[#0278ff] hover:underline font-semibold"
+                      >
+                        Reset all filters
+                      </button>
+                    </div>
+                  ) : (
+                    <p>No execution runs found. Click "Start New Test" to begin testing.</p>
+                  )}
                 </td>
               </tr>
             ) : (
-              runs.map((run: any) => (
+              filteredRuns.map((run: any) => (
                 <tr key={run.id} className="hover:bg-slate-800/30 transition-colors group">
                   <td className="px-6 py-4 font-medium text-slate-200 align-middle">
                     <div className="flex items-center gap-2.5">
@@ -159,6 +425,7 @@ export default function ExecutionsPage() {
                           strictMode: Boolean(run.strict_mode),
                           tags: run.tags || []
                         }}
+                        onRunCreated={() => fetchRuns()}
                         triggerButton={(openModal) => (
                           <button
                             type="button"

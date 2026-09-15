@@ -22,7 +22,7 @@ export default function RunTestButton() {
       } else {
         alert("Failed to queue the test. Check API logs.");
       }
-    } catch (e) {
+    } catch {
       alert("Error connecting to the API.");
     }
     setLoading(false);

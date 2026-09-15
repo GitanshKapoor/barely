@@ -8,6 +8,20 @@ from barely_core.db import SessionLocal, RunRecord, RunStep
 
 router = APIRouter()
 
+def extract_goal_instructions(goal_text: str) -> list:
+    import re
+    if not goal_text:
+        return []
+    instructions = []
+    for line in goal_text.splitlines():
+        line = line.strip()
+        m = re.match(r'^\d+[\.\)]\s*(.+)$', line)
+        if m:
+            instructions.append(m.group(1).strip())
+        elif line.startswith("- ") or line.startswith("* "):
+            instructions.append(line[2:].strip())
+    return instructions
+
 def generate_report_html(run, steps) -> str:
     is_success = run.status == "completed" and run.success
     status_bg = "#10b981" if is_success else "#f43f5e" if run.status == "completed" else "#64748b" if run.status == "cancelled" else "#f59e0b"
@@ -28,16 +42,35 @@ def generate_report_html(run, steps) -> str:
         </div>
         """
 
+    goal_instructions = extract_goal_instructions(run.goal or "")
+
     steps_html = ""
     for s in steps:
+        target_instruction = goal_instructions[s.step_index] if s.step_index < len(goal_instructions) else None
+        target_html = ""
+        if target_instruction:
+            target_html = f"""
+            <div class="step-target">
+                <span class="target-tag">🎯 Goal Instruction (Step {s.step_index + 1})</span>
+                <p class="target-text">{html_lib.escape(target_instruction)}</p>
+            </div>
+            """
+
         thought_snippet = ""
         if s.thought:
             thought_snippet = f"""
             <div class="step-thought">
-                <span class="thought-tag">AI Agent Thought</span>
+                <span class="thought-tag">💭 AI Agent Reasoning</span>
                 <p class="thought-text">"{html_lib.escape(s.thought)}"</p>
             </div>
             """
+
+        action_snippet = f"""
+        <div class="step-action-box">
+            <span class="action-tag">⚡ Action Executed</span>
+            <p class="action-text">{html_lib.escape(s.description)}</p>
+        </div>
+        """
 
         img_snippet = ""
         if s.screenshot_base64:
@@ -50,10 +83,11 @@ def generate_report_html(run, steps) -> str:
         steps_html += f"""
         <div class="step-card">
             <div class="step-header">
-                <span class="step-pill">Step {s.step_index + 1}</span>
-                <span class="step-action">{html_lib.escape(s.description)}</span>
+                <span class="step-pill">Execution Step {s.step_index + 1}</span>
             </div>
+            {target_html}
             {thought_snippet}
+            {action_snippet}
             {img_snippet}
         </div>
         """
@@ -212,17 +246,34 @@ def generate_report_html(run, steps) -> str:
             border-radius: 4px;
             font-family: monospace;
         }}
-        .step-action {{
-            font-size: 14px;
+        .step-target {{
+            background: rgba(16, 185, 129, 0.08);
+            border-left: 3px solid var(--success);
+            border-radius: 4px;
+            padding: 10px 14px;
+            margin-bottom: 12px;
+        }}
+        .target-tag {{
+            display: block;
+            font-size: 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: #34d399;
+            margin-bottom: 4px;
+        }}
+        .target-text {{
+            font-size: 13px;
+            color: #e2e8f0;
             font-weight: 600;
-            color: #f1f5f9;
+            line-height: 1.4;
         }}
         .step-thought {{
             background: rgba(2, 120, 255, 0.08);
             border-left: 3px solid var(--accent);
             border-radius: 4px;
             padding: 10px 14px;
-            margin-bottom: 14px;
+            margin-bottom: 12px;
         }}
         .thought-tag {{
             display: block;
@@ -238,6 +289,28 @@ def generate_report_html(run, steps) -> str:
             color: #94a3b8;
             font-style: italic;
             line-height: 1.5;
+        }}
+        .step-action-box {{
+            background: rgba(245, 158, 11, 0.08);
+            border-left: 3px solid #f59e0b;
+            border-radius: 4px;
+            padding: 10px 14px;
+            margin-bottom: 14px;
+        }}
+        .action-tag {{
+            display: block;
+            font-size: 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: #fbbf24;
+            margin-bottom: 4px;
+        }}
+        .action-text {{
+            font-size: 13px;
+            color: #f8fafc;
+            font-weight: 600;
+            line-height: 1.4;
         }}
         .step-screenshot {{
             border-radius: 8px;
@@ -281,11 +354,16 @@ def generate_report_html(run, steps) -> str:
             .title {{ color: #0f172a !important; }}
             .meta-item strong {{ color: #0f172a !important; }}
             .meta-item {{ color: #475569 !important; }}
-            .goal-box {{ color: #334155 !important; background: #f8fafc !important; }}
+            .step-target {{ background: #f0fdf4 !important; border-left: 3px solid #10b981 !important; }}
+            .target-tag {{ color: #059669 !important; }}
+            .target-text {{ color: #065f46 !important; }}
             .step-thought {{ background: #f1f5f9 !important; border-left: 3px solid #0278ff !important; }}
+            .thought-tag {{ color: #0284c7 !important; }}
             .thought-text {{ color: #475569 !important; }}
+            .step-action-box {{ background: #fffbeb !important; border-left: 3px solid #f59e0b !important; }}
+            .action-tag {{ color: #d97706 !important; }}
+            .action-text {{ color: #92400e !important; }}
             .tag-pill {{ background: #eff6ff !important; color: #1d4ed8 !important; border: 1px solid #bfdbfe !important; }}
-            .step-action {{ color: #0f172a !important; }}
             .step-screenshot {{ background: #f8fafc !important; border: 1px solid #cbd5e1 !important; }}
             .failure-content {{ background: #fff1f2 !important; color: #9f1239 !important; border: 1px solid #fecdd3 !important; }}
             .step-pill {{ background: #e2e8f0 !important; color: #334155 !important; }}
@@ -355,6 +433,7 @@ def download_report(run_id: str):
             raise HTTPException(status_code=404, detail="Run not found")
             
         steps = db.query(RunStep).filter(RunStep.run_id == run_id).order_by(RunStep.step_index).all()
+        goal_instructions = extract_goal_instructions(run.goal or "")
         
         # 1. JSON payload
         run_data = {
@@ -373,7 +452,8 @@ def download_report(run_id: str):
             "steps": [
                 {
                     "step_index": s.step_index,
-                    "description": s.description,
+                    "target_instruction": goal_instructions[s.step_index] if s.step_index < len(goal_instructions) else None,
+                    "action_executed": s.description,
                     "thought": s.thought
                 } for s in steps
             ]
@@ -410,9 +490,11 @@ def download_report(run_id: str):
         if steps:
             for s in steps:
                 md_lines.append(f"### Step {s.step_index + 1}")
+                if s.step_index < len(goal_instructions):
+                    md_lines.append(f"- **🎯 Target Goal Instruction:** `{goal_instructions[s.step_index]}`")
                 if s.thought:
-                    md_lines.append(f"*AI Agent Thought:* _{s.thought}_")
-                md_lines.append(f"**Action:** `{s.description}`\n")
+                    md_lines.append(f"- **💭 AI Agent Reasoning:** _{s.thought}_")
+                md_lines.append(f"- **⚡ Action Executed:** `{s.description}`\n")
         else:
             md_lines.append("*(No execution steps were recorded)*\n")
 

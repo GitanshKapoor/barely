@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
-import { Play, Globe, Smartphone, Monitor, Tablet, X, Info, RotateCcw, Tag } from 'lucide-react';
+import { Play, Globe, Smartphone, Monitor, Tablet, X, Info, Tag, ArrowRight, Loader2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
 export interface RunConfigData {
@@ -17,25 +17,27 @@ export interface RunConfigData {
 interface NewRunFormProps {
   initialData?: RunConfigData;
   triggerButton?: (open: (e?: React.MouseEvent) => void) => React.ReactNode;
+  onRunCreated?: (jobId: string) => void;
 }
 
-export default function NewRunForm({ initialData, triggerButton }: NewRunFormProps) {
-  const [mounted, setMounted] = useState(false);
+const emptySubscribe = () => () => {};
+
+export default function NewRunForm({ initialData, triggerButton, onRunCreated }: NewRunFormProps) {
+  const mounted = useSyncExternalStore(emptySubscribe, () => true, () => false);
   const [loading, setLoading] = useState(false);
+  const [transitioning, setTransitioning] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
   const [name, setName] = useState(initialData?.name || '');
   const [url, setUrl] = useState(initialData?.url || 'https://');
   const [goalText, setGoalText] = useState(initialData?.goalText || '');
   const [device, setDevice] = useState(initialData?.device || 'desktop');
   const [strictMode, setStrictMode] = useState(Boolean(initialData?.strictMode));
+  const [autoNavigate, setAutoNavigate] = useState(false);
   const [tags, setTags] = useState<string[]>(initialData?.tags || []);
   const [tagInput, setTagInput] = useState('');
+  const [toast, setToast] = useState<{ id: string; name: string } | null>(null);
 
   const router = useRouter();
-
-  useEffect(() => {
-    setMounted(true);
-  }, []);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -92,7 +94,7 @@ export default function NewRunForm({ initialData, triggerButton }: NewRunFormPro
     setIsOpen(true);
   };
 
-  const handleRun = async (e: any) => {
+  const handleRun = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     try {
@@ -111,22 +113,43 @@ export default function NewRunForm({ initialData, triggerButton }: NewRunFormPro
       });
       if (res.ok) {
         const data = await res.json();
-        setIsOpen(false);
-        if (!initialData) {
-          setName(''); setUrl('https://'); setGoalText(''); setDevice('desktop'); setStrictMode(false); setTags([]); setTagInput('');
+        const createdJobId = data.job_id;
+
+        if (onRunCreated && createdJobId) {
+          onRunCreated(createdJobId);
         }
-        if (data.job_id) {
-          router.push(`/runs/${data.job_id}`);
+
+        if (autoNavigate && createdJobId) {
+          setTransitioning(true);
+          setTimeout(() => {
+            setIsOpen(false);
+            setTransitioning(false);
+            router.push(`/runs/${createdJobId}`);
+          }, 450);
         } else {
-          router.refresh();
+          setIsOpen(false);
+          const currentTestName = name || 'Automated E2E Test';
+          if (!initialData) {
+            setName(''); setUrl('https://'); setGoalText(''); setDevice('desktop'); setStrictMode(false); setTags([]); setTagInput('');
+          }
+          if (createdJobId) {
+            setToast({
+              id: createdJobId,
+              name: currentTestName
+            });
+            setTimeout(() => {
+              setToast((curr) => (curr?.id === createdJobId ? null : curr));
+            }, 8000);
+          }
         }
       } else {
         alert('Failed to queue the test. Check API logs.');
       }
-    } catch (e) {
+    } catch {
       alert('Error connecting to the API. Is it running?');
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   const devices = [
@@ -320,6 +343,32 @@ export default function NewRunForm({ initialData, triggerButton }: NewRunFormPro
               </label>
             </div>
           </div>
+
+          {/* GitHub-style Auto-navigate Toggle */}
+          <div className="text-left">
+            <div className="flex items-center justify-between p-3 rounded-lg border border-slate-800 bg-[#070b14]">
+              <div className="space-y-0.5 pr-3 text-left">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs font-bold text-slate-200">Auto-navigate to Live Audit</span>
+                </div>
+                <p className="text-[11px] text-slate-400 text-left">
+                  {autoNavigate 
+                    ? 'Immediately open live execution logs upon dispatch' 
+                    : 'Stay on page and display background dispatch toast (GitHub Actions style)'}
+                </p>
+              </div>
+
+              <label className="relative inline-flex items-center cursor-pointer flex-shrink-0">
+                <input
+                  type="checkbox"
+                  checked={autoNavigate}
+                  onChange={(e) => setAutoNavigate(e.target.checked)}
+                  className="sr-only peer"
+                />
+                <div className="w-9 h-5 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#0278ff]"></div>
+              </label>
+            </div>
+          </div>
         </div>
 
         <div className="flex items-center gap-3 justify-end pt-2 border-t border-slate-800/80">
@@ -344,6 +393,51 @@ export default function NewRunForm({ initialData, triggerButton }: NewRunFormPro
     </div>
   );
 
+  const toastContent = toast ? (
+    <div className="fixed bottom-6 right-6 z-50 animate-in fade-in slide-in-from-bottom-5 duration-300 max-w-md w-full sm:w-auto">
+      <div className="bg-[#0d1322]/95 border border-[#0278ff]/40 shadow-2xl shadow-[#0278ff]/10 rounded-xl p-4 flex items-center gap-3.5 backdrop-blur-md">
+        <div className="w-9 h-9 rounded-lg bg-[#0278ff]/15 border border-[#0278ff]/30 flex items-center justify-center text-[#0278ff] flex-shrink-0">
+          <Play className="w-4 h-4 fill-current animate-pulse" />
+        </div>
+        <div className="flex-1 min-w-0 pr-2">
+          <div className="flex items-center gap-2">
+            <h4 className="text-xs font-bold text-slate-100 uppercase tracking-wide">Test Dispatched</h4>
+            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-mono bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+              Active
+            </span>
+          </div>
+          <p className="text-xs text-slate-300 truncate mt-0.5 font-medium">{toast.name}</p>
+        </div>
+        <div className="flex items-center gap-2 flex-shrink-0">
+          <button
+            type="button"
+            onClick={() => router.push(`/runs/${toast.id}`)}
+            className="px-3 py-1.5 bg-[#0278ff] hover:bg-[#0062d6] text-white text-xs font-semibold rounded-lg shadow-sm flex items-center gap-1.5 transition-all cursor-pointer"
+          >
+            <span>View Live Audit</span>
+            <ArrowRight className="w-3 h-3" />
+          </button>
+          <button
+            type="button"
+            onClick={() => setToast(null)}
+            className="p-1 text-slate-400 hover:text-white rounded-md transition-colors cursor-pointer"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+    </div>
+  ) : null;
+
+  const transitioningContent = transitioning ? (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/70 backdrop-blur-sm animate-in fade-in duration-200">
+      <div className="flex flex-col items-center gap-3 p-6 rounded-xl bg-[#0d1322] border border-slate-800 shadow-2xl">
+        <Loader2 className="w-6 h-6 animate-spin text-[#0278ff]" />
+        <p className="text-sm font-medium text-slate-200">Navigating to live test execution...</p>
+      </div>
+    </div>
+  ) : null;
+
   return (
     <>
       {triggerButton ? (
@@ -358,6 +452,8 @@ export default function NewRunForm({ initialData, triggerButton }: NewRunFormPro
         </button>
       )}
       {isOpen && mounted && createPortal(modalContent, document.body)}
+      {mounted && toast && createPortal(toastContent, document.body)}
+      {mounted && transitioning && createPortal(transitioningContent, document.body)}
     </>
   );
 }
