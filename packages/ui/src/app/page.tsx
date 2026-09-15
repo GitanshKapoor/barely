@@ -9,7 +9,7 @@ async function getStats() {
     if (!res.ok) return { runs: [] };
     const data = await res.json();
     return data;
-  } catch (e) {
+  } catch {
     return { runs: [] };
   }
 }
@@ -76,25 +76,58 @@ export default async function Home() {
             <p className="text-sm font-semibold text-slate-200">Overall Pass Rate</p>
             <p className="text-xs text-slate-400 mt-0.5">Calculated across all completed test pipelines</p>
           </div>
-          <div className="flex items-baseline gap-1">
+          <div className="flex items-baseline gap-1.5">
             <span className="text-3xl font-extrabold text-slate-100 font-mono">{passRate}%</span>
-            <span className="text-xs text-slate-500 font-medium">success</span>
+            <span className="text-xs text-slate-400 font-light tracking-wide">Success</span>
           </div>
         </div>
-        <div className="w-full h-3 bg-slate-900 rounded-full overflow-hidden p-0.5 border border-slate-800">
-          <div
-            className="h-full rounded-full transition-all duration-700"
-            style={{
-              width: `${Math.max(passRate, total === 0 ? 0 : 4)}%`,
-              background: passRate >= 80 ? 'linear-gradient(90deg, #0278ff 0%, #10b981 100%)' : passRate >= 50 ? '#f59e0b' : '#f43f5e'
-            }}
-          />
+        {/* Multi-status segmented distribution bar */}
+        <div className="w-full h-3 bg-slate-900/90 rounded-full overflow-hidden flex gap-0.5 p-0.5 border border-slate-800">
+          {total > 0 ? (
+            <>
+              {passed > 0 && (
+                <div
+                  className="h-full bg-emerald-500 rounded-full transition-all duration-500 hover:brightness-110"
+                  style={{ width: `${(passed / total) * 100}%` }}
+                  title={`${passed} Passed (${Math.round((passed / total) * 100)}%)`}
+                />
+              )}
+              {failed > 0 && (
+                <div
+                  className="h-full bg-rose-500 rounded-full transition-all duration-500 hover:brightness-110"
+                  style={{ width: `${(failed / total) * 100}%` }}
+                  title={`${failed} Failed / Cancelled (${Math.round((failed / total) * 100)}%)`}
+                />
+              )}
+              {(running + pending) > 0 && (
+                <div
+                  className="h-full bg-amber-400 rounded-full transition-all duration-500 animate-pulse hover:brightness-110"
+                  style={{ width: `${((running + pending) / total) * 100}%` }}
+                  title={`${running + pending} In-Flight (${Math.round(((running + pending) / total) * 100)}%)`}
+                />
+              )}
+            </>
+          ) : (
+            <div className="h-full bg-slate-800/60 rounded-full w-full" />
+          )}
         </div>
-        <div className="flex items-center justify-between text-xs text-slate-400 pt-1 font-mono">
-          <span className="text-emerald-400 font-medium">{passed} passed</span>
-          <span className="text-rose-400 font-medium">{failed} failed/cancelled</span>
-          <span className="text-amber-400 font-medium">{running + pending} in-flight</span>
-          <span className="text-slate-500">{total} total runs</span>
+        <div className="flex items-center justify-between text-xs pt-1 tracking-wide font-light">
+          <span className="flex items-center gap-1.5 text-emerald-400/90">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 flex-shrink-0"></span>
+            {passed} Passed
+          </span>
+          <span className="flex items-center gap-1.5 text-rose-400/90">
+            <span className="w-1.5 h-1.5 rounded-full bg-rose-500 flex-shrink-0"></span>
+            {failed} Failed / Cancelled
+          </span>
+          <span className="flex items-center gap-1.5 text-amber-400/90">
+            <span className="w-1.5 h-1.5 rounded-full bg-amber-400 flex-shrink-0"></span>
+            {running + pending} In-Flight
+          </span>
+          <span className="flex items-center gap-1.5 text-slate-400/80">
+            <span className="w-1.5 h-1.5 rounded-full bg-slate-600 flex-shrink-0"></span>
+            {total} Total Runs
+          </span>
         </div>
       </div>
 
@@ -120,7 +153,7 @@ export default async function Home() {
                 <div className="flex-shrink-0">
                   {run.status === 'completed' && run.success && <CheckCircle2 className="w-4 h-4 text-emerald-400" />}
                   {run.status === 'completed' && !run.success && <XCircle className="w-4 h-4 text-rose-400" />}
-                  {run.status === 'cancelled' && <Ban className="w-4 h-4 text-slate-400" />}
+                  {run.status === 'cancelled' && <Ban className="w-4 h-4 text-orange-400" />}
                   {run.status === 'running' && (
                     <span className="relative flex h-3 w-3">
                       <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#0278ff] opacity-75"></span>
@@ -140,7 +173,7 @@ export default async function Home() {
                   run.status === 'completed' && run.success ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' :
                   run.status === 'completed' && !run.success ? 'bg-rose-500/10 text-rose-400 border-rose-500/20' :
                   run.status === 'running' ? 'bg-[#0278ff]/10 text-[#0278ff] border-[#0278ff]/30 animate-pulse' :
-                  run.status === 'cancelled' ? 'bg-slate-800 text-slate-400 border-slate-700' :
+                  run.status === 'cancelled' ? 'bg-orange-500/10 text-orange-400 border-orange-500/25' :
                   'bg-amber-500/10 text-amber-400 border-amber-500/20'
                 }`}>
                   {run.status === 'completed' && run.success ? 'PASS' :

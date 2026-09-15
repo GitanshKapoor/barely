@@ -42,6 +42,43 @@ interface RunData {
   steps: RunStep[];
 }
 
+function formatActionDescription(desc: string, thought?: string | null): string {
+  if (!desc) return "Action executed";
+  let formatted = desc;
+
+  // Replace technical locator IDs e.g. [barely-id="9"] or [barely-id=9]
+  formatted = formatted.replace(/\[barely-id=["']?([^"']+)["']?\]/gi, 'element');
+
+  // Handle "Clicked element [3]" or "Clicked [3]"
+  if (/clicked\s+(?:element\s+)?\[\d+\]/i.test(formatted)) {
+    if (thought) {
+      const match = thought.match(/click(?:ing|ed)?\s+(?:on\s+)?(?:the\s+)?([^.,;]+)/i);
+      if (match && match[1] && match[1].trim().length > 0 && match[1].trim().length < 40) {
+        return `Clicked "${match[1].trim()}"`;
+      }
+    }
+    return "Clicked target element";
+  }
+
+  // Handle "Typed 'foo' into [3]" or "Typed 'foo' into element [3]"
+  if (/typed\s+.*?\s+into\s+(?:element\s+)?\[\d+\]/i.test(formatted)) {
+    const textMatch = formatted.match(/typed\s+'([^']*)'/i);
+    const text = textMatch ? textMatch[1] : '';
+    if (thought) {
+      const inputMatch = thought.match(/(?:type|enter|input)(?:ing)?\s+.*?into\s+(?:the\s+)?([^.,;]+)/i);
+      if (inputMatch && inputMatch[1] && inputMatch[1].trim().length > 0 && inputMatch[1].trim().length < 40) {
+        return `Typed '${text}' into "${inputMatch[1].trim()}" field`;
+      }
+    }
+    return text ? `Typed '${text}' into input field` : "Entered text into input field";
+  }
+
+  // Clean trailing technical bracketed numbers [123]
+  formatted = formatted.replace(/\s*\[\d+\]/g, '');
+
+  return formatted;
+}
+
 export default function ClientRunDetails({ id }: { id: string }) {
   const [run, setRun] = useState<RunData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -143,12 +180,12 @@ export default function ClientRunDetails({ id }: { id: string }) {
                 run.status === 'completed' && run.success ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/25' :
                 run.status === 'completed' && !run.success ? 'bg-rose-500/10 text-rose-400 border-rose-500/25' :
                 run.status === 'running' ? 'bg-[#0278ff]/10 text-[#0278ff] border-[#0278ff]/30 animate-pulse' :
-                run.status === 'cancelled' ? 'bg-slate-800 text-slate-400 border-slate-700' :
+                run.status === 'cancelled' ? 'bg-orange-500/10 text-orange-400 border-orange-500/25' :
                 'bg-amber-500/10 text-amber-400 border-amber-500/25'
               }`}>
                 {run.status === 'completed' && run.success && <CheckCircle2 className="w-3.5 h-3.5" />}
                 {run.status === 'completed' && !run.success && <XCircle className="w-3.5 h-3.5" />}
-                {run.status === 'cancelled' && <Ban className="w-3.5 h-3.5" />}
+                {run.status === 'cancelled' && <Ban className="w-3.5 h-3.5 text-orange-400" />}
                 {run.status === 'running' && <span className="w-2 h-2 rounded-full bg-[#0278ff] animate-ping" />}
                 {run.status === 'pending' && <Clock className="w-3.5 h-3.5" />}
                 <span className="uppercase">{run.status}</span>
@@ -301,7 +338,12 @@ export default function ClientRunDetails({ id }: { id: string }) {
                         </div>
                       )}
 
-                      <p className="text-slate-200 font-mono font-medium">{step.description}</p>
+                      <div className="p-2 rounded bg-slate-950/40 border border-slate-800/60 text-xs">
+                        <span className="text-[9px] font-bold tracking-wider uppercase text-emerald-400/90 block mb-0.5">Action Executed</span>
+                        <p className="text-slate-200 font-medium text-[11px] leading-relaxed">
+                          {formatActionDescription(step.description, step.thought)}
+                        </p>
+                      </div>
                     </div>
                   );
                 })

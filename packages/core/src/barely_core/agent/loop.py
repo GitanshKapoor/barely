@@ -127,7 +127,7 @@ class AgentLoop:
                 action = action_payload.get('action')
                 thought = action_payload.get('thought')
                 try:
-                    desc = self._execute_action(action, action_payload)
+                    desc = self._execute_action(action, action_payload, dom_elements=dom_elements)
                     self._append_log(f"▶️ Executed: {desc}")
                     
                     b64_snap = None
@@ -187,21 +187,62 @@ class AgentLoop:
         finally:
             self.engine.stop()
 
-    def _execute_action(self, action: str, payload: Dict[str, Any]) -> str:
+    def _get_element_label(self, elem_id: Any, dom_elements: List[Dict[str, Any]] = None, thought: str = None) -> str:
+        """Translates technical element IDs into clean, human-readable UI element descriptions."""
+        if elem_id is None:
+            return "target element"
+        if dom_elements:
+            for el in dom_elements:
+                if str(el.get("id")) == str(elem_id):
+                    tag = (el.get("tag") or "").lower()
+                    text = (el.get("text") or "").strip()
+                    el_type = (el.get("type") or "").lower()
+                    placeholder = (el.get("placeholder") or "").strip()
+                    aria_label = (el.get("aria_label") or "").strip()
+                    name = (el.get("name") or "").strip()
+
+                    label_text = text or aria_label or placeholder or name
+
+                    if tag == "a":
+                        return f'"{label_text}" link' if label_text else "navigation link"
+                    elif tag == "button" or (tag == "input" and el_type in ["submit", "button"]):
+                        return f'"{label_text}" button' if label_text else "button"
+                    elif tag in ["input", "textarea"]:
+                        if label_text and label_text.lower() not in ["input", "text", "search", "textarea"]:
+                            return f'"{label_text}" input field'
+                        return f'{label_text or el_type or "text"} input field'
+                    elif tag == "select":
+                        return f'"{label_text}" dropdown' if label_text else "dropdown"
+                    elif label_text:
+                        return f'"{label_text}"'
+
+        # Fallback: check if the thought mentions what element is being targeted
+        if thought:
+            import re
+            match = re.search(r'click(?:ing|ed)?\s+(?:on\s+)?(?:the\s+)?([^.,;]+)', thought, re.IGNORECASE)
+            if match and len(match.group(1).strip()) < 35:
+                return f'"{match.group(1).strip()}"'
+
+        return "target element"
+
+    def _execute_action(self, action: str, payload: Dict[str, Any], dom_elements: List[Dict[str, Any]] = None) -> str:
+        elem_id = payload.get('element_id')
+        thought = payload.get('thought')
+        target_label = self._get_element_label(elem_id, dom_elements, thought=thought)
+
         if action == "click":
-            desc = f"Clicked element [{payload.get('element_id')}]"
-            self.engine.click_element(payload.get('element_id'))
+            desc = f"Clicked {target_label}"
+            self.engine.click_element(elem_id)
             return desc
         elif action == "type":
             press_enter = bool(payload.get('press_enter', False))
             text = str(payload.get('text', ''))
-            desc = f"Typed '{text}' into [{payload.get('element_id')}]" + (" and pressed Enter" if press_enter else "")
-            self.engine.type_element(payload.get('element_id'), text, press_enter=press_enter)
+            desc = f"Typed '{text}' into {target_label}" + (" and pressed Enter" if press_enter else "")
+            self.engine.type_element(elem_id, text, press_enter=press_enter)
             return desc
         elif action == "press_key":
             key = payload.get('key', 'Enter')
-            elem_id = payload.get('element_id')
-            desc = f"Pressed key '{key}'" + (f" on [{elem_id}]" if elem_id else "")
+            desc = f"Pressed key '{key}'" + (f" on {target_label}" if elem_id else "")
             self.engine.press_key(key=key, element_id=elem_id)
             return desc
         elif action == "navigate":
@@ -209,11 +250,11 @@ class AgentLoop:
             self.engine.navigate(payload.get('text'))
             return desc
         elif action == "screenshot":
-            return "Took an explicit screenshot of the current page."
+            return "Captured visual verification screenshot."
         elif action == "finish":
-            return "Agent marked goal as finished."
+            return "Goal successfully accomplished. Test completed."
         elif action == "fail":
-            return f"Agent marked goal as failed: {payload.get('reasoning')}"
+            return f"Test failed: {payload.get('reasoning')}"
         else:
             raise ValueError(f"Unknown action: {action}")
 

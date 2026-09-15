@@ -5,8 +5,6 @@ import Link from 'next/link';
 import { 
   Image as ImageIcon, 
   Info, 
-  CheckCircle2, 
-  XCircle, 
   RotateCw, 
   ExternalLink, 
   Eye, 
