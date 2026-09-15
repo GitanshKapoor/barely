@@ -50,7 +50,13 @@ def start_worker():
     while True:
         db = SessionLocal()
         try:
-            job = db.query(RunRecord).filter(RunRecord.status == "pending").order_by(RunRecord.created_at.asc()).first()
+            job = (
+                db.query(RunRecord)
+                .filter(RunRecord.status == "pending")
+                .order_by(RunRecord.created_at.asc())
+                .with_for_update(skip_locked=True)
+                .first()
+            )
             if job:
                 # Lock the job
                 job.status = "running"
