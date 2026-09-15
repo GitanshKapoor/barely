@@ -431,6 +431,7 @@ export default function ExecutionsPage() {
                           goalText: run.goal,
                           device: run.device || 'desktop',
                           strictMode: Boolean(run.strict_mode),
+                          useCache: false,
                           tags: run.tags || []
                         }}
                         onRunCreated={() => fetchRuns()}

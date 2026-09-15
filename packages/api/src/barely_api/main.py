@@ -29,6 +29,7 @@ class RunRequest(BaseModel):
     goal_text: str
     device: str = "desktop"
     strict_mode: bool = False
+    use_cache: bool = False
     tags: Optional[List[str]] = []
 
 @app.on_event("startup")
@@ -52,6 +53,7 @@ def list_runs():
                 "success": r.success,
                 "failure_reason": r.failure_reason,
                 "strict_mode": bool(r.strict_mode),
+                "use_cache": bool(getattr(r, "use_cache", False)),
                 "tags": [t for t in r.tags.split(",") if t] if r.tags else [],
                 "created_at": r.created_at.isoformat() if r.created_at else None
             })
@@ -133,6 +135,7 @@ def get_run(run_id: str):
             "success": r.success,
             "failure_reason": r.failure_reason,
             "strict_mode": bool(r.strict_mode),
+            "use_cache": bool(getattr(r, "use_cache", False)),
             "tags": [t for t in r.tags.split(",") if t] if r.tags else [],
             "created_at": r.created_at.isoformat() if r.created_at else None,
             "logs": r.logs or "",
@@ -174,6 +177,7 @@ def trigger_run(req: RunRequest):
             start_url=req.url,
             device=req.device, 
             strict_mode=req.strict_mode,
+            use_cache=req.use_cache,
             tags=tag_str,
             status="pending"
         )
@@ -183,3 +187,14 @@ def trigger_run(req: RunRequest):
         db.close()
         
     return {"message": "Job queued successfully", "job_id": job_id}
+
+@app.post("/api/cache/clear")
+def clear_cache():
+    from barely_core.db import CacheRecord
+    db = SessionLocal()
+    try:
+        deleted = db.query(CacheRecord).delete()
+        db.commit()
+        return {"message": f"Cleared {deleted} cached decision records", "deleted": deleted}
+    finally:
+        db.close()

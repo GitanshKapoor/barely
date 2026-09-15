@@ -50,11 +50,12 @@ class RunResult:
     failure_reason: str = None
 
 class AgentLoop:
-    def __init__(self, engine: BrowserEngine, model: str = "anthropic/claude-sonnet-4-5", run_id: str = None):
+    def __init__(self, engine: BrowserEngine, model: str = "anthropic/claude-sonnet-4-5", run_id: str = None, use_cache: bool = False):
         self.engine = engine
         self.model = model
         self.cache = ActionCache()
         self.run_id = run_id
+        self.use_cache = use_cache
 
     def _append_log(self, text: str):
         if not self.run_id:
@@ -105,14 +106,15 @@ class AgentLoop:
                 step_count += 1
                 dom_elements = self.engine.extract_dom()
                 
-                # Infinite loop prevention
-                current_dom_hash = hash(str(dom_elements))
-                if step_count > 1 and getattr(self, "_last_dom_hash", None) == current_dom_hash:
-                    self._append_log("⚠️ DOM unchanged since last action. Bypassing action cache.")
-                    cached_action = None
-                else:
-                    cached_action = self.cache.get_action(goal.name, dom_elements)
-                self._last_dom_hash = current_dom_hash
+                # Check Action Cache only if explicitly enabled
+                cached_action = None
+                if self.use_cache:
+                    current_dom_hash = hash(str(dom_elements))
+                    if step_count > 1 and getattr(self, "_last_dom_hash", None) == current_dom_hash:
+                        self._append_log("⚠️ DOM unchanged since last action. Bypassing action cache.")
+                    else:
+                        cached_action = self.cache.get_action(goal.name, dom_elements)
+                    self._last_dom_hash = current_dom_hash
                 
                 if cached_action:
                     self._append_log(f"⚡ Step {step_count}: Cached decision match retrieved.")
@@ -156,7 +158,7 @@ class AgentLoop:
                         finally:
                             db.close()
 
-                    if not cached_action and action not in ["fail", "finish"]:
+                    if self.use_cache and not cached_action and action not in ["fail", "finish"]:
                         self.cache.save_action(goal.name, dom_elements, action_payload)
                         
                 except Exception as e:
