@@ -355,6 +355,18 @@ export default function NewRunForm({ initialData, triggerButton, onRunCreated }:
               <div className="space-y-0.5 pr-3 text-left">
                 <div className="flex items-center gap-1.5">
                   <span className="text-xs font-bold text-slate-200">Auto-navigate to Live Audit</span>
+                  <div className="relative group cursor-help">
+                    <Info className="w-3.5 h-3.5 text-slate-400 hover:text-[#0278ff] transition-colors" />
+                    <div className="absolute left-0 bottom-full mb-2 hidden group-hover:block w-72 p-3 rounded-lg bg-[#0d1322] border border-slate-700 shadow-2xl text-[11px] text-slate-300 leading-relaxed z-50 pointer-events-none text-left whitespace-normal">
+                      <p className="font-bold text-white mb-1">What is Auto-navigate?</p>
+                      <p>
+                        When <strong className="text-emerald-400">Enabled</strong>: Your browser immediately opens the live test execution screen upon queueing the test.
+                      </p>
+                      <p className="mt-1.5 text-slate-400">
+                        When <strong className="text-[#0278ff]">Disabled (Recommended)</strong>: Stays on your current page (GitHub Actions style), updates the runs table in real time, and shows a floating notification toast to view the audit when ready.
+                      </p>
+                    </div>
+                  </div>
                 </div>
                 <p className="text-[11px] text-slate-400 text-left">
                   {autoNavigate 
@@ -381,6 +393,18 @@ export default function NewRunForm({ initialData, triggerButton, onRunCreated }:
               <div className="space-y-0.5 pr-3 text-left">
                 <div className="flex items-center gap-1.5">
                   <span className="text-xs font-bold text-slate-200">AI Decision Caching</span>
+                  <div className="relative group cursor-help">
+                    <Info className="w-3.5 h-3.5 text-slate-400 hover:text-[#0278ff] transition-colors" />
+                    <div className="absolute left-0 bottom-full mb-2 hidden group-hover:block w-72 p-3 rounded-lg bg-[#0d1322] border border-slate-700 shadow-2xl text-[11px] text-slate-300 leading-relaxed z-50 pointer-events-none text-left whitespace-normal">
+                      <p className="font-bold text-white mb-1">What is AI Decision Caching?</p>
+                      <p>
+                        When <strong className="text-emerald-400">Enabled</strong>: Replays previous verified LLM decisions for identical DOM states to achieve sub-second execution speed without calling the AI model.
+                      </p>
+                      <p className="mt-1.5 text-slate-400">
+                        When <strong className="text-[#0278ff]">Disabled (Recommended)</strong>: Prompt Claude live at every step to inspect the live page and verify dynamic behavior or recent website changes.
+                      </p>
+                    </div>
+                  </div>
                   <span className={`text-[10px] font-mono font-bold px-1.5 py-0.2 rounded border ${
                     useCache 
                       ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30' 
