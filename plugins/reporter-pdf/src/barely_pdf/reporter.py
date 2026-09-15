@@ -5,6 +5,28 @@ from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image, Page
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from barely_core.models.domain import RunResult
 
+def clean_action_description(desc: str, thought: str = None) -> str:
+    import re
+    if not desc:
+        return "Action executed"
+    cleaned = re.sub(r'\[barely-id=["\']?[^"\']+["\']?\]', 'element', desc)
+    if re.search(r'clicked\s+(?:element\s+)?\[\d+\]', cleaned, re.I):
+        if thought:
+            m = re.search(r'click(?:ing|ed)?\s+(?:on\s+)?(?:the\s+)?([^.,;]+)', thought, re.I)
+            if m and len(m.group(1).strip()) < 35:
+                return f'Clicked "{m.group(1).strip()}"'
+        return "Clicked target element"
+    if re.search(r'typed\s+.*?\s+into\s+(?:element\s+)?\[\d+\]', cleaned, re.I):
+        tm = re.search(r"typed\s+'([^']*)'", cleaned, re.I)
+        txt = tm.group(1) if tm else ''
+        if thought:
+            im = re.search(r'(?:type|enter|input)(?:ing)?\s+.*?into\s+(?:the\s+)?([^.,;]+)', thought, re.I)
+            if im and len(im.group(1).strip()) < 35:
+                return f'Typed \'{txt}\' into "{im.group(1).strip()}" field'
+        return f"Typed '{txt}' into input field" if txt else "Entered text into input field"
+    cleaned = re.sub(r'\s*\[\d+\]', '', cleaned)
+    return cleaned
+
 class PDFReporter:
     """
     Generates professional PDF test execution reports.
@@ -56,7 +78,8 @@ class PDFReporter:
                     story.append(Spacer(1, 4))
                 
                 # Action
-                desc = getattr(step, "description", str(step))
+                raw_desc = getattr(step, "description", str(step))
+                desc = clean_action_description(raw_desc, thought)
                 story.append(Paragraph(f"<b>Action Executed:</b> {desc}", self.action_style))
                 story.append(Spacer(1, 8))
                 

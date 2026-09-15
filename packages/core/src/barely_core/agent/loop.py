@@ -187,34 +187,48 @@ class AgentLoop:
         finally:
             self.engine.stop()
 
-    def _get_element_label(self, elem_id: Any, dom_elements: List[Dict[str, Any]] = None) -> str:
+    def _get_element_label(self, elem_id: Any, dom_elements: List[Dict[str, Any]] = None, thought: str = None) -> str:
         """Translates technical element IDs into clean, human-readable UI element descriptions."""
         if elem_id is None:
-            return "element"
+            return "target element"
         if dom_elements:
             for el in dom_elements:
                 if str(el.get("id")) == str(elem_id):
                     tag = (el.get("tag") or "").lower()
                     text = (el.get("text") or "").strip()
                     el_type = (el.get("type") or "").lower()
+                    placeholder = (el.get("placeholder") or "").strip()
+                    aria_label = (el.get("aria_label") or "").strip()
+                    name = (el.get("name") or "").strip()
+
+                    label_text = text or aria_label or placeholder or name
 
                     if tag == "a":
-                        return f'"{text}" link' if text else "link"
+                        return f'"{label_text}" link' if label_text else "navigation link"
                     elif tag == "button" or (tag == "input" and el_type in ["submit", "button"]):
-                        return f'"{text}" button' if text else "button"
+                        return f'"{label_text}" button' if label_text else "button"
                     elif tag in ["input", "textarea"]:
-                        if text and text.lower() not in ["input", "text", "search"]:
-                            return f'"{text}" input field'
-                        return f'{text or el_type or "text"} input field'
+                        if label_text and label_text.lower() not in ["input", "text", "search", "textarea"]:
+                            return f'"{label_text}" input field'
+                        return f'{label_text or el_type or "text"} input field'
                     elif tag == "select":
-                        return f'"{text}" dropdown' if text else "dropdown"
-                    elif text:
-                        return f'"{text}"'
-        return "element"
+                        return f'"{label_text}" dropdown' if label_text else "dropdown"
+                    elif label_text:
+                        return f'"{label_text}"'
+
+        # Fallback: check if the thought mentions what element is being targeted
+        if thought:
+            import re
+            match = re.search(r'click(?:ing|ed)?\s+(?:on\s+)?(?:the\s+)?([^.,;]+)', thought, re.IGNORECASE)
+            if match and len(match.group(1).strip()) < 35:
+                return f'"{match.group(1).strip()}"'
+
+        return "target element"
 
     def _execute_action(self, action: str, payload: Dict[str, Any], dom_elements: List[Dict[str, Any]] = None) -> str:
         elem_id = payload.get('element_id')
-        target_label = self._get_element_label(elem_id, dom_elements)
+        thought = payload.get('thought')
+        target_label = self._get_element_label(elem_id, dom_elements, thought=thought)
 
         if action == "click":
             desc = f"Clicked {target_label}"

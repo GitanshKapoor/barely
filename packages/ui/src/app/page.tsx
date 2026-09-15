@@ -153,7 +153,7 @@ export default async function Home() {
                 <div className="flex-shrink-0">
                   {run.status === 'completed' && run.success && <CheckCircle2 className="w-4 h-4 text-emerald-400" />}
                   {run.status === 'completed' && !run.success && <XCircle className="w-4 h-4 text-rose-400" />}
-                  {run.status === 'cancelled' && <Ban className="w-4 h-4 text-slate-400" />}
+                  {run.status === 'cancelled' && <Ban className="w-4 h-4 text-orange-400" />}
                   {run.status === 'running' && (
                     <span className="relative flex h-3 w-3">
                       <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#0278ff] opacity-75"></span>
@@ -173,7 +173,7 @@ export default async function Home() {
                   run.status === 'completed' && run.success ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' :
                   run.status === 'completed' && !run.success ? 'bg-rose-500/10 text-rose-400 border-rose-500/20' :
                   run.status === 'running' ? 'bg-[#0278ff]/10 text-[#0278ff] border-[#0278ff]/30 animate-pulse' :
-                  run.status === 'cancelled' ? 'bg-slate-800 text-slate-400 border-slate-700' :
+                  run.status === 'cancelled' ? 'bg-orange-500/10 text-orange-400 border-orange-500/25' :
                   'bg-amber-500/10 text-amber-400 border-amber-500/20'
                 }`}>
                   {run.status === 'completed' && run.success ? 'PASS' :

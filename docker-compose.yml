@@ -23,6 +23,7 @@ services:
         condition: service_healthy
     environment:
       - DATABASE_URL=postgresql://barely:barelypassword@barely-db:5432/barelydb
+      - PYTHONPATH=/workspace/packages/core/src:/workspace/packages/api/src:/workspace/packages/worker/src:/workspace/plugins/reporter-pdf/src
     build: 
       context: .
       dockerfile: Dockerfile
@@ -41,6 +42,7 @@ services:
         condition: service_healthy
     environment:
       - DATABASE_URL=postgresql://barely:barelypassword@barely-db:5432/barelydb
+      - PYTHONPATH=/workspace/packages/core/src:/workspace/packages/api/src:/workspace/packages/worker/src:/workspace/plugins/reporter-pdf/src
     build: 
       context: .
       dockerfile: Dockerfile

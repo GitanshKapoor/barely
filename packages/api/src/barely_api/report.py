@@ -22,9 +22,31 @@ def extract_goal_instructions(goal_text: str) -> list:
             instructions.append(line[2:].strip())
     return instructions
 
+def clean_action_description(desc: str, thought: str = None) -> str:
+    import re
+    if not desc:
+        return "Action executed"
+    cleaned = re.sub(r'\[barely-id=["\']?[^"\']+["\']?\]', 'element', desc)
+    if re.search(r'clicked\s+(?:element\s+)?\[\d+\]', cleaned, re.I):
+        if thought:
+            m = re.search(r'click(?:ing|ed)?\s+(?:on\s+)?(?:the\s+)?([^.,;]+)', thought, re.I)
+            if m and len(m.group(1).strip()) < 35:
+                return f'Clicked "{m.group(1).strip()}"'
+        return "Clicked target element"
+    if re.search(r'typed\s+.*?\s+into\s+(?:element\s+)?\[\d+\]', cleaned, re.I):
+        tm = re.search(r"typed\s+'([^']*)'", cleaned, re.I)
+        txt = tm.group(1) if tm else ''
+        if thought:
+            im = re.search(r'(?:type|enter|input)(?:ing)?\s+.*?into\s+(?:the\s+)?([^.,;]+)', thought, re.I)
+            if im and len(im.group(1).strip()) < 35:
+                return f'Typed \'{txt}\' into "{im.group(1).strip()}" field'
+        return f"Typed '{txt}' into input field" if txt else "Entered text into input field"
+    cleaned = re.sub(r'\s*\[\d+\]', '', cleaned)
+    return cleaned
+
 def generate_report_html(run, steps) -> str:
     is_success = run.status == "completed" and run.success
-    status_bg = "#10b981" if is_success else "#f43f5e" if run.status == "completed" else "#64748b" if run.status == "cancelled" else "#f59e0b"
+    status_bg = "#10b981" if is_success else "#f43f5e" if run.status == "completed" else "#f97316" if run.status == "cancelled" else "#f59e0b"
     status_label = "PASSED" if is_success else "FAILED" if run.status == "completed" else run.status.upper()
 
     failure_html = ""
@@ -65,10 +87,11 @@ def generate_report_html(run, steps) -> str:
             </div>
             """
 
+        action_desc = clean_action_description(s.description, s.thought)
         action_snippet = f"""
         <div class="step-action-box">
             <span class="action-tag">⚡ Action Executed</span>
-            <p class="action-text">{html_lib.escape(s.description)}</p>
+            <p class="action-text">{html_lib.escape(action_desc)}</p>
         </div>
         """
 
@@ -453,7 +476,7 @@ def download_report(run_id: str):
                 {
                     "step_index": s.step_index,
                     "target_instruction": goal_instructions[s.step_index] if s.step_index < len(goal_instructions) else None,
-                    "action_executed": s.description,
+                    "action_executed": clean_action_description(s.description, s.thought),
                     "thought": s.thought
                 } for s in steps
             ]
@@ -489,12 +512,13 @@ def download_report(run_id: str):
         md_lines.append("## 📋 Execution Steps Audit")
         if steps:
             for s in steps:
+                action_text = clean_action_description(s.description, s.thought)
                 md_lines.append(f"### Step {s.step_index + 1}")
                 if s.step_index < len(goal_instructions):
                     md_lines.append(f"- **🎯 Target Goal Instruction:** `{goal_instructions[s.step_index]}`")
                 if s.thought:
                     md_lines.append(f"- **💭 AI Agent Reasoning:** _{s.thought}_")
-                md_lines.append(f"- **⚡ Action Executed:** `{s.description}`\n")
+                md_lines.append(f"- **⚡ Action Executed:** `{action_text}`\n")
         else:
             md_lines.append("*(No execution steps were recorded)*\n")
 

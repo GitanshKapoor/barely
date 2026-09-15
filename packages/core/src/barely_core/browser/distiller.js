@@ -40,7 +40,15 @@ function distillDOM() {
 
         if (isInteractive(node)) {
             const id = elementIdCounter++;
-            const text = node.innerText?.trim() || node.value?.trim() || node.getAttribute('aria-label') || node.getAttribute('placeholder') || tag;
+            const rawText = node.innerText?.trim() 
+                || node.value?.trim() 
+                || node.getAttribute('aria-label') 
+                || node.getAttribute('placeholder') 
+                || node.getAttribute('title')
+                || node.getAttribute('alt')
+                || node.querySelector('img')?.getAttribute('alt')
+                || node.getAttribute('name')
+                || '';
             
             // Highlight element in the UI for visual debugging/screenshots
             node.setAttribute('barely-id', id);
@@ -49,7 +57,10 @@ function distillDOM() {
             const elementData = {
                 id: id,
                 tag: tag,
-                text: text.substring(0, 50), // Truncate massive text
+                text: rawText.substring(0, 60),
+                placeholder: node.getAttribute('placeholder') || null,
+                aria_label: node.getAttribute('aria-label') || null,
+                name: node.getAttribute('name') || null,
                 type: node.type || null
             };
             

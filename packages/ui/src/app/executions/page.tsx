@@ -224,10 +224,11 @@ export default function ExecutionsPage() {
               onClick={() => setStatusFilter('cancelled')}
               className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all flex items-center gap-1.5 ${
                 statusFilter === 'cancelled'
-                  ? 'bg-slate-700 text-white shadow-sm'
-                  : 'bg-slate-900/60 text-slate-400 hover:text-slate-200 hover:bg-slate-800/80 border border-slate-800'
+                  ? 'bg-orange-500 text-white shadow-sm shadow-orange-500/20'
+                  : 'bg-slate-900/60 text-slate-400 hover:text-orange-400 hover:bg-orange-500/10 border border-slate-800'
               }`}
             >
+              <span className="w-1.5 h-1.5 rounded-full bg-orange-400"></span>
               Cancelled <span className="text-[10px] opacity-80 font-mono">({cancelledCount})</span>
             </button>
           </div>
@@ -247,7 +248,14 @@ export default function ExecutionsPage() {
               <div 
                 className="h-full bg-rose-500 rounded-full transition-all duration-300"
                 style={{ width: `${(failedCount / totalCount) * 100}%` }}
-                title={`${failedCount} Failed / Cancelled`}
+                title={`${failedCount} Failed`}
+              />
+            )}
+            {cancelledCount > 0 && (
+              <div 
+                className="h-full bg-orange-400 rounded-full transition-all duration-300"
+                style={{ width: `${(cancelledCount / totalCount) * 100}%` }}
+                title={`${cancelledCount} Cancelled`}
               />
             )}
             {inFlightCount > 0 && (
@@ -362,7 +370,7 @@ export default function ExecutionsPage() {
                     <div className="flex items-center gap-2.5">
                       {run.status === "completed" && run.success && <CheckCircle2 className="w-4 h-4 text-emerald-400 flex-shrink-0" />}
                       {run.status === "completed" && !run.success && <XCircle className="w-4 h-4 text-rose-400 flex-shrink-0" />}
-                      {run.status === "cancelled" && <Ban className="w-4 h-4 text-slate-400 flex-shrink-0" />}
+                      {run.status === "cancelled" && <Ban className="w-4 h-4 text-orange-400 flex-shrink-0" />}
                       {run.status === "running" && (
                         <span className="relative flex h-3 w-3 flex-shrink-0">
                           <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#0278ff] opacity-75"></span>
@@ -393,7 +401,7 @@ export default function ExecutionsPage() {
                       run.status === 'completed' && run.success ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' :
                       run.status === 'completed' && !run.success ? 'bg-rose-500/10 text-rose-400 border-rose-500/20' :
                       run.status === 'running' ? 'bg-[#0278ff]/10 text-[#0278ff] border-[#0278ff]/30 animate-pulse' :
-                      run.status === 'cancelled' ? 'bg-slate-800 text-slate-400 border-slate-700' :
+                      run.status === 'cancelled' ? 'bg-orange-500/10 text-orange-400 border-orange-500/25' :
                       'bg-amber-500/10 text-amber-400 border-amber-500/20'
                     }`}>
                       {run.status === "pending" && "⏳ Pending"}
