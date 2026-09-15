@@ -11,6 +11,7 @@ export interface RunConfigData {
   goalText?: string;
   device?: string;
   strictMode?: boolean;
+  useCache?: boolean;
   tags?: string[];
 }
 
@@ -32,6 +33,7 @@ export default function NewRunForm({ initialData, triggerButton, onRunCreated }:
   const [goalText, setGoalText] = useState(initialData?.goalText || '');
   const [device, setDevice] = useState(initialData?.device || 'desktop');
   const [strictMode, setStrictMode] = useState(Boolean(initialData?.strictMode));
+  const [useCache, setUseCache] = useState(Boolean(initialData?.useCache));
   const [autoNavigate, setAutoNavigate] = useState(false);
   const [tags, setTags] = useState<string[]>(initialData?.tags || []);
   const [tagInput, setTagInput] = useState('');
@@ -80,6 +82,7 @@ export default function NewRunForm({ initialData, triggerButton, onRunCreated }:
       setGoalText(initialData.goalText || '');
       setDevice(initialData.device || 'desktop');
       setStrictMode(Boolean(initialData.strictMode));
+      setUseCache(Boolean(initialData.useCache));
       setTags(initialData.tags || []);
       setTagInput('');
     } else {
@@ -88,6 +91,7 @@ export default function NewRunForm({ initialData, triggerButton, onRunCreated }:
       setGoalText('');
       setDevice('desktop');
       setStrictMode(false);
+      setUseCache(false);
       setTags([]);
       setTagInput('');
     }
@@ -108,6 +112,7 @@ export default function NewRunForm({ initialData, triggerButton, onRunCreated }:
           goal_text: goalText, 
           device,
           strict_mode: strictMode,
+          use_cache: useCache,
           tags
         })
       });
@@ -130,7 +135,7 @@ export default function NewRunForm({ initialData, triggerButton, onRunCreated }:
           setIsOpen(false);
           const currentTestName = name || 'Automated E2E Test';
           if (!initialData) {
-            setName(''); setUrl('https://'); setGoalText(''); setDevice('desktop'); setStrictMode(false); setTags([]); setTagInput('');
+            setName(''); setUrl('https://'); setGoalText(''); setDevice('desktop'); setStrictMode(false); setUseCache(false); setTags([]); setTagInput('');
           }
           if (createdJobId) {
             setToast({
@@ -363,6 +368,39 @@ export default function NewRunForm({ initialData, triggerButton, onRunCreated }:
                   type="checkbox"
                   checked={autoNavigate}
                   onChange={(e) => setAutoNavigate(e.target.checked)}
+                  className="sr-only peer"
+                />
+                <div className="w-9 h-5 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#0278ff]"></div>
+              </label>
+            </div>
+          </div>
+
+          {/* AI Decision Caching Toggle */}
+          <div className="text-left">
+            <div className="flex items-center justify-between p-3 rounded-lg border border-slate-800 bg-[#070b14]">
+              <div className="space-y-0.5 pr-3 text-left">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs font-bold text-slate-200">AI Decision Caching</span>
+                  <span className={`text-[10px] font-mono font-bold px-1.5 py-0.2 rounded border ${
+                    useCache 
+                      ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30' 
+                      : 'bg-slate-800 text-slate-400 border-slate-700'
+                  }`}>
+                    {useCache ? 'Active' : 'Disabled (Live AI)'}
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-400 text-left">
+                  {useCache 
+                    ? 'Replays cached decisions if DOM matches (fastest, skips LLM calls)' 
+                    : 'Disabled (Recommended) — AI agent inspects DOM and prompts Claude live at every step'}
+                </p>
+              </div>
+
+              <label className="relative inline-flex items-center cursor-pointer flex-shrink-0">
+                <input
+                  type="checkbox"
+                  checked={useCache}
+                  onChange={(e) => setUseCache(e.target.checked)}
                   className="sr-only peer"
                 />
                 <div className="w-9 h-5 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#0278ff]"></div>

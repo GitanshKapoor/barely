@@ -21,6 +21,7 @@ class RunRecord(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     logs = Column(Text, nullable=True)
     strict_mode = Column(Boolean, default=False)
+    use_cache = Column(Boolean, default=False)
     tags = Column(String, nullable=True)
     
     steps = relationship("RunStep", back_populates="run", cascade="all, delete-orphan")
@@ -43,3 +44,10 @@ class CacheRecord(Base):
 
 def init_db():
     Base.metadata.create_all(bind=engine)
+    from sqlalchemy import text
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("ALTER TABLE runs ADD COLUMN IF NOT EXISTS use_cache BOOLEAN DEFAULT FALSE;"))
+            conn.commit()
+    except Exception:
+        pass

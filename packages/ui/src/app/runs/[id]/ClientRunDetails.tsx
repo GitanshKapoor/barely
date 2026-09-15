@@ -219,8 +219,10 @@ export default function ClientRunDetails({ id }: { id: string }) {
               goalText: run.goal,
               device: run.device || 'desktop',
               strictMode: Boolean(run.strict_mode),
+              useCache: false,
               tags: run.tags || []
             }}
+            onRunCreated={() => fetchRun()}
             triggerButton={(openModal) => (
               <button
                 onClick={openModal}
