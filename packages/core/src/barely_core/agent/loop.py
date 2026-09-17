@@ -287,11 +287,20 @@ Review PAST ACTIONS ALREADY PERFORMED against USER TEST INSTRUCTIONS.
 
     def _call_llm(self, prompt: str) -> Dict[str, Any]:
         import re
+        from barely_core.settings import resolve_model_api_key
+
         messages = [
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": prompt}
         ]
-        response = litellm.completion(model=self.model, messages=messages, temperature=0.0)
+        
+        # Dynamically resolve encrypted key from DB or fallback to environment
+        api_key = resolve_model_api_key(self.model)
+        call_kwargs = {}
+        if api_key:
+            call_kwargs["api_key"] = api_key
+
+        response = litellm.completion(model=self.model, messages=messages, temperature=0.0, **call_kwargs)
         raw_output = response.choices[0].message.content
         
         # More robust JSON extraction using regex to find the first { and last }
