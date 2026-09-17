@@ -216,6 +216,67 @@ class TestKeyRequest(BaseModel):
     provider: str
     key: Optional[str] = None
 
+def get_storage_target_info():
+    """Classifies database & storage target at a high level (Docker vs AWS vs Cloud) with ZERO credential leakage."""
+    import os
+    from urllib.parse import urlparse
+
+    db_url = os.getenv("DATABASE_URL", "")
+    storage_provider_env = (os.getenv("STORAGE_PROVIDER") or "").lower()
+    aws_region = os.getenv("AWS_REGION") or os.getenv("AWS_DEFAULT_REGION")
+    s3_bucket = os.getenv("S3_BUCKET") or os.getenv("AWS_S3_BUCKET")
+
+    target = "Docker Container (Local)"
+    storage_type = "docker"
+    storage_driver = "Docker Persistent Volume (barely_pgdata)"
+
+    if storage_provider_env == "aws" or s3_bucket or (aws_region and "amazonaws" in db_url):
+        target = "AWS Cloud (RDS / S3)"
+        storage_type = "aws"
+        storage_driver = f"AWS S3 & Managed RDS ({aws_region or 'us-east-1'})"
+
+    if db_url:
+        try:
+            parsed = urlparse(db_url)
+            host = (parsed.hostname or "").lower()
+            if "rds.amazonaws.com" in host or "aurora.amazonaws.com" in host:
+                target = "AWS RDS (PostgreSQL)"
+                storage_type = "aws"
+                storage_driver = "AWS RDS Aurora/Postgres & S3"
+            elif "postgres.database.azure.com" in host:
+                target = "Azure PostgreSQL"
+                storage_type = "azure"
+                storage_driver = "Azure Managed DB & Blob Storage"
+            elif "cloudsql" in host or "googleapis.com" in host:
+                target = "Google Cloud SQL"
+                storage_type = "gcp"
+                storage_driver = "GCP Cloud SQL & GCS"
+            elif "neon.tech" in host:
+                target = "Neon Serverless Postgres"
+                storage_type = "neon"
+                storage_driver = "Neon Cloud DB"
+            elif "supabase.co" in host:
+                target = "Supabase PostgreSQL"
+                storage_type = "supabase"
+                storage_driver = "Supabase Storage & DB"
+            elif host in ("barely-db", "localhost", "127.0.0.1", "postgres", "db"):
+                target = "Docker Container (Local)"
+                storage_type = "docker"
+                storage_driver = "Docker Persistent Volume (barely_pgdata)"
+            elif storage_type != "aws":
+                target = "Managed Cloud Database"
+                storage_type = "cloud"
+                storage_driver = "External Cloud Storage"
+        except Exception:
+            pass
+
+    return {
+        "target": target,
+        "storage_type": storage_type,
+        "storage_driver": storage_driver,
+        "engine": "PostgreSQL 15"
+    }
+
 @app.get("/api/settings")
 def get_settings():
     from barely_core.settings import list_settings_status
@@ -233,10 +294,13 @@ def get_settings():
     except Exception:
         is_connected = False
 
+    storage_info = get_storage_target_info()
+
     return {
         "settings": settings_list,
         "database": {
-            "is_connected": is_connected
+            "is_connected": is_connected,
+            **storage_info
         }
     }
 
