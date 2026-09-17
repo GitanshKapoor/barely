@@ -47,6 +47,12 @@ def process_job(run_id: str, test_name: str, goal_text: str, start_url: str, dev
         finally:
             db.close()
 
+        try:
+            from barely_core.integrations.dispatcher import dispatch_run_notifications
+            dispatch_run_notifications(run_id)
+        except Exception as ne:
+            logger.error(f"Failed to dispatch post-crash notifications for {run_id}: {ne}")
+
 def start_worker():
     init_db()
     logger.info("Barely Worker Node started. Polling DB for jobs...")

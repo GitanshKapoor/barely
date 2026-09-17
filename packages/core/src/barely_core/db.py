@@ -30,6 +30,8 @@ class RunRecord(Base):
     use_cache = Column(Boolean, default=False)
     model = Column(String, nullable=True)
     tags = Column(String, nullable=True)
+    jira_issue_key = Column(String, nullable=True)
+    jira_issue_url = Column(String, nullable=True)
     
     steps = relationship("RunStep", back_populates="run", cascade="all, delete-orphan")
 
@@ -63,6 +65,8 @@ def init_db():
         with engine.connect() as conn:
             conn.execute(text("ALTER TABLE runs ADD COLUMN IF NOT EXISTS use_cache BOOLEAN DEFAULT FALSE;"))
             conn.execute(text("ALTER TABLE runs ADD COLUMN IF NOT EXISTS model VARCHAR(255);"))
+            conn.execute(text("ALTER TABLE runs ADD COLUMN IF NOT EXISTS jira_issue_key VARCHAR(255);"))
+            conn.execute(text("ALTER TABLE runs ADD COLUMN IF NOT EXISTS jira_issue_url TEXT;"))
             conn.commit()
     except Exception:
         pass

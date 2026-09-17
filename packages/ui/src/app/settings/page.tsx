@@ -23,7 +23,9 @@ import {
   Copy,
   CheckCheck,
   BookOpen,
-  Terminal
+  Terminal,
+  Bell,
+  Send
 } from 'lucide-react';
 import { formatModelName } from '../../utils/models';
 
@@ -125,6 +127,38 @@ export default function SettingsPage() {
   const [testingKey, setTestingKey] = useState<string | null>(null);
   const [deletingKey, setDeletingKey] = useState<string | null>(null);
 
+  // Enterprise Integrations States
+  const [jiraHost, setJiraHost] = useState('');
+  const [jiraEmail, setJiraEmail] = useState('');
+  const [jiraToken, setJiraToken] = useState('');
+  const [jiraProjectKey, setJiraProjectKey] = useState('QA');
+  const [jiraIssueType, setJiraIssueType] = useState('Bug');
+  const [jiraAutoCreate, setJiraAutoCreate] = useState(false);
+  const [jiraConfigured, setJiraConfigured] = useState(false);
+  const [jiraMaskedToken, setJiraMaskedToken] = useState('');
+  const [showJiraToken, setShowJiraToken] = useState(false);
+  const [testingJira, setTestingJira] = useState(false);
+  const [savingJira, setSavingJira] = useState(false);
+  const [jiraTestResult, setJiraTestResult] = useState<{ success: boolean; message: string } | null>(null);
+
+  const [slackWebhookUrl, setSlackWebhookUrl] = useState('');
+  const [slackNotifyOn, setSlackNotifyOn] = useState('failure_only');
+  const [slackConfigured, setSlackConfigured] = useState(false);
+  const [slackMaskedWebhook, setSlackMaskedWebhook] = useState('');
+  const [showSlackWebhook, setShowSlackWebhook] = useState(false);
+  const [testingSlack, setTestingSlack] = useState(false);
+  const [savingSlack, setSavingSlack] = useState(false);
+  const [slackTestResult, setSlackTestResult] = useState<{ success: boolean; message: string } | null>(null);
+
+  const [teamsWebhookUrl, setTeamsWebhookUrl] = useState('');
+  const [teamsNotifyOn, setTeamsNotifyOn] = useState('failure_only');
+  const [teamsConfigured, setTeamsConfigured] = useState(false);
+  const [teamsMaskedWebhook, setTeamsMaskedWebhook] = useState('');
+  const [showTeamsWebhook, setShowTeamsWebhook] = useState(false);
+  const [testingTeams, setTestingTeams] = useState(false);
+  const [savingTeams, setSavingTeams] = useState(false);
+  const [teamsTestResult, setTeamsTestResult] = useState<{ success: boolean; message: string } | null>(null);
+
   // Toast notification
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
 
@@ -190,6 +224,36 @@ export default function SettingsPage() {
       if (defaultModelSetting && defaultModelSetting.masked_value) {
         setModelNameInput(prev => prev ? prev : defaultModelSetting.masked_value);
       }
+
+      // Fetch enterprise integrations configuration
+      try {
+        const intgRes = await fetch(`${apiUrl}/api/integrations`);
+        if (intgRes.ok) {
+          const intgData = await intgRes.json();
+          const intg = intgData.integrations;
+          if (intg?.jira) {
+            setJiraHost(intg.jira.host || '');
+            setJiraEmail(intg.jira.email || '');
+            setJiraProjectKey(intg.jira.project_key || 'QA');
+            setJiraIssueType(intg.jira.issue_type || 'Bug');
+            setJiraAutoCreate(Boolean(intg.jira.auto_create));
+            setJiraConfigured(Boolean(intg.jira.configured));
+            setJiraMaskedToken(intg.jira.masked_token || '');
+          }
+          if (intg?.slack) {
+            setSlackNotifyOn(intg.slack.notify_on || 'failure_only');
+            setSlackConfigured(Boolean(intg.slack.configured));
+            setSlackMaskedWebhook(intg.slack.masked_webhook || '');
+          }
+          if (intg?.teams) {
+            setTeamsNotifyOn(intg.teams.notify_on || 'failure_only');
+            setTeamsConfigured(Boolean(intg.teams.configured));
+            setTeamsMaskedWebhook(intg.teams.masked_webhook || '');
+          }
+        }
+      } catch (ie) {
+        console.error('Failed to load integrations:', ie);
+      }
     } catch (err: any) {
       showToast(`Failed to load settings: ${err.message}`, 'error');
     } finally {
@@ -253,6 +317,182 @@ export default function SettingsPage() {
       showToast(`Error saving model: ${err.message}`, 'error');
     } finally {
       setSavingModel(false);
+    }
+  };
+
+  const handleTestJira = async () => {
+    setTestingJira(true);
+    setJiraTestResult(null);
+    try {
+      const payload: any = {
+        provider: 'jira',
+        jira_host: jiraHost.trim(),
+        jira_email: jiraEmail.trim(),
+        jira_project_key: jiraProjectKey.trim().toUpperCase()
+      };
+      if (jiraToken.trim()) {
+        payload.jira_api_token = jiraToken.trim();
+      }
+      const res = await fetch(`${apiUrl}/api/integrations/test`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+      setJiraTestResult({ success: data.success, message: data.message || (data.success ? 'Jira connected successfully!' : 'Connection test failed') });
+      if (data.success) {
+        showToast(data.message || 'Jira connection verified!', 'success');
+      } else {
+        showToast(data.message || 'Jira verification failed', 'error');
+      }
+    } catch (e: any) {
+      setJiraTestResult({ success: false, message: e.message || 'Network error' });
+      showToast(`Jira test error: ${e.message}`, 'error');
+    } finally {
+      setTestingJira(false);
+    }
+  };
+
+  const handleSaveJira = async () => {
+    setSavingJira(true);
+    try {
+      const payload: any = {
+        jira_host: jiraHost.trim(),
+        jira_email: jiraEmail.trim(),
+        jira_project_key: jiraProjectKey.trim().toUpperCase(),
+        jira_issue_type: jiraIssueType.trim(),
+        jira_auto_create: jiraAutoCreate
+      };
+      if (jiraToken.trim()) {
+        payload.jira_api_token = jiraToken.trim();
+      }
+      const res = await fetch(`${apiUrl}/api/integrations`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        showToast('Jira configuration saved and encrypted securely!', 'success');
+        setJiraToken('');
+        await fetchSettings();
+      } else {
+        showToast(data.detail || data.error || 'Failed to save Jira settings', 'error');
+      }
+    } catch (e: any) {
+      showToast(`Save error: ${e.message}`, 'error');
+    } finally {
+      setSavingJira(false);
+    }
+  };
+
+  const handleTestSlack = async () => {
+    setTestingSlack(true);
+    setSlackTestResult(null);
+    try {
+      const payload: any = { provider: 'slack' };
+      if (slackWebhookUrl.trim()) {
+        payload.slack_webhook_url = slackWebhookUrl.trim();
+      }
+      const res = await fetch(`${apiUrl}/api/integrations/test`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+      setSlackTestResult({ success: data.success, message: data.message || (data.success ? 'Slack ping sent!' : 'Slack test failed') });
+      if (data.success) {
+        showToast('Slack test card delivered!', 'success');
+      } else {
+        showToast(data.message || 'Slack test failed', 'error');
+      }
+    } catch (e: any) {
+      setSlackTestResult({ success: false, message: e.message });
+      showToast(`Slack test error: ${e.message}`, 'error');
+    } finally {
+      setTestingSlack(false);
+    }
+  };
+
+  const handleSaveSlack = async () => {
+    setSavingSlack(true);
+    try {
+      const payload: any = { slack_notify_on: slackNotifyOn };
+      if (slackWebhookUrl.trim()) {
+        payload.slack_webhook_url = slackWebhookUrl.trim();
+      }
+      const res = await fetch(`${apiUrl}/api/integrations`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        showToast('Slack settings saved!', 'success');
+        setSlackWebhookUrl('');
+        await fetchSettings();
+      } else {
+        showToast(data.detail || data.error || 'Failed to save Slack settings', 'error');
+      }
+    } catch (e: any) {
+      showToast(`Save error: ${e.message}`, 'error');
+    } finally {
+      setSavingSlack(false);
+    }
+  };
+
+  const handleTestTeams = async () => {
+    setTestingTeams(true);
+    setTeamsTestResult(null);
+    try {
+      const payload: any = { provider: 'teams' };
+      if (teamsWebhookUrl.trim()) {
+        payload.teams_webhook_url = teamsWebhookUrl.trim();
+      }
+      const res = await fetch(`${apiUrl}/api/integrations/test`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+      setTeamsTestResult({ success: data.success, message: data.message || (data.success ? 'Teams ping sent!' : 'Teams test failed') });
+      if (data.success) {
+        showToast('Microsoft Teams test card delivered!', 'success');
+      } else {
+        showToast(data.message || 'Teams test failed', 'error');
+      }
+    } catch (e: any) {
+      setTeamsTestResult({ success: false, message: e.message });
+      showToast(`Teams test error: ${e.message}`, 'error');
+    } finally {
+      setTestingTeams(false);
+    }
+  };
+
+  const handleSaveTeams = async () => {
+    setSavingTeams(true);
+    try {
+      const payload: any = { teams_notify_on: teamsNotifyOn };
+      if (teamsWebhookUrl.trim()) {
+        payload.teams_webhook_url = teamsWebhookUrl.trim();
+      }
+      const res = await fetch(`${apiUrl}/api/integrations`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        showToast('Microsoft Teams settings saved!', 'success');
+        setTeamsWebhookUrl('');
+        await fetchSettings();
+      } else {
+        showToast(data.detail || data.error || 'Failed to save Teams settings', 'error');
+      }
+    } catch (e: any) {
+      showToast(`Save error: ${e.message}`, 'error');
+    } finally {
+      setSavingTeams(false);
     }
   };
 
@@ -1071,6 +1311,452 @@ export default function SettingsPage() {
                   </div>
                 );
               })}
+            </div>
+          </div>
+
+          {/* Section 5: Enterprise Integrations (Jira Bug Tracker, Slack, Microsoft Teams) */}
+          <div className="rounded-xl border border-slate-800 bg-[#0a0f1d] shadow-xl overflow-hidden">
+            <div className="px-6 py-4 border-b border-slate-800 flex items-center justify-between flex-wrap gap-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-7 h-7 rounded-lg bg-blue-500/10 text-[#0278ff] flex items-center justify-center border border-blue-500/20">
+                  <Bell className="w-4 h-4" />
+                </div>
+                <div>
+                  <h2 className="text-sm font-bold text-white flex items-center gap-2">
+                    Enterprise Integrations
+                    <span className="px-2 py-0.2 rounded-full text-[10px] font-mono bg-blue-500/10 text-blue-300 border border-blue-500/20 font-semibold">
+                      Jira · Slack · Teams
+                    </span>
+                  </h2>
+                  <p className="text-xs text-slate-400">Automate bug ticket creation in Jira and stream incident notifications to Slack &amp; Teams</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-6 space-y-8 divide-y divide-slate-800/60">
+              
+              {/* 1. Atlassian Jira Integration Card */}
+              <div className="space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-7 h-7 rounded-lg bg-[#0052cc]/15 text-[#2684ff] flex items-center justify-center border border-[#0052cc]/30 shrink-0">
+                      <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
+                        <path d="M11.53 2c0 2.4 1.97 4.35 4.35 4.35h1.78v1.7c0 2.4 1.94 4.34 4.34 4.35V2.84A.84.84 0 0 0 21.16 2H11.53zM5.77 7.76c0 2.4 1.96 4.34 4.34 4.34h1.78v1.7c0 2.4 1.94 4.35 4.35 4.35V8.6a.84.84 0 0 0-.84-.84H5.77zm-5.77 5.76c0 2.4 1.95 4.34 4.34 4.34h1.79v1.7c0 2.4 1.94 4.35 4.34 4.35V14.36a.84.84 0 0 0-.84-.84H0z"/>
+                      </svg>
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                        Atlassian Jira Cloud
+                        <span className="text-[10px] font-mono text-slate-500 font-normal">REST API v3</span>
+                      </h3>
+                      <p className="text-xs text-slate-400">File bug reports directly into your Jira project with complete step reproduction histories</p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    {jiraConfigured ? (
+                      <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 flex items-center gap-1.5">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                        Connected ({jiraProjectKey})
+                      </span>
+                    ) : (
+                      <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-slate-800 text-slate-400 border border-slate-700">
+                        Not Configured
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Jira Form Grid */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 pt-1">
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-bold text-slate-300">Jira Cloud Domain / Host</label>
+                    <input
+                      type="text"
+                      value={jiraHost}
+                      onChange={(e) => setJiraHost(e.target.value)}
+                      placeholder="https://your-company.atlassian.net"
+                      className="w-full bg-[#070b14] border border-slate-800 focus:border-[#0278ff] rounded-lg px-3 py-2 text-xs font-mono text-white outline-none placeholder:text-slate-600"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-bold text-slate-300">Atlassian User Email</label>
+                    <input
+                      type="email"
+                      value={jiraEmail}
+                      onChange={(e) => setJiraEmail(e.target.value)}
+                      placeholder="qa-bot@company.com"
+                      className="w-full bg-[#070b14] border border-slate-800 focus:border-[#0278ff] rounded-lg px-3 py-2 text-xs font-mono text-white outline-none placeholder:text-slate-600"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between">
+                      <label className="text-[11px] font-bold text-slate-300">Atlassian API Token</label>
+                      {activeMode === 'helm' && (
+                        <span className="text-[10px] font-mono text-cyan-400 flex items-center gap-1">
+                          <Lock className="w-2.5 h-2.5" /> Helm Managed
+                        </span>
+                      )}
+                    </div>
+                    <div className="relative">
+                      <input
+                        type={showJiraToken ? 'text' : 'password'}
+                        value={jiraToken}
+                        onChange={(e) => setJiraToken(e.target.value)}
+                        disabled={activeMode === 'helm'}
+                        placeholder={jiraConfigured ? (jiraMaskedToken || '••••••••••••••••') : 'Atlassian API Token from id.atlassian.com'}
+                        className={`w-full border rounded-lg pl-3 pr-9 py-2 text-xs font-mono outline-none ${
+                          activeMode === 'helm'
+                            ? 'bg-slate-900/60 border-slate-800/80 text-slate-400 cursor-not-allowed'
+                            : 'bg-[#070b14] border-slate-800 focus:border-[#0278ff] text-white placeholder:text-slate-600'
+                        }`}
+                      />
+                      {activeMode !== 'helm' && (
+                        <button
+                          type="button"
+                          onClick={() => setShowJiraToken(!showJiraToken)}
+                          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300"
+                        >
+                          {showJiraToken ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-bold text-slate-300">Project Key</label>
+                      <input
+                        type="text"
+                        value={jiraProjectKey}
+                        onChange={(e) => setJiraProjectKey(e.target.value.toUpperCase())}
+                        placeholder="QA"
+                        className="w-full bg-[#070b14] border border-slate-800 focus:border-[#0278ff] rounded-lg px-3 py-2 text-xs font-mono text-white outline-none placeholder:text-slate-600 uppercase"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-bold text-slate-300">Issue Type</label>
+                      <input
+                        type="text"
+                        value={jiraIssueType}
+                        onChange={(e) => setJiraIssueType(e.target.value)}
+                        placeholder="Bug"
+                        className="w-full bg-[#070b14] border border-slate-800 focus:border-[#0278ff] rounded-lg px-3 py-2 text-xs font-mono text-white outline-none placeholder:text-slate-600"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Auto-Create Toggle */}
+                <div className="p-3.5 rounded-lg bg-[#070b14] border border-slate-800 flex items-center justify-between gap-3">
+                  <div className="space-y-0.5">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-bold text-white">Auto-Create Jira Ticket on Failure</span>
+                      {jiraAutoCreate && (
+                        <span className="px-1.5 py-0.2 rounded text-[10px] font-semibold bg-blue-500/20 text-[#2684ff] border border-blue-500/30">
+                          Active
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-[11px] text-slate-400">
+                      When enabled, any test execution failure automatically files a Jira issue with step reproduction history and report links.
+                    </p>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer shrink-0">
+                    <input
+                      type="checkbox"
+                      checked={jiraAutoCreate}
+                      onChange={(e) => setJiraAutoCreate(e.target.checked)}
+                      className="sr-only peer"
+                    />
+                    <div className="w-9 h-5 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#0052cc]"></div>
+                  </label>
+                </div>
+
+                {/* Jira Test Feedback */}
+                {jiraTestResult && (
+                  <div className={`p-3 rounded-lg border text-xs flex items-center gap-2 ${
+                    jiraTestResult.success
+                      ? 'bg-emerald-950/30 border-emerald-500/30 text-emerald-300'
+                      : 'bg-rose-950/30 border-rose-500/30 text-rose-300'
+                  }`}>
+                    {jiraTestResult.success ? (
+                      <Check className="w-4 h-4 text-emerald-400 shrink-0" />
+                    ) : (
+                      <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+                    )}
+                    <span className="text-[11px] leading-relaxed break-all">{jiraTestResult.message}</span>
+                  </div>
+                )}
+
+                {/* Jira Actions */}
+                <div className="flex items-center justify-end gap-2.5 pt-1">
+                  <button
+                    type="button"
+                    onClick={handleTestJira}
+                    disabled={testingJira}
+                    className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 flex items-center gap-1.5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                  >
+                    {testingJira ? <Loader2 className="w-3.5 h-3.5 animate-spin text-[#0278ff]" /> : <Zap className="w-3.5 h-3.5 text-amber-400" />}
+                    <span>Test Connection</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleSaveJira}
+                    disabled={savingJira}
+                    className="px-4 py-1.5 rounded-lg text-xs font-semibold bg-[#0052cc] hover:bg-[#0047b3] text-white shadow-md shadow-blue-900/30 flex items-center gap-1.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                  >
+                    {savingJira ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                    <span>Save Jira Settings</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* 2. Slack Incident Notifications Card */}
+              <div className="pt-6 space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-7 h-7 rounded-lg bg-[#4A154B]/30 text-[#E01E5A] flex items-center justify-center border border-[#4A154B]/50 shrink-0">
+                      <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
+                        <path d="M5.042 15.165a2.528 2.528 0 0 1-2.52 2.523A2.528 2.528 0 0 1 0 15.165a2.527 2.527 0 0 1 2.522-2.52h2.52v2.52zM6.313 15.165a2.527 2.527 0 0 1 2.521-2.52 2.527 2.527 0 0 1 2.521 2.52v6.313A2.528 2.528 0 0 1 8.834 24a2.528 2.528 0 0 1-2.521-2.522v-6.313zM8.834 5.042a2.528 2.528 0 0 1-2.521-2.52A2.528 2.528 0 0 1 8.834 0a2.528 2.528 0 0 1 2.521 2.522v2.52H8.834zM8.834 6.313a2.528 2.528 0 0 1 2.521 2.521 2.528 2.528 0 0 1-2.521 2.521H2.522A2.528 2.528 0 0 1 0 8.834a2.528 2.528 0 0 1 2.522-2.521h6.312zM18.956 8.834a2.528 2.528 0 0 1 2.522-2.521A2.528 2.528 0 0 1 24 8.834a2.528 2.528 0 0 1-2.522 2.521h-2.522V8.834zM17.688 8.834a2.528 2.528 0 0 1-2.523 2.521 2.527 2.527 0 0 1-2.52-2.521V2.522A2.527 2.527 0 0 1 15.165 0a2.528 2.528 0 0 1 2.523 2.522v6.312zM15.165 18.956a2.528 2.528 0 0 1 2.523 2.522A2.528 2.528 0 0 1 15.165 24a2.527 2.527 0 0 1-2.52-2.522v-2.522h2.52zM15.165 17.688a2.527 2.527 0 0 1-2.52-2.523 2.526 2.526 0 0 1 2.52-2.52h6.313A2.527 2.527 0 0 1 24 15.165a2.528 2.528 0 0 1-2.522 2.523h-6.313z"/>
+                      </svg>
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                        Slack Channel Alerts
+                        <span className="text-[10px] font-mono text-slate-500 font-normal">Block Kit</span>
+                      </h3>
+                      <p className="text-xs text-slate-400">Dispatch interactive incident cards with deep links to your engineering Slack channel</p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    {slackConfigured ? (
+                      <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 flex items-center gap-1.5">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                        Connected
+                      </span>
+                    ) : (
+                      <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-slate-800 text-slate-400 border border-slate-700">
+                        Not Configured
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5 pt-1">
+                  <div className="md:col-span-2 space-y-1">
+                    <div className="flex items-center justify-between">
+                      <label className="text-[11px] font-bold text-slate-300">Slack Incoming Webhook URL</label>
+                      {activeMode === 'helm' && (
+                        <span className="text-[10px] font-mono text-cyan-400 flex items-center gap-1">
+                          <Lock className="w-2.5 h-2.5" /> Helm Managed
+                        </span>
+                      )}
+                    </div>
+                    <div className="relative">
+                      <input
+                        type={showSlackWebhook ? 'text' : 'password'}
+                        value={slackWebhookUrl}
+                        onChange={(e) => setSlackWebhookUrl(e.target.value)}
+                        disabled={activeMode === 'helm'}
+                        placeholder={slackConfigured ? (slackMaskedWebhook || 'https://hooks.slack.com/services/...') : 'https://hooks.slack.com/services/...'}
+                        className={`w-full border rounded-lg pl-3 pr-9 py-2 text-xs font-mono outline-none ${
+                          activeMode === 'helm'
+                            ? 'bg-slate-900/60 border-slate-800/80 text-slate-400 cursor-not-allowed'
+                            : 'bg-[#070b14] border-slate-800 focus:border-[#0278ff] text-white placeholder:text-slate-600'
+                        }`}
+                      />
+                      {activeMode !== 'helm' && (
+                        <button
+                          type="button"
+                          onClick={() => setShowSlackWebhook(!showSlackWebhook)}
+                          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300"
+                        >
+                          {showSlackWebhook ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-bold text-slate-300">Alert Trigger</label>
+                    <select
+                      value={slackNotifyOn}
+                      onChange={(e) => setSlackNotifyOn(e.target.value)}
+                      className="w-full bg-[#070b14] border border-slate-800 focus:border-[#0278ff] rounded-lg px-3 py-2 text-xs font-mono text-white outline-none cursor-pointer"
+                    >
+                      <option value="failure_only">Failures Only (Recommended)</option>
+                      <option value="all">All Executions (Pass &amp; Fail)</option>
+                      <option value="disabled">Disabled</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Slack Test Feedback */}
+                {slackTestResult && (
+                  <div className={`p-3 rounded-lg border text-xs flex items-center gap-2 ${
+                    slackTestResult.success
+                      ? 'bg-emerald-950/30 border-emerald-500/30 text-emerald-300'
+                      : 'bg-rose-950/30 border-rose-500/30 text-rose-300'
+                  }`}>
+                    {slackTestResult.success ? (
+                      <Check className="w-4 h-4 text-emerald-400 shrink-0" />
+                    ) : (
+                      <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+                    )}
+                    <span className="text-[11px] leading-relaxed break-all">{slackTestResult.message}</span>
+                  </div>
+                )}
+
+                {/* Slack Actions */}
+                <div className="flex items-center justify-end gap-2.5 pt-1">
+                  <button
+                    type="button"
+                    onClick={handleTestSlack}
+                    disabled={testingSlack}
+                    className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 flex items-center gap-1.5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                  >
+                    {testingSlack ? <Loader2 className="w-3.5 h-3.5 animate-spin text-[#0278ff]" /> : <Send className="w-3.5 h-3.5 text-amber-400" />}
+                    <span>Send Test Card</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleSaveSlack}
+                    disabled={savingSlack}
+                    className="px-4 py-1.5 rounded-lg text-xs font-semibold bg-[#0278ff] hover:bg-[#0062d6] text-white shadow-md shadow-blue-500/20 flex items-center gap-1.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                  >
+                    {savingSlack ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                    <span>Save Slack Settings</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* 3. Microsoft Teams Incident Notifications Card */}
+              <div className="pt-6 space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-7 h-7 rounded-lg bg-[#5059C9]/20 text-[#7B83EB] flex items-center justify-center border border-[#5059C9]/40 shrink-0">
+                      <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
+                        <path d="M19.5 7.5a2.5 2.5 0 1 1-5 0 2.5 2.5 0 0 1 5 0zM12 9a3 3 0 1 0-6 0 3 3 0 0 0 6 0zm7.5 4.5h-4a2.5 2.5 0 0 0-2.5 2.5v3h9v-3a2.5 2.5 0 0 0-2.5-2.5zm-9 1.5h-3A3.5 3.5 0 0 0 4 18.5V20h7v-5z"/>
+                      </svg>
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                        Microsoft Teams Channel Alerts
+                        <span className="text-[10px] font-mono text-slate-500 font-normal">Adaptive Cards</span>
+                      </h3>
+                      <p className="text-xs text-slate-400">Stream test results and failure cards to Microsoft Teams via Connector or Power Automate</p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    {teamsConfigured ? (
+                      <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 flex items-center gap-1.5">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                        Connected
+                      </span>
+                    ) : (
+                      <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-slate-800 text-slate-400 border border-slate-700">
+                        Not Configured
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5 pt-1">
+                  <div className="md:col-span-2 space-y-1">
+                    <div className="flex items-center justify-between">
+                      <label className="text-[11px] font-bold text-slate-300">Microsoft Teams Webhook URL</label>
+                      {activeMode === 'helm' && (
+                        <span className="text-[10px] font-mono text-cyan-400 flex items-center gap-1">
+                          <Lock className="w-2.5 h-2.5" /> Helm Managed
+                        </span>
+                      )}
+                    </div>
+                    <div className="relative">
+                      <input
+                        type={showTeamsWebhook ? 'text' : 'password'}
+                        value={teamsWebhookUrl}
+                        onChange={(e) => setTeamsWebhookUrl(e.target.value)}
+                        disabled={activeMode === 'helm'}
+                        placeholder={teamsConfigured ? (teamsMaskedWebhook || 'https://company.webhook.office.com/...') : 'https://company.webhook.office.com/...'}
+                        className={`w-full border rounded-lg pl-3 pr-9 py-2 text-xs font-mono outline-none ${
+                          activeMode === 'helm'
+                            ? 'bg-slate-900/60 border-slate-800/80 text-slate-400 cursor-not-allowed'
+                            : 'bg-[#070b14] border-slate-800 focus:border-[#0278ff] text-white placeholder:text-slate-600'
+                        }`}
+                      />
+                      {activeMode !== 'helm' && (
+                        <button
+                          type="button"
+                          onClick={() => setShowTeamsWebhook(!showTeamsWebhook)}
+                          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300"
+                        >
+                          {showTeamsWebhook ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="space-y-1">
+                    <label className="text-[11px] font-bold text-slate-300">Alert Trigger</label>
+                    <select
+                      value={teamsNotifyOn}
+                      onChange={(e) => setTeamsNotifyOn(e.target.value)}
+                      className="w-full bg-[#070b14] border border-slate-800 focus:border-[#0278ff] rounded-lg px-3 py-2 text-xs font-mono text-white outline-none cursor-pointer"
+                    >
+                      <option value="failure_only">Failures Only (Recommended)</option>
+                      <option value="all">All Executions (Pass &amp; Fail)</option>
+                      <option value="disabled">Disabled</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Teams Test Feedback */}
+                {teamsTestResult && (
+                  <div className={`p-3 rounded-lg border text-xs flex items-center gap-2 ${
+                    teamsTestResult.success
+                      ? 'bg-emerald-950/30 border-emerald-500/30 text-emerald-300'
+                      : 'bg-rose-950/30 border-rose-500/30 text-rose-300'
+                  }`}>
+                    {teamsTestResult.success ? (
+                      <Check className="w-4 h-4 text-emerald-400 shrink-0" />
+                    ) : (
+                      <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+                    )}
+                    <span className="text-[11px] leading-relaxed break-all">{teamsTestResult.message}</span>
+                  </div>
+                )}
+
+                {/* Teams Actions */}
+                <div className="flex items-center justify-end gap-2.5 pt-1">
+                  <button
+                    type="button"
+                    onClick={handleTestTeams}
+                    disabled={testingTeams}
+                    className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 flex items-center gap-1.5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                  >
+                    {testingTeams ? <Loader2 className="w-3.5 h-3.5 animate-spin text-[#0278ff]" /> : <Send className="w-3.5 h-3.5 text-amber-400" />}
+                    <span>Send Test Card</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleSaveTeams}
+                    disabled={savingTeams}
+                    className="px-4 py-1.5 rounded-lg text-xs font-semibold bg-[#0278ff] hover:bg-[#0062d6] text-white shadow-md shadow-blue-500/20 flex items-center gap-1.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                  >
+                    {savingTeams ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                    <span>Save Teams Settings</span>
+                  </button>
+                </div>
+              </div>
+
             </div>
           </div>
 

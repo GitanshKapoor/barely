@@ -329,3 +329,11 @@ Review PAST ACTIONS ALREADY PERFORMED against USER TEST INSTRUCTIONS.
             logger.error(f"DB Save Error: {e}")
         finally:
             db.close()
+
+        # Trigger notifications & automated Jira filing asynchronously/post-commit
+        try:
+            from barely_core.integrations.dispatcher import dispatch_run_notifications
+            dispatch_run_notifications(self.run_id)
+        except Exception as ne:
+            logger.error(f"Failed to dispatch post-run integrations for {self.run_id}: {ne}")
+

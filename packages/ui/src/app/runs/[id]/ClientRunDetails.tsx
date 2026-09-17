@@ -17,7 +17,9 @@ import {
   RotateCw,
   RotateCcw,
   Tag,
-  Cpu
+  Cpu,
+  Loader2,
+  AlertCircle
 } from 'lucide-react';
 import NewRunForm from '../../../components/NewRunForm';
 import { formatModelName } from '../../../utils/models';
@@ -42,6 +44,8 @@ interface RunData {
   tags?: string[];
   created_at: string | null;
   logs: string;
+  jira_issue_key?: string | null;
+  jira_issue_url?: string | null;
   steps: RunStep[];
 }
 
@@ -88,6 +92,8 @@ export default function ClientRunDetails({ id }: { id: string }) {
   const [activeTab, setActiveTab] = useState<'steps' | 'logs'>('steps');
   const [selectedStepIdx, setSelectedStepIdx] = useState<number>(0);
   const [cancelling, setCancelling] = useState(false);
+  const [creatingJira, setCreatingJira] = useState(false);
+  const [jiraMessage, setJiraMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const terminalBottomRef = useRef<HTMLDivElement>(null);
 
   const fetchRun = async () => {
@@ -107,6 +113,30 @@ export default function ClientRunDetails({ id }: { id: string }) {
       console.error("Error fetching run details:", e);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleCreateJiraTicket = async () => {
+    setCreatingJira(true);
+    setJiraMessage(null);
+    try {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+      const res = await fetch(`${apiUrl}/api/runs/${id}/jira`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({})
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setJiraMessage({ type: 'success', text: `Created Jira issue ${data.issue_key} successfully!` });
+        await fetchRun();
+      } else {
+        setJiraMessage({ type: 'error', text: data.detail || data.error || 'Failed to create Jira ticket.' });
+      }
+    } catch (e: any) {
+      setJiraMessage({ type: 'error', text: e.message || 'Error communicating with Barely API.' });
+    } finally {
+      setCreatingJira(false);
     }
   };
 
@@ -207,6 +237,21 @@ export default function ClientRunDetails({ id }: { id: string }) {
                   <Tag className="w-3 h-3 text-[#0278ff]" /> #{tag}
                 </span>
               ))}
+              {run.jira_issue_key && (
+                <a
+                  href={run.jira_issue_url || '#'}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-[11px] font-bold font-mono px-2.5 py-0.5 rounded-full bg-[#0052cc]/15 text-[#2684ff] hover:text-white hover:bg-[#0052cc]/30 border border-[#0052cc]/40 flex items-center gap-1.5 transition-all shadow-sm"
+                  title={`Open ${run.jira_issue_key} in Atlassian Jira`}
+                >
+                  <svg className="w-3 h-3 fill-current" viewBox="0 0 24 24">
+                    <path d="M11.53 2c0 2.4 1.97 4.35 4.35 4.35h1.78v1.7c0 2.4 1.94 4.34 4.34 4.35V2.84A.84.84 0 0 0 21.16 2H11.53zM5.77 7.76c0 2.4 1.96 4.34 4.34 4.34h1.78v1.7c0 2.4 1.94 4.35 4.35 4.35V8.6a.84.84 0 0 0-.84-.84H5.77zm-5.77 5.76c0 2.4 1.95 4.34 4.34 4.34h1.79v1.7c0 2.4 1.94 4.35 4.34 4.35V14.36a.84.84 0 0 0-.84-.84H0z"/>
+                  </svg>
+                  <span>Jira: {run.jira_issue_key}</span>
+                  <ExternalLink className="w-2.5 h-2.5" />
+                </a>
+              )}
             </div>
             <div className="flex items-center gap-3 text-xs text-slate-400 flex-wrap">
               <span className="font-mono text-slate-500">{run.id}</span>
@@ -221,6 +266,39 @@ export default function ClientRunDetails({ id }: { id: string }) {
 
         {/* Action Controls */}
         <div className="flex items-center gap-2.5 flex-wrap">
+          {/* Jira Integration Action: View Ticket or 1-Click Create */}
+          {run.jira_issue_key ? (
+            <a
+              href={run.jira_issue_url || '#'}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1.5 px-3.5 py-2 bg-[#0052cc]/15 hover:bg-[#0052cc]/25 text-[#2684ff] hover:text-white border border-[#0052cc]/35 text-xs font-semibold rounded-lg transition-all shadow-sm cursor-pointer"
+              title={`View ${run.jira_issue_key} in Atlassian Jira`}
+            >
+              <svg className="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24">
+                <path d="M11.53 2c0 2.4 1.97 4.35 4.35 4.35h1.78v1.7c0 2.4 1.94 4.34 4.34 4.35V2.84A.84.84 0 0 0 21.16 2H11.53zM5.77 7.76c0 2.4 1.96 4.34 4.34 4.34h1.78v1.7c0 2.4 1.94 4.35 4.35 4.35V8.6a.84.84 0 0 0-.84-.84H5.77zm-5.77 5.76c0 2.4 1.95 4.34 4.34 4.34h1.79v1.7c0 2.4 1.94 4.35 4.34 4.35V14.36a.84.84 0 0 0-.84-.84H0z"/>
+              </svg>
+              <span>Jira: {run.jira_issue_key}</span>
+              <ExternalLink className="w-3 h-3" />
+            </a>
+          ) : (run.status === 'completed' && !run.success) ? (
+            <button
+              onClick={handleCreateJiraTicket}
+              disabled={creatingJira}
+              className="flex items-center gap-1.5 px-3.5 py-2 bg-[#0052cc] hover:bg-[#0047b3] text-white text-xs font-semibold rounded-lg shadow-md shadow-blue-900/30 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+              title="File Jira bug ticket with reproduction steps sequence"
+            >
+              {creatingJira ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <svg className="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24">
+                  <path d="M11.53 2c0 2.4 1.97 4.35 4.35 4.35h1.78v1.7c0 2.4 1.94 4.34 4.34 4.35V2.84A.84.84 0 0 0 21.16 2H11.53zM5.77 7.76c0 2.4 1.96 4.34 4.34 4.34h1.78v1.7c0 2.4 1.94 4.35 4.35 4.35V8.6a.84.84 0 0 0-.84-.84H5.77zm-5.77 5.76c0 2.4 1.95 4.34 4.34 4.34h1.79v1.7c0 2.4 1.94 4.35 4.34 4.35V14.36a.84.84 0 0 0-.84-.84H0z"/>
+                </svg>
+              )}
+              <span>{creatingJira ? "Creating Ticket..." : "Create Jira Ticket"}</span>
+            </button>
+          ) : null}
+
           <NewRunForm
             initialData={{
               name: run.name || run.id,
@@ -273,6 +351,30 @@ export default function ClientRunDetails({ id }: { id: string }) {
           </a>
         </div>
       </div>
+
+      {/* Jira Notification Feedback */}
+      {jiraMessage && (
+        <div className={`p-3 rounded-lg border text-xs flex items-center justify-between gap-2 ${
+          jiraMessage.type === 'success' 
+            ? 'bg-emerald-950/30 border-emerald-500/30 text-emerald-300' 
+            : 'bg-rose-950/30 border-rose-500/30 text-rose-300'
+        }`}>
+          <div className="flex items-center gap-2">
+            {jiraMessage.type === 'success' ? (
+              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+            ) : (
+              <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+            )}
+            <span>{jiraMessage.text}</span>
+          </div>
+          <button
+            onClick={() => setJiraMessage(null)}
+            className="text-slate-400 hover:text-white text-xs px-2 py-0.5 cursor-pointer"
+          >
+            ✕
+          </button>
+        </div>
+      )}
 
       {/* Goal Instructions Card */}
       <div className="rounded-xl border border-slate-800 bg-[#0d1322] p-4 text-xs font-mono space-y-1">

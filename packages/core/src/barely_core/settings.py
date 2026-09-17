@@ -16,7 +16,20 @@ KNOWN_SETTINGS = [
     {"key": "DEFAULT_MODEL", "is_secret": False, "label": "Default AI Model", "category": "model", "placeholder": "anthropic/claude-sonnet-4-5"},
     {"key": "DEFAULT_DEVICE", "is_secret": False, "label": "Default Test Device", "category": "defaults", "placeholder": "desktop"},
     {"key": "MAX_STEPS", "is_secret": False, "label": "Max Steps Per Test", "category": "defaults", "placeholder": "20"},
-    {"key": "STRICT_MODE_DEFAULT", "is_secret": False, "label": "Default Strict Mode", "category": "defaults", "placeholder": "false"}
+    {"key": "STRICT_MODE_DEFAULT", "is_secret": False, "label": "Default Strict Mode", "category": "defaults", "placeholder": "false"},
+    # Atlassian Jira Integration
+    {"key": "JIRA_HOST", "is_secret": False, "label": "Jira Cloud Domain", "category": "jira", "placeholder": "https://company.atlassian.net"},
+    {"key": "JIRA_EMAIL", "is_secret": False, "label": "Jira Account Email", "category": "jira", "placeholder": "qa-bot@company.com"},
+    {"key": "JIRA_API_TOKEN", "is_secret": True, "label": "Jira API Token", "category": "jira", "placeholder": "Atlassian API token"},
+    {"key": "JIRA_PROJECT_KEY", "is_secret": False, "label": "Jira Project Key", "category": "jira", "placeholder": "QA"},
+    {"key": "JIRA_ISSUE_TYPE", "is_secret": False, "label": "Jira Issue Type", "category": "jira", "placeholder": "Bug"},
+    {"key": "JIRA_AUTO_CREATE", "is_secret": False, "label": "Auto-Create Jira Ticket on Failure", "category": "jira", "placeholder": "false"},
+    # Slack Incident Alerts
+    {"key": "SLACK_WEBHOOK_URL", "is_secret": True, "label": "Slack Webhook URL", "category": "slack", "placeholder": "https://hooks.slack.com/services/..."},
+    {"key": "SLACK_NOTIFY_ON", "is_secret": False, "label": "Slack Notification Trigger", "category": "slack", "placeholder": "failure_only"},
+    # Microsoft Teams Incident Alerts
+    {"key": "TEAMS_WEBHOOK_URL", "is_secret": True, "label": "Microsoft Teams Webhook URL", "category": "teams", "placeholder": "https://company.webhook.office.com/..."},
+    {"key": "TEAMS_NOTIFY_ON", "is_secret": False, "label": "Microsoft Teams Notification Trigger", "category": "teams", "placeholder": "failure_only"}
 ]
 
 SECRETS_DIR = os.getenv("BARELY_SECRETS_DIR", "/etc/secrets/barely")
@@ -439,4 +452,48 @@ def list_supported_models() -> Dict[str, Any]:
         "providers": PROVIDER_DOCS,
         "default_model": default_model
     }
+
+def get_integrations_summary() -> Dict[str, Any]:
+    """
+    Returns the status and non-sensitive configuration for enterprise integrations:
+    Atlassian Jira, Slack Webhooks, and Microsoft Teams Webhooks.
+    Zero credential leakage: tokens and webhooks are securely masked.
+    """
+    from barely_core.integrations.jira import JiraClient
+    from barely_core.integrations.slack import SlackClient
+    from barely_core.integrations.teams import TeamsClient
+
+    jira_client = JiraClient()
+    slack_client = SlackClient()
+    teams_client = TeamsClient()
+
+    jira_token = get_setting("JIRA_API_TOKEN")
+    slack_url = get_setting("SLACK_WEBHOOK_URL")
+    teams_url = get_setting("TEAMS_WEBHOOK_URL")
+
+    return {
+        "jira": {
+            "configured": jira_client.is_configured,
+            "host": get_setting("JIRA_HOST") or "",
+            "email": get_setting("JIRA_EMAIL") or "",
+            "project_key": get_setting("JIRA_PROJECT_KEY") or "QA",
+            "issue_type": get_setting("JIRA_ISSUE_TYPE") or "Bug",
+            "auto_create": (get_setting("JIRA_AUTO_CREATE") or "false").strip().lower() in ("true", "1", "yes"),
+            "has_token": bool(jira_token),
+            "masked_token": mask_secret(jira_token) if jira_token else ""
+        },
+        "slack": {
+            "configured": slack_client.is_configured,
+            "notify_on": get_setting("SLACK_NOTIFY_ON") or "failure_only",
+            "has_webhook": bool(slack_url),
+            "masked_webhook": mask_secret(slack_url) if slack_url else ""
+        },
+        "teams": {
+            "configured": teams_client.is_configured,
+            "notify_on": get_setting("TEAMS_NOTIFY_ON") or "failure_only",
+            "has_webhook": bool(teams_url),
+            "masked_webhook": mask_secret(teams_url) if teams_url else ""
+        }
+    }
+
 

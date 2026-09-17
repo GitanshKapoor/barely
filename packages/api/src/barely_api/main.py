@@ -57,6 +57,8 @@ def list_runs():
                 "use_cache": bool(getattr(r, "use_cache", False)),
                 "model": getattr(r, "model", None) or "anthropic/claude-sonnet-4-5",
                 "tags": [t for t in r.tags.split(",") if t] if r.tags else [],
+                "jira_issue_key": getattr(r, "jira_issue_key", None),
+                "jira_issue_url": getattr(r, "jira_issue_url", None),
                 "created_at": r.created_at.isoformat() if r.created_at else None
             })
         return {"runs": runs}
@@ -142,6 +144,8 @@ def get_run(run_id: str):
             "tags": [t for t in r.tags.split(",") if t] if r.tags else [],
             "created_at": r.created_at.isoformat() if r.created_at else None,
             "logs": r.logs or "",
+            "jira_issue_key": getattr(r, "jira_issue_key", None),
+            "jira_issue_url": getattr(r, "jira_issue_url", None),
             "steps": [{"description": s.description, "thought": s.thought, "screenshot": s.screenshot_base64} for s in steps]
         }
     finally:
@@ -462,4 +466,190 @@ def test_model(req: TestModelRequest):
             "success": False,
             "error": f"Test failed for '{target_model}': {err_str[:250]}"
         }
+
+# -------------------------------------------------------------
+# Enterprise Jira & Incident Integration Endpoints
+# -------------------------------------------------------------
+
+class CreateJiraIssueRequest(BaseModel):
+    issue_type: Optional[str] = None
+    summary: Optional[str] = None
+
+@app.post("/api/runs/{run_id}/jira")
+def create_run_jira_issue(run_id: str, req: Optional[CreateJiraIssueRequest] = None):
+    """
+    1-Click Manual Jira Ticket Creation from Run Details page.
+    Generates an ADF reproduction report and creates a ticket in Atlassian Jira Cloud.
+    """
+    from barely_core.db import RunStep
+    from barely_core.integrations.jira import JiraClient
+    
+    db = SessionLocal()
+    try:
+        r = db.query(RunRecord).filter(RunRecord.id == run_id).first()
+        if not r:
+            raise HTTPException(status_code=404, detail="Run not found")
+            
+        if r.jira_issue_key and r.jira_issue_url:
+            return {
+                "success": True,
+                "issue_key": r.jira_issue_key,
+                "issue_url": r.jira_issue_url,
+                "message": f"Jira ticket {r.jira_issue_key} already exists for this run."
+            }
+            
+        steps = db.query(RunStep).filter(RunStep.run_id == run_id).order_by(RunStep.step_index.asc()).all()
+        run_data = {
+            "id": r.id,
+            "name": (req.summary if req and req.summary else None) or r.name or r.id,
+            "start_url": r.start_url or "",
+            "device": r.device or "desktop",
+            "status": r.status or "completed",
+            "success": r.success,
+            "failure_reason": r.failure_reason or "Manual failure ticket created from Barely UI",
+            "model": getattr(r, "model", None) or "Claude Sonnet",
+            "steps": [{"description": s.description, "thought": s.thought} for s in steps]
+        }
+        
+        jira_client = JiraClient()
+        if not jira_client.is_configured:
+            raise HTTPException(
+                status_code=400,
+                detail="Jira is not fully configured. Please configure your Jira Cloud Domain, Email, API Token, and Project Key in Settings."
+            )
+            
+        custom_issue_type = req.issue_type if req and req.issue_type else None
+        success, issue_key, issue_url, error = jira_client.create_issue(run_data, issue_type=custom_issue_type)
+        if not success or not issue_key:
+            raise HTTPException(status_code=400, detail=error or "Failed to create Jira issue.")
+            
+        r.jira_issue_key = issue_key
+        r.jira_issue_url = issue_url
+        db.commit()
+        
+        return {
+            "success": True,
+            "issue_key": issue_key,
+            "issue_url": issue_url,
+            "message": f"Created Jira ticket {issue_key} successfully!"
+        }
+    finally:
+        db.close()
+
+class SaveIntegrationsRequest(BaseModel):
+    jira_host: Optional[str] = None
+    jira_email: Optional[str] = None
+    jira_api_token: Optional[str] = None
+    jira_project_key: Optional[str] = None
+    jira_issue_type: Optional[str] = None
+    jira_auto_create: Optional[bool] = None
+    slack_webhook_url: Optional[str] = None
+    slack_notify_on: Optional[str] = None
+    teams_webhook_url: Optional[str] = None
+    teams_notify_on: Optional[str] = None
+
+@app.get("/api/integrations")
+def get_integrations():
+    """Returns the status and configuration for Jira, Slack, and Teams without leaking credentials."""
+    from barely_core.settings import get_integrations_summary, get_secrets_mode
+    return {
+        "integrations": get_integrations_summary(),
+        "secrets_mode": get_secrets_mode()
+    }
+
+@app.post("/api/integrations")
+def save_integrations(req: SaveIntegrationsRequest):
+    """
+    Saves enterprise integration settings with AES-256 encryption-at-rest for tokens and webhooks.
+    Enforces GitOps/Helm locks when Helm mode is active.
+    """
+    from barely_core.settings import set_setting, get_secrets_mode, get_integrations_summary
+    
+    secrets_mode = get_secrets_mode()
+    is_helm_mode = secrets_mode["mode"] == "helm"
+    
+    # Check if attempting to modify secret credentials in Helm mode
+    has_secret_edits = any([
+        req.jira_api_token is not None and req.jira_api_token.strip(),
+        req.slack_webhook_url is not None and req.slack_webhook_url.strip(),
+        req.teams_webhook_url is not None and req.teams_webhook_url.strip(),
+    ])
+    if is_helm_mode and has_secret_edits:
+        raise HTTPException(
+            status_code=403,
+            detail="Helm / GitOps Mode is active. Secret credentials must be configured via Helm values or Kubernetes Secret."
+        )
+
+    # Save Jira settings
+    if req.jira_host is not None:
+        set_setting("JIRA_HOST", req.jira_host.strip(), is_secret=False)
+    if req.jira_email is not None:
+        set_setting("JIRA_EMAIL", req.jira_email.strip(), is_secret=False)
+    if req.jira_api_token is not None and req.jira_api_token.strip():
+        set_setting("JIRA_API_TOKEN", req.jira_api_token.strip(), is_secret=True)
+    if req.jira_project_key is not None:
+        set_setting("JIRA_PROJECT_KEY", req.jira_project_key.strip().upper(), is_secret=False)
+    if req.jira_issue_type is not None:
+        set_setting("JIRA_ISSUE_TYPE", req.jira_issue_type.strip(), is_secret=False)
+    if req.jira_auto_create is not None:
+        set_setting("JIRA_AUTO_CREATE", "true" if req.jira_auto_create else "false", is_secret=False)
+
+    # Save Slack settings
+    if req.slack_webhook_url is not None and req.slack_webhook_url.strip():
+        set_setting("SLACK_WEBHOOK_URL", req.slack_webhook_url.strip(), is_secret=True)
+    if req.slack_notify_on is not None:
+        set_setting("SLACK_NOTIFY_ON", req.slack_notify_on.strip(), is_secret=False)
+
+    # Save Teams settings
+    if req.teams_webhook_url is not None and req.teams_webhook_url.strip():
+        set_setting("TEAMS_WEBHOOK_URL", req.teams_webhook_url.strip(), is_secret=True)
+    if req.teams_notify_on is not None:
+        set_setting("TEAMS_NOTIFY_ON", req.teams_notify_on.strip(), is_secret=False)
+
+    return {
+        "success": True,
+        "message": "Enterprise integration settings updated successfully!",
+        "integrations": get_integrations_summary()
+    }
+
+class TestIntegrationRequest(BaseModel):
+    provider: str
+    jira_host: Optional[str] = None
+    jira_email: Optional[str] = None
+    jira_api_token: Optional[str] = None
+    jira_project_key: Optional[str] = None
+    slack_webhook_url: Optional[str] = None
+    teams_webhook_url: Optional[str] = None
+
+@app.post("/api/integrations/test")
+def test_integration(req: TestIntegrationRequest):
+    """Verifies credentials and connectivity for Jira, Slack, or Teams."""
+    provider = req.provider.strip().lower()
+    
+    if provider == "jira":
+        from barely_core.integrations.jira import JiraClient
+        client = JiraClient()
+        success, message = client.test_connection(
+            host=req.jira_host,
+            email=req.jira_email,
+            api_token=req.jira_api_token,
+            project_key=req.jira_project_key
+        )
+        return {"success": success, "message": message}
+        
+    elif provider == "slack":
+        from barely_core.integrations.slack import SlackClient
+        client = SlackClient()
+        success, message = client.test_connection(webhook_url=req.slack_webhook_url)
+        return {"success": success, "message": message}
+        
+    elif provider in ("teams", "ms_teams"):
+        from barely_core.integrations.teams import TeamsClient
+        client = TeamsClient()
+        success, message = client.test_connection(webhook_url=req.teams_webhook_url)
+        return {"success": success, "message": message}
+        
+    else:
+        raise HTTPException(status_code=400, detail=f"Unknown provider '{provider}'. Must be 'jira', 'slack', or 'teams'.")
+
 
