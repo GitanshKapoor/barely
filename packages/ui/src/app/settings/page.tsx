@@ -17,7 +17,9 @@ import {
   Lock,
   Zap,
   Info,
-  ExternalLink
+  ExternalLink,
+  Pencil,
+  X
 } from 'lucide-react';
 import { formatModelName } from '../../utils/models';
 
@@ -78,6 +80,7 @@ export default function SettingsPage() {
   const [testingModel, setTestingModel] = useState<boolean>(false);
   const [savingModel, setSavingModel] = useState<boolean>(false);
   const [modelTestResult, setModelTestResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [isEditModelModalOpen, setIsEditModelModalOpen] = useState<boolean>(false);
 
   // Form input states
   const [inputValues, setInputValues] = useState<Record<string, string>>({});
@@ -162,7 +165,9 @@ export default function SettingsPage() {
         const err = await res.json();
         throw new Error(err.detail || 'Failed to save model');
       }
-      showToast(`Default AI model updated to '${target}'`, 'success');
+      showToast(`Default AI model updated to '${formatModelName(target)}'`, 'success');
+      setIsEditModelModalOpen(false);
+      setModelTestResult(null);
       await fetchSettings();
     } catch (err: any) {
       showToast(`Error saving model: ${err.message}`, 'error');
@@ -263,6 +268,7 @@ export default function SettingsPage() {
 
   const apiKeys = settings.filter(s => s.category === 'api_keys');
   const defaultSettings = settings.filter(s => s.category === 'defaults');
+  const activeModel = settings.find(s => s.key === 'DEFAULT_MODEL')?.masked_value || 'anthropic/claude-sonnet-4-5';
 
   return (
     <div className="max-w-4xl mx-auto space-y-6 pb-12">
@@ -468,47 +474,140 @@ export default function SettingsPage() {
                 </div>
                 <div>
                   <h2 className="text-sm font-bold text-white">AI Agent Model</h2>
-                  <p className="text-xs text-slate-400">Specify any model name and verify connectivity with a 1-token test</p>
+                  <p className="text-xs text-slate-400">Foundation LLM used for test planning and DOM interaction</p>
                 </div>
               </div>
               
-              {/* Current Default Badge */}
+              {/* Current Default Badge with Pencil Edit Icon */}
               <div className="flex items-center gap-2 bg-[#070b14] border border-purple-500/30 px-3 py-1.5 rounded-lg shadow-sm">
                 <span className="text-[11px] text-slate-400 font-medium">Active Default:</span>
                 <span className="text-xs font-semibold text-purple-300 flex items-center gap-1.5">
                   <span className="w-1.5 h-1.5 rounded-full bg-purple-400"></span>
-                  {formatModelName(settings.find(s => s.key === 'DEFAULT_MODEL')?.masked_value || 'anthropic/claude-sonnet-4-5')}
+                  {formatModelName(activeModel)}
                 </span>
-                <span className="text-[10px] font-mono text-slate-500 hidden sm:inline">
-                  ({settings.find(s => s.key === 'DEFAULT_MODEL')?.masked_value || 'anthropic/claude-sonnet-4-5'})
-                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setModelNameInput(activeModel);
+                    setModelTestResult(null);
+                    setIsEditModelModalOpen(true);
+                  }}
+                  className="p-1 rounded hover:bg-slate-800 text-slate-400 hover:text-purple-300 transition-colors ml-0.5 cursor-pointer"
+                  title="Edit Default Model"
+                >
+                  <Pencil className="w-3 h-3" />
+                </button>
               </div>
             </div>
 
-            <div className="p-6 space-y-4">
-              <div className="space-y-1.5">
-                <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider">
-                  Model Identifier
-                </label>
-                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
-                  <div className="relative flex-1">
+            {/* Clean Model Card View */}
+            <div className="p-6">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-xl bg-[#070b14] border border-slate-800/80">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2.5">
+                    <span className="text-base font-bold text-white tracking-tight">
+                      {formatModelName(activeModel)}
+                    </span>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-purple-500/15 text-purple-300 border border-purple-500/30 flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-purple-400"></span>
+                      Default Model
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-400">
+                    Default multi-modal foundation model used across all test executions.
+                  </p>
+                  <p className="text-[11px] font-mono text-slate-500 pt-0.5">
+                    API Slug: <span className="text-slate-400">{activeModel}</span>
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setModelNameInput(activeModel);
+                    setModelTestResult(null);
+                    setIsEditModelModalOpen(true);
+                  }}
+                  className="px-3.5 py-2 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 hover:border-purple-500/40 flex items-center gap-2 transition-all shadow-sm shrink-0 self-start sm:self-auto cursor-pointer"
+                  title="Edit Default AI Model"
+                >
+                  <Pencil className="w-3.5 h-3.5 text-purple-400" />
+                  <span>Edit Model</span>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Edit Model Popup Modal */}
+          {isEditModelModalOpen && (
+            <div 
+              className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4 animate-in fade-in duration-150"
+              onClick={(e) => {
+                if (e.target === e.currentTarget) {
+                  setIsEditModelModalOpen(false);
+                  setModelTestResult(null);
+                }
+              }}
+            >
+              <div className="bg-[#0a0f1d] border border-slate-800 rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden animate-in zoom-in-95 duration-150 text-left">
+                {/* Modal Header */}
+                <div className="px-6 py-4 border-b border-slate-800 flex items-center justify-between">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-lg bg-purple-500/15 text-purple-400 flex items-center justify-center border border-purple-500/30">
+                      <Cpu className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-bold text-white">Configure AI Agent Model</h3>
+                      <p className="text-[11px] text-slate-400">Set the default model and verify connectivity with a 1-token test</p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsEditModelModalOpen(false);
+                      setModelTestResult(null);
+                    }}
+                    className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                {/* Modal Body */}
+                <div className="p-6 space-y-4">
+                  {/* Display Name Live Preview */}
+                  <div className="p-3 rounded-lg bg-[#070b14] border border-slate-800 flex items-center justify-between">
+                    <span className="text-xs text-slate-400 font-medium">Display Name:</span>
+                    <span className="text-xs font-bold text-purple-300 flex items-center gap-1.5">
+                      <span className="w-1.5 h-1.5 rounded-full bg-purple-400"></span>
+                      {formatModelName(modelNameInput.trim() || activeModel)}
+                    </span>
+                  </div>
+
+                  {/* Model Identifier input */}
+                  <div className="space-y-1.5">
+                    <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider">
+                      Model Identifier (API Slug)
+                    </label>
                     <input
                       type="text"
                       value={modelNameInput}
                       onChange={(e) => setModelNameInput(e.target.value)}
                       placeholder="e.g. anthropic/claude-sonnet-4-5 or groq/llama-3.3-70b-versatile"
                       className="w-full bg-[#070b14] border border-slate-800 focus:border-[#0278ff] focus:ring-1 focus:ring-[#0278ff] rounded-lg px-3.5 py-2.5 text-xs font-mono text-white placeholder:text-slate-600 outline-none transition-all"
+                      autoFocus
                     />
                   </div>
 
-                  <div className="flex items-center gap-2 shrink-0 justify-end">
-                    {/* 1-Token Test Button */}
+                  {/* 1-Token Test Action */}
+                  <div className="flex items-center justify-between pt-1">
+                    <span className="text-[11px] text-slate-500">Verify credentials &amp; quota before saving</span>
                     <button
                       type="button"
                       onClick={handleTestModel}
                       disabled={testingModel || !modelNameInput.trim()}
-                      className="px-3.5 py-2.5 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 flex items-center gap-1.5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
-                      title="Run a 1-token test ping with configured API key"
+                      className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 flex items-center gap-1.5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                      title="Run a 1-token test ping"
                     >
                       {testingModel ? (
                         <Loader2 className="w-3.5 h-3.5 animate-spin text-[#0278ff]" />
@@ -517,82 +616,95 @@ export default function SettingsPage() {
                       )}
                       <span>Test (1 token)</span>
                     </button>
+                  </div>
 
-                    {/* Save Button */}
-                    <button
-                      type="button"
-                      onClick={handleSaveModel}
-                      disabled={savingModel || !modelNameInput.trim()}
-                      className="px-4 py-2.5 rounded-lg text-xs font-semibold bg-[#0278ff] hover:bg-[#0062d6] text-white shadow-md disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5 cursor-pointer transition-all"
-                    >
-                      {savingModel ? (
-                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  {/* Test Result Feedback */}
+                  {modelTestResult && (
+                    <div className={`p-3 rounded-lg border text-xs flex items-center gap-2 ${
+                      modelTestResult.success 
+                        ? 'bg-emerald-950/30 border-emerald-500/30 text-emerald-300' 
+                        : 'bg-rose-950/30 border-rose-500/30 text-rose-300'
+                    }`}>
+                      {modelTestResult.success ? (
+                        <Check className="w-4 h-4 text-emerald-400 shrink-0" />
                       ) : (
-                        <Check className="w-3.5 h-3.5" />
+                        <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
                       )}
-                      <span>Save Model</span>
-                    </button>
+                      <span className="font-mono text-[11px] break-all">{modelTestResult.message}</span>
+                    </div>
+                  )}
+
+                  {/* Reference Documentation Links */}
+                  <div className="pt-2 border-t border-slate-800/60 flex items-center gap-2 text-[11px] text-slate-400 flex-wrap">
+                    <span className="font-semibold text-slate-500">Model docs:</span>
+                    <a
+                      href="https://console.groq.com/docs/models"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-[#0278ff] hover:underline flex items-center gap-0.5"
+                    >
+                      Groq Models <ExternalLink className="w-2.5 h-2.5" />
+                    </a>
+                    <span className="text-slate-700">·</span>
+                    <a
+                      href="https://docs.anthropic.com/en/docs/about-claude/models"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-[#0278ff] hover:underline flex items-center gap-0.5"
+                    >
+                      Claude Models <ExternalLink className="w-2.5 h-2.5" />
+                    </a>
+                    <span className="text-slate-700">·</span>
+                    <a
+                      href="https://platform.openai.com/docs/models"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-[#0278ff] hover:underline flex items-center gap-0.5"
+                    >
+                      OpenAI Models <ExternalLink className="w-2.5 h-2.5" />
+                    </a>
+                    <span className="text-slate-700">·</span>
+                    <a
+                      href="https://ai.google.dev/gemini-api/docs/models/gemini"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-[#0278ff] hover:underline flex items-center gap-0.5"
+                    >
+                      Gemini Models <ExternalLink className="w-2.5 h-2.5" />
+                    </a>
                   </div>
                 </div>
-              </div>
 
-              {/* Test Result Message */}
-              {modelTestResult && (
-                <div className={`p-3 rounded-lg border text-xs flex items-center gap-2 ${
-                  modelTestResult.success 
-                    ? 'bg-emerald-950/30 border-emerald-500/30 text-emerald-300' 
-                    : 'bg-rose-950/30 border-rose-500/30 text-rose-300'
-                }`}>
-                  {modelTestResult.success ? (
-                    <Check className="w-4 h-4 text-emerald-400 shrink-0" />
-                  ) : (
-                    <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
-                  )}
-                  <span className="font-mono">{modelTestResult.message}</span>
+                {/* Modal Footer */}
+                <div className="px-6 py-4 border-t border-slate-800 bg-slate-900/40 flex items-center justify-end gap-2.5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsEditModelModalOpen(false);
+                      setModelTestResult(null);
+                    }}
+                    disabled={savingModel}
+                    className="px-4 py-2 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition-colors cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSaveModel}
+                    disabled={savingModel || !modelNameInput.trim()}
+                    className="px-4 py-2 rounded-lg text-xs font-semibold bg-[#0278ff] hover:bg-[#0062d6] text-white shadow-md disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5 cursor-pointer transition-all"
+                  >
+                    {savingModel ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <Check className="w-3.5 h-3.5" />
+                    )}
+                    <span>Set as Default</span>
+                  </button>
                 </div>
-              )}
-
-              {/* Documentation Reference Links */}
-              <div className="pt-2 border-t border-slate-800/60 flex items-center gap-2 text-[11px] text-slate-400 flex-wrap">
-                <span className="font-semibold text-slate-500">Model docs:</span>
-                <a
-                  href="https://console.groq.com/docs/models"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-[#0278ff] hover:underline flex items-center gap-0.5"
-                >
-                  Groq Models <ExternalLink className="w-2.5 h-2.5" />
-                </a>
-                <span className="text-slate-700">·</span>
-                <a
-                  href="https://docs.anthropic.com/en/docs/about-claude/models"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-[#0278ff] hover:underline flex items-center gap-0.5"
-                >
-                  Claude Models <ExternalLink className="w-2.5 h-2.5" />
-                </a>
-                <span className="text-slate-700">·</span>
-                <a
-                  href="https://platform.openai.com/docs/models"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-[#0278ff] hover:underline flex items-center gap-0.5"
-                >
-                  OpenAI Models <ExternalLink className="w-2.5 h-2.5" />
-                </a>
-                <span className="text-slate-700">·</span>
-                <a
-                  href="https://ai.google.dev/gemini-api/docs/models/gemini"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-[#0278ff] hover:underline flex items-center gap-0.5"
-                >
-                  Gemini Models <ExternalLink className="w-2.5 h-2.5" />
-                </a>
               </div>
             </div>
-          </div>
+          )}
 
           {/* Section 3: Database Connection Status */}
           <div className="rounded-xl border border-slate-800 bg-[#0a0f1d] px-6 py-4 flex items-center justify-between shadow-xl">
