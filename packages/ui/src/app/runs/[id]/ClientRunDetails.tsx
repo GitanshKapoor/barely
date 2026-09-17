@@ -20,6 +20,7 @@ import {
   Cpu
 } from 'lucide-react';
 import NewRunForm from '../../../components/NewRunForm';
+import { formatModelName } from '../../../utils/models';
 
 interface RunStep {
   description: string;
@@ -196,9 +197,9 @@ export default function ClientRunDetails({ id }: { id: string }) {
                 {run.device || 'desktop'}
               </span>
               {run.model && (
-                <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-purple-500/10 text-purple-300 border border-purple-500/25 flex items-center gap-1">
+                <span className="text-[10px] font-semibold px-2.5 py-0.5 rounded-full bg-purple-500/15 text-purple-300 border border-purple-500/30 flex items-center gap-1.5 shadow-sm" title={run.model}>
                   <Cpu className="w-3 h-3 text-purple-400" />
-                  {run.model.split('/').pop() || run.model}
+                  {formatModelName(run.model)}
                 </span>
               )}
               {run.tags && run.tags.length > 0 && run.tags.map((tag: string) => (

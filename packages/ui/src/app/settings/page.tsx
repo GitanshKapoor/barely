@@ -19,6 +19,7 @@ import {
   Info,
   ExternalLink
 } from 'lucide-react';
+import { formatModelName } from '../../utils/models';
 
 interface SettingItem {
   key: string;
@@ -472,10 +473,14 @@ export default function SettingsPage() {
               </div>
               
               {/* Current Default Badge */}
-              <div className="flex items-center gap-2 bg-[#070b14] border border-slate-800 px-3 py-1.5 rounded-lg">
+              <div className="flex items-center gap-2 bg-[#070b14] border border-purple-500/30 px-3 py-1.5 rounded-lg shadow-sm">
                 <span className="text-[11px] text-slate-400 font-medium">Active Default:</span>
-                <span className="text-xs font-mono font-bold text-purple-400">
-                  {settings.find(s => s.key === 'DEFAULT_MODEL')?.masked_value || 'anthropic/claude-sonnet-4-5'}
+                <span className="text-xs font-semibold text-purple-300 flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-purple-400"></span>
+                  {formatModelName(settings.find(s => s.key === 'DEFAULT_MODEL')?.masked_value || 'anthropic/claude-sonnet-4-5')}
+                </span>
+                <span className="text-[10px] font-mono text-slate-500 hidden sm:inline">
+                  ({settings.find(s => s.key === 'DEFAULT_MODEL')?.masked_value || 'anthropic/claude-sonnet-4-5'})
                 </span>
               </div>
             </div>

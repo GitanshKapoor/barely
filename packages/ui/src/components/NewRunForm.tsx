@@ -4,6 +4,7 @@ import { useState, useEffect, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
 import { Play, Globe, Smartphone, Monitor, Tablet, X, Info, Tag, ArrowRight, Loader2, Cpu } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import { formatModelName } from '../utils/models';
 
 export interface RunConfigData {
   name?: string;
@@ -341,13 +342,15 @@ export default function NewRunForm({ initialData, triggerButton, onRunCreated }:
               <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5 text-left">
                 <Cpu className="w-3.5 h-3.5 text-purple-400" /> AI Model (Optional)
               </label>
-              <span className="text-[11px] text-slate-500 font-mono">Default: {defaultModelName.split('/').pop()}</span>
+              <span className="text-[11px] text-slate-400 font-medium">
+                Default: <span className="text-purple-300 font-semibold">{formatModelName(defaultModelName)}</span>
+              </span>
             </div>
             <input
               type="text"
               value={model}
               onChange={(e) => setModel(e.target.value)}
-              placeholder={`Leave blank for default (${defaultModelName}) or enter e.g. groq/llama-3.3-70b-versatile`}
+              placeholder={`Leave blank for default (${formatModelName(defaultModelName)}) or enter e.g. groq/llama-3.3-70b-versatile`}
               className="w-full block bg-[#070b14] border border-slate-800 rounded-lg px-4 py-2.5 text-xs font-mono text-slate-200 placeholder-slate-600 focus:outline-none focus:border-[#0278ff] focus:ring-1 focus:ring-[#0278ff]"
             />
           </div>

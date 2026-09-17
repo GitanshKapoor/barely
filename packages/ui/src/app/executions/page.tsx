@@ -14,8 +14,10 @@ import {
   Search, 
   X, 
   Tag, 
-  Monitor
+  Monitor,
+  Cpu
 } from 'lucide-react';
+import { formatModelName } from '../../utils/models';
 
 export default function ExecutionsPage() {
   const [runs, setRuns] = useState<any[]>([]);
@@ -329,7 +331,7 @@ export default function ExecutionsPage() {
           <thead className="bg-slate-900/60 border-b border-slate-800 text-[11px] uppercase tracking-wider text-slate-400 font-bold">
             <tr>
               <th className="px-6 py-4 font-semibold">Pipeline / Test Name</th>
-              <th className="px-6 py-4 font-semibold">Device</th>
+              <th className="px-6 py-4 font-semibold">Device &amp; Model</th>
               <th className="px-6 py-4 font-semibold">Run ID</th>
               <th className="px-6 py-4 font-semibold">Status</th>
               <th className="px-6 py-4 font-semibold text-right">Actions</th>
@@ -391,13 +393,17 @@ export default function ExecutionsPage() {
                     )}
                   </td>
                   <td className="px-6 py-4 align-middle">
-                    <div className="flex flex-col gap-1 items-start">
+                    <div className="flex flex-col gap-1.5 items-start">
                       <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-slate-800 text-slate-300 border border-slate-700 uppercase">
                         {run.device || 'desktop'}
                       </span>
                       {run.model && (
-                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-mono text-purple-400 bg-purple-500/10 border border-purple-500/20 truncate max-w-[130px]" title={run.model}>
-                          {run.model.split('/').pop()}
+                        <span 
+                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold text-purple-300 bg-purple-500/15 border border-purple-500/30 whitespace-nowrap shadow-sm" 
+                          title={run.model}
+                        >
+                          <Cpu className="w-2.5 h-2.5 text-purple-400 shrink-0" />
+                          {formatModelName(run.model)}
                         </span>
                       )}
                     </div>
