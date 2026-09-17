@@ -30,6 +30,7 @@ class RunRequest(BaseModel):
     device: str = "desktop"
     strict_mode: bool = False
     use_cache: bool = False
+    model: Optional[str] = None
     tags: Optional[List[str]] = []
 
 @app.on_event("startup")
@@ -54,6 +55,7 @@ def list_runs():
                 "failure_reason": r.failure_reason,
                 "strict_mode": bool(r.strict_mode),
                 "use_cache": bool(getattr(r, "use_cache", False)),
+                "model": getattr(r, "model", None) or "anthropic/claude-sonnet-4-5",
                 "tags": [t for t in r.tags.split(",") if t] if r.tags else [],
                 "created_at": r.created_at.isoformat() if r.created_at else None
             })
@@ -136,6 +138,7 @@ def get_run(run_id: str):
             "failure_reason": r.failure_reason,
             "strict_mode": bool(r.strict_mode),
             "use_cache": bool(getattr(r, "use_cache", False)),
+            "model": getattr(r, "model", None) or "anthropic/claude-sonnet-4-5",
             "tags": [t for t in r.tags.split(",") if t] if r.tags else [],
             "created_at": r.created_at.isoformat() if r.created_at else None,
             "logs": r.logs or "",
@@ -143,6 +146,11 @@ def get_run(run_id: str):
         }
     finally:
         db.close()
+
+@app.get("/api/models")
+def get_models():
+    from barely_core.settings import list_supported_models
+    return list_supported_models()
 
 @app.post("/api/runs/{run_id}/cancel")
 def cancel_run(run_id: str):
@@ -178,6 +186,7 @@ def trigger_run(req: RunRequest):
             device=req.device, 
             strict_mode=req.strict_mode,
             use_cache=req.use_cache,
+            model=req.model.strip() if req.model and req.model.strip() else None,
             tags=tag_str,
             status="pending"
         )
@@ -316,5 +325,45 @@ def test_key(req: TestKeyRequest):
         return {
             "success": False,
             "error": f"Verification failed: {err_str[:250]}"
+        }
+
+class TestModelRequest(BaseModel):
+    model: str
+    api_key: Optional[str] = None
+
+@app.post("/api/settings/test-model")
+def test_model(req: TestModelRequest):
+    import litellm
+    from barely_core.settings import resolve_model_api_key
+    
+    target_model = req.model.strip() if req.model else ""
+    if not target_model:
+        raise HTTPException(status_code=400, detail="Model name cannot be empty")
+        
+    active_key = req.api_key.strip() if req.api_key and req.api_key.strip() else resolve_model_api_key(target_model)
+    
+    try:
+        kwargs = {
+            "model": target_model,
+            "messages": [{"role": "user", "content": "ping"}],
+            "max_tokens": 1
+        }
+        if active_key:
+            kwargs["api_key"] = active_key
+            
+        litellm.completion(**kwargs)
+        return {
+            "success": True,
+            "message": f"Verified '{target_model}' successfully (1-token test passed)!"
+        }
+    except Exception as e:
+        err_str = str(e)
+        if active_key:
+            for part in active_key.split("-"):
+                if len(part) > 6 and part in err_str:
+                    err_str = err_str.replace(part, "••••")
+        return {
+            "success": False,
+            "error": f"Test failed for '{target_model}': {err_str[:250]}"
         }
 

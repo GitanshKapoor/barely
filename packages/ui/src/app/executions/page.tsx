@@ -391,9 +391,16 @@ export default function ExecutionsPage() {
                     )}
                   </td>
                   <td className="px-6 py-4 align-middle">
-                    <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-slate-800 text-slate-300 border border-slate-700 uppercase">
-                      {run.device || 'desktop'}
-                    </span>
+                    <div className="flex flex-col gap-1 items-start">
+                      <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-slate-800 text-slate-300 border border-slate-700 uppercase">
+                        {run.device || 'desktop'}
+                      </span>
+                      {run.model && (
+                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-mono text-purple-400 bg-purple-500/10 border border-purple-500/20 truncate max-w-[130px]" title={run.model}>
+                          {run.model.split('/').pop()}
+                        </span>
+                      )}
+                    </div>
                   </td>
                   <td className="px-6 py-4 font-mono text-xs text-slate-400 align-middle">{run.id}</td>
                   <td className="px-6 py-4 whitespace-nowrap align-middle">

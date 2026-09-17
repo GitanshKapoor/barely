@@ -28,6 +28,7 @@ class RunRecord(Base):
     logs = Column(Text, nullable=True)
     strict_mode = Column(Boolean, default=False)
     use_cache = Column(Boolean, default=False)
+    model = Column(String, nullable=True)
     tags = Column(String, nullable=True)
     
     steps = relationship("RunStep", back_populates="run", cascade="all, delete-orphan")
@@ -61,6 +62,7 @@ def init_db():
     try:
         with engine.connect() as conn:
             conn.execute(text("ALTER TABLE runs ADD COLUMN IF NOT EXISTS use_cache BOOLEAN DEFAULT FALSE;"))
+            conn.execute(text("ALTER TABLE runs ADD COLUMN IF NOT EXISTS model VARCHAR(255);"))
             conn.commit()
     except Exception:
         pass

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
-import { Play, Globe, Smartphone, Monitor, Tablet, X, Info, Tag, ArrowRight, Loader2 } from 'lucide-react';
+import { Play, Globe, Smartphone, Monitor, Tablet, X, Info, Tag, ArrowRight, Loader2, Cpu } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
 export interface RunConfigData {
@@ -12,6 +12,7 @@ export interface RunConfigData {
   device?: string;
   strictMode?: boolean;
   useCache?: boolean;
+  model?: string;
   tags?: string[];
 }
 
@@ -34,12 +35,30 @@ export default function NewRunForm({ initialData, triggerButton, onRunCreated }:
   const [device, setDevice] = useState(initialData?.device || 'desktop');
   const [strictMode, setStrictMode] = useState(Boolean(initialData?.strictMode));
   const [useCache, setUseCache] = useState(Boolean(initialData?.useCache));
+  const [model, setModel] = useState(initialData?.model || '');
+  const [defaultModelName, setDefaultModelName] = useState<string>('anthropic/claude-sonnet-4-5');
   const [autoNavigate, setAutoNavigate] = useState(false);
   const [tags, setTags] = useState<string[]>(initialData?.tags || []);
   const [tagInput, setTagInput] = useState('');
   const [toast, setToast] = useState<{ id: string; name: string } | null>(null);
 
   const router = useRouter();
+
+  useEffect(() => {
+    const fetchDefaultModel = async () => {
+      try {
+        const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+        const res = await fetch(`${apiUrl}/api/models`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.default_model) setDefaultModelName(data.default_model);
+        }
+      } catch {
+        // silent fallback
+      }
+    };
+    fetchDefaultModel();
+  }, []);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -83,6 +102,7 @@ export default function NewRunForm({ initialData, triggerButton, onRunCreated }:
       setDevice(initialData.device || 'desktop');
       setStrictMode(Boolean(initialData.strictMode));
       setUseCache(Boolean(initialData.useCache));
+      setModel(initialData.model || '');
       setTags(initialData.tags || []);
       setTagInput('');
     } else {
@@ -92,6 +112,7 @@ export default function NewRunForm({ initialData, triggerButton, onRunCreated }:
       setDevice('desktop');
       setStrictMode(false);
       setUseCache(false);
+      setModel('');
       setTags([]);
       setTagInput('');
     }
@@ -113,6 +134,7 @@ export default function NewRunForm({ initialData, triggerButton, onRunCreated }:
           device,
           strict_mode: strictMode,
           use_cache: useCache,
+          model: model.trim() || undefined,
           tags
         })
       });
@@ -135,7 +157,7 @@ export default function NewRunForm({ initialData, triggerButton, onRunCreated }:
           setIsOpen(false);
           const currentTestName = name || 'Automated E2E Test';
           if (!initialData) {
-            setName(''); setUrl('https://'); setGoalText(''); setDevice('desktop'); setStrictMode(false); setUseCache(false); setTags([]); setTagInput('');
+            setName(''); setUrl('https://'); setGoalText(''); setDevice('desktop'); setStrictMode(false); setUseCache(false); setModel(''); setTags([]); setTagInput('');
           }
           if (createdJobId) {
             setToast({
@@ -311,6 +333,23 @@ export default function NewRunForm({ initialData, triggerButton, onRunCreated }:
                 </button>
               ))}
             </div>
+          </div>
+
+          {/* AI Model (Optional) */}
+          <div className="space-y-1.5 text-left pt-2 border-t border-slate-800/80">
+            <div className="flex items-center justify-between">
+              <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5 text-left">
+                <Cpu className="w-3.5 h-3.5 text-purple-400" /> AI Model (Optional)
+              </label>
+              <span className="text-[11px] text-slate-500 font-mono">Default: {defaultModelName.split('/').pop()}</span>
+            </div>
+            <input
+              type="text"
+              value={model}
+              onChange={(e) => setModel(e.target.value)}
+              placeholder={`Leave blank for default (${defaultModelName}) or enter e.g. groq/llama-3.3-70b-versatile`}
+              className="w-full block bg-[#070b14] border border-slate-800 rounded-lg px-4 py-2.5 text-xs font-mono text-slate-200 placeholder-slate-600 focus:outline-none focus:border-[#0278ff] focus:ring-1 focus:ring-[#0278ff]"
+            />
           </div>
 
           {/* Strict Mode Configuration */}

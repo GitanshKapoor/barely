@@ -65,10 +65,35 @@ def test_db_url_masking():
         assert "Complex_P@ss!" not in masked
         print(f"  ✓ Masked DB URL: {masked}")
 
+def test_models_catalog():
+    print("\nTesting multi-provider models catalog and documentation registry...")
+    from barely_core.settings import list_supported_models, KNOWN_MODELS, PROVIDER_DOCS
+    
+    catalog = list_supported_models()
+    assert "models" in catalog
+    assert "providers" in catalog
+    assert "default_model" in catalog
+    
+    # Verify all 4 providers are documented
+    for provider in ["anthropic", "groq", "openai", "gemini"]:
+        assert provider in catalog["providers"], f"Missing documentation for provider {provider}"
+        doc = catalog["providers"][provider]
+        assert "docs_url" in doc and doc["docs_url"].startswith("https://"), f"Invalid doc URL for {provider}"
+        print(f"  ✓ Provider docs registered: {doc['name']} -> {doc['docs_url']}")
+        
+    # Verify models catalog contents
+    assert len(catalog["models"]) >= 8, f"Expected at least 8 models in catalog, found {len(catalog['models'])}"
+    groq_models = [m for m in catalog["models"] if m["provider"] == "groq"]
+    anthropic_models = [m for m in catalog["models"] if m["provider"] == "anthropic"]
+    assert len(groq_models) >= 2, "Expected Groq models in catalog"
+    assert len(anthropic_models) >= 2, "Expected Anthropic models in catalog"
+    print(f"  ✓ Models catalog verified: {len(catalog['models'])} models across {len(catalog['providers'])} providers")
+
 if __name__ == "__main__":
     print("=== RUNNING BARELY CRYPTO & SETTINGS SECURITY TESTS ===")
     test_encryption_roundtrip()
     test_randomized_ciphertext()
     test_secret_masking()
     test_db_url_masking()
+    test_models_catalog()
     print("\n🎉 ALL TESTS PASSED SUCCESSFULLY!")

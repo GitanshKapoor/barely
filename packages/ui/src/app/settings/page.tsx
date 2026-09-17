@@ -17,7 +17,8 @@ import {
   Server,
   Lock,
   Zap,
-  Info
+  Info,
+  ExternalLink
 } from 'lucide-react';
 
 interface SettingItem {
@@ -78,6 +79,12 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
+  // Model configuration states
+  const [modelNameInput, setModelNameInput] = useState<string>('');
+  const [testingModel, setTestingModel] = useState<boolean>(false);
+  const [savingModel, setSavingModel] = useState<boolean>(false);
+  const [modelTestResult, setModelTestResult] = useState<{ success: boolean; message: string } | null>(null);
+
   // Form input states
   const [inputValues, setInputValues] = useState<Record<string, string>>({});
   const [showPlaintext, setShowPlaintext] = useState<Record<string, boolean>>({});
@@ -101,6 +108,11 @@ export default function SettingsPage() {
       const data: SettingsResponse = await res.json();
       setSettings(data.settings);
       setDbStatus(data.database);
+
+      const defaultModelSetting = data.settings.find(s => s.key === 'DEFAULT_MODEL');
+      if (defaultModelSetting && defaultModelSetting.masked_value) {
+        setModelNameInput(prev => prev ? prev : defaultModelSetting.masked_value);
+      }
     } catch (err: any) {
       showToast(`Failed to load settings: ${err.message}`, 'error');
     } finally {
@@ -108,6 +120,62 @@ export default function SettingsPage() {
       setRefreshing(false);
     }
   }, [apiUrl]);
+
+  const handleTestModel = async () => {
+    const target = modelNameInput.trim();
+    if (!target) {
+      showToast('Please enter a model name to test', 'error');
+      return;
+    }
+    setTestingModel(true);
+    setModelTestResult(null);
+    try {
+      const res = await fetch(`${apiUrl}/api/settings/test-model`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model: target })
+      });
+      const data = await res.json();
+      if (data.success) {
+        setModelTestResult({ success: true, message: data.message });
+        showToast(data.message, 'success');
+      } else {
+        setModelTestResult({ success: false, message: data.error || 'Model test failed' });
+        showToast(data.error || 'Model test failed', 'error');
+      }
+    } catch (err: any) {
+      setModelTestResult({ success: false, message: err.message });
+      showToast(`Test error: ${err.message}`, 'error');
+    } finally {
+      setTestingModel(false);
+    }
+  };
+
+  const handleSaveModel = async () => {
+    const target = modelNameInput.trim();
+    if (!target) {
+      showToast('Please enter a model name', 'error');
+      return;
+    }
+    setSavingModel(true);
+    try {
+      const res = await fetch(`${apiUrl}/api/settings`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ key: 'DEFAULT_MODEL', value: target })
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.detail || 'Failed to save model');
+      }
+      showToast(`Default AI model updated to '${target}'`, 'success');
+      await fetchSettings();
+    } catch (err: any) {
+      showToast(`Error saving model: ${err.message}`, 'error');
+    } finally {
+      setSavingModel(false);
+    }
+  };
 
   useEffect(() => {
     fetchSettings();
@@ -200,7 +268,6 @@ export default function SettingsPage() {
   };
 
   const apiKeys = settings.filter(s => s.category === 'api_keys');
-  const modelSettings = settings.filter(s => s.category === 'model');
   const defaultSettings = settings.filter(s => s.category === 'defaults');
 
   return (
@@ -398,73 +465,134 @@ export default function SettingsPage() {
             </div>
           </div>
 
-          {/* Section 2: AI Model Selection */}
+          {/* Section 2: AI Agent Model Configuration */}
           <div className="rounded-xl border border-slate-800 bg-[#0a0f1d] shadow-xl overflow-hidden">
-            <div className="px-6 py-4 border-b border-slate-800 flex items-center gap-2.5">
-              <div className="w-7 h-7 rounded-lg bg-purple-500/10 text-purple-400 flex items-center justify-center border border-purple-500/20">
-                <Cpu className="w-4 h-4" />
+            <div className="px-6 py-4 border-b border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-7 h-7 rounded-lg bg-purple-500/10 text-purple-400 flex items-center justify-center border border-purple-500/20">
+                  <Cpu className="w-4 h-4" />
+                </div>
+                <div>
+                  <h2 className="text-sm font-bold text-white">AI Agent Model</h2>
+                  <p className="text-xs text-slate-400">Specify any model name and verify connectivity with a 1-token test</p>
+                </div>
               </div>
-              <div>
-                <h2 className="text-sm font-bold text-white">AI Agent Model</h2>
-                <p className="text-xs text-slate-400">Select the default LLM architecture for agent reasoning</p>
+              
+              {/* Current Default Badge */}
+              <div className="flex items-center gap-2 bg-[#070b14] border border-slate-800 px-3 py-1.5 rounded-lg">
+                <span className="text-[11px] text-slate-400 font-medium">Active Default:</span>
+                <span className="text-xs font-mono font-bold text-purple-400">
+                  {settings.find(s => s.key === 'DEFAULT_MODEL')?.masked_value || 'anthropic/claude-sonnet-4-5'}
+                </span>
               </div>
             </div>
 
             <div className="p-6 space-y-4">
-              {modelSettings.map(item => {
-                const currentVal = inputValues[item.key] !== undefined ? inputValues[item.key] : (item.masked_value || 'anthropic/claude-sonnet-4-5');
-                const isTyping = inputValues[item.key] !== undefined && inputValues[item.key] !== item.masked_value;
-                const isSaving = savingKey === item.key;
-
-                return (
-                  <div key={item.key} className="space-y-3">
-                    <div className="flex flex-wrap gap-2">
-                      {[
-                        { label: 'Claude 3.5 Sonnet (Recommended)', val: 'anthropic/claude-sonnet-4-5' },
-                        { label: 'GPT-4o (OpenAI)', val: 'openai/gpt-4o' },
-                        { label: 'Llama 3.3 70B (Groq)', val: 'groq/llama-3.3-70b-versatile' },
-                        { label: 'Gemini 1.5 Pro', val: 'gemini/gemini-1.5-pro' }
-                      ].map(preset => (
-                        <button
-                          key={preset.val}
-                          type="button"
-                          onClick={() => handleInputChange(item.key, preset.val)}
-                          className={`px-3 py-1.5 rounded-lg text-xs font-mono font-semibold border transition-all ${
-                            currentVal === preset.val
-                              ? 'bg-purple-500/20 border-purple-500/50 text-purple-200'
-                              : 'bg-[#070b14] border-slate-800 text-slate-400 hover:border-slate-700'
-                          }`}
-                        >
-                          {preset.label}
-                        </button>
-                      ))}
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="text"
-                        value={currentVal}
-                        onChange={(e) => handleInputChange(item.key, e.target.value)}
-                        placeholder="e.g. anthropic/claude-sonnet-4-5"
-                        className="flex-1 bg-[#070b14] border border-slate-800 focus:border-[#0278ff] focus:ring-1 focus:ring-[#0278ff] rounded-lg px-3.5 py-2 text-xs font-mono text-white placeholder:text-slate-600 outline-none"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => saveSetting(item.key)}
-                        disabled={!isTyping || isSaving}
-                        className={`px-3 py-2 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all ${
-                          isTyping
-                            ? 'bg-[#0278ff] hover:bg-[#0062d6] text-white shadow-md cursor-pointer'
-                            : 'bg-slate-800 text-slate-500 border border-slate-800 cursor-not-allowed'
-                        }`}
-                      >
-                        {isSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
-                        <span>Save Model</span>
-                      </button>
-                    </div>
+              <div className="space-y-1.5">
+                <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider">
+                  Model Identifier
+                </label>
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                  <div className="relative flex-1">
+                    <input
+                      type="text"
+                      value={modelNameInput}
+                      onChange={(e) => setModelNameInput(e.target.value)}
+                      placeholder="e.g. anthropic/claude-sonnet-4-5 or groq/llama-3.3-70b-versatile"
+                      className="w-full bg-[#070b14] border border-slate-800 focus:border-[#0278ff] focus:ring-1 focus:ring-[#0278ff] rounded-lg px-3.5 py-2.5 text-xs font-mono text-white placeholder:text-slate-600 outline-none transition-all"
+                    />
                   </div>
-                );
-              })}
+
+                  <div className="flex items-center gap-2 shrink-0 justify-end">
+                    {/* 1-Token Test Button */}
+                    <button
+                      type="button"
+                      onClick={handleTestModel}
+                      disabled={testingModel || !modelNameInput.trim()}
+                      className="px-3.5 py-2.5 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 flex items-center gap-1.5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                      title="Run a 1-token test ping with configured API key"
+                    >
+                      {testingModel ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin text-[#0278ff]" />
+                      ) : (
+                        <Zap className="w-3.5 h-3.5 text-amber-400" />
+                      )}
+                      <span>Test (1 token)</span>
+                    </button>
+
+                    {/* Save Button */}
+                    <button
+                      type="button"
+                      onClick={handleSaveModel}
+                      disabled={savingModel || !modelNameInput.trim()}
+                      className="px-4 py-2.5 rounded-lg text-xs font-semibold bg-[#0278ff] hover:bg-[#0062d6] text-white shadow-md disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5 cursor-pointer transition-all"
+                    >
+                      {savingModel ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <Check className="w-3.5 h-3.5" />
+                      )}
+                      <span>Save Model</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Test Result Message */}
+              {modelTestResult && (
+                <div className={`p-3 rounded-lg border text-xs flex items-center gap-2 ${
+                  modelTestResult.success 
+                    ? 'bg-emerald-950/30 border-emerald-500/30 text-emerald-300' 
+                    : 'bg-rose-950/30 border-rose-500/30 text-rose-300'
+                }`}>
+                  {modelTestResult.success ? (
+                    <Check className="w-4 h-4 text-emerald-400 shrink-0" />
+                  ) : (
+                    <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+                  )}
+                  <span className="font-mono">{modelTestResult.message}</span>
+                </div>
+              )}
+
+              {/* Documentation Reference Links */}
+              <div className="pt-2 border-t border-slate-800/60 flex items-center gap-2 text-[11px] text-slate-400 flex-wrap">
+                <span className="font-semibold text-slate-500">Model docs:</span>
+                <a
+                  href="https://console.groq.com/docs/models"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-[#0278ff] hover:underline flex items-center gap-0.5"
+                >
+                  Groq Models <ExternalLink className="w-2.5 h-2.5" />
+                </a>
+                <span className="text-slate-700">·</span>
+                <a
+                  href="https://docs.anthropic.com/en/docs/about-claude/models"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-[#0278ff] hover:underline flex items-center gap-0.5"
+                >
+                  Claude Models <ExternalLink className="w-2.5 h-2.5" />
+                </a>
+                <span className="text-slate-700">·</span>
+                <a
+                  href="https://platform.openai.com/docs/models"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-[#0278ff] hover:underline flex items-center gap-0.5"
+                >
+                  OpenAI Models <ExternalLink className="w-2.5 h-2.5" />
+                </a>
+                <span className="text-slate-700">·</span>
+                <a
+                  href="https://ai.google.dev/gemini-api/docs/models/gemini"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-[#0278ff] hover:underline flex items-center gap-0.5"
+                >
+                  Gemini Models <ExternalLink className="w-2.5 h-2.5" />
+                </a>
+              </div>
             </div>
           </div>
 

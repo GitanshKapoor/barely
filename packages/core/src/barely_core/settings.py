@@ -161,3 +161,133 @@ def resolve_model_api_key(model: str) -> Optional[str]:
     elif m.startswith("gemini/") or "gemini" in m:
         return get_setting("GEMINI_API_KEY")
     return None
+
+PROVIDER_DOCS = {
+    "anthropic": {
+        "name": "Anthropic Claude",
+        "docs_url": "https://docs.anthropic.com/en/docs/about-claude/models",
+        "description": "State-of-the-art visual acuity, precision DOM understanding, and autonomous step-by-step reasoning"
+    },
+    "groq": {
+        "name": "Groq",
+        "docs_url": "https://console.groq.com/docs/models",
+        "description": "Ultra-low latency LPU inference engine for open-weights models (Meta Llama 3.3, Mixtral)"
+    },
+    "openai": {
+        "name": "OpenAI",
+        "docs_url": "https://platform.openai.com/docs/models",
+        "description": "Premier multimodal models (GPT-4o, GPT-4o-mini) with high visual comprehension and tool use"
+    },
+    "gemini": {
+        "name": "Google Gemini",
+        "docs_url": "https://ai.google.dev/gemini-api/docs/models/gemini",
+        "description": "Massive context window with rapid multimodal DOM inspection and full-page visual reasoning"
+    }
+}
+
+KNOWN_MODELS = [
+    # Anthropic Claude
+    {
+        "id": "anthropic/claude-sonnet-4-5",
+        "name": "Claude 3.5 Sonnet",
+        "provider": "anthropic",
+        "supports_vision": True,
+        "recommended": True,
+        "context_window": "200k",
+        "description": "Recommended for end-to-end web QA. Superior spatial awareness, robust DOM locators, and resilient error recovery."
+    },
+    {
+        "id": "anthropic/claude-3-5-haiku-20241022",
+        "name": "Claude 3.5 Haiku",
+        "provider": "anthropic",
+        "supports_vision": True,
+        "recommended": False,
+        "context_window": "200k",
+        "description": "Fast, cost-effective vision model for quick smoke tests and straightforward checkout flows."
+    },
+    {
+        "id": "anthropic/claude-3-opus-20240229",
+        "name": "Claude 3 Opus",
+        "provider": "anthropic",
+        "supports_vision": True,
+        "recommended": False,
+        "context_window": "200k",
+        "description": "Deep analytical model for complex enterprise multi-app workflows and non-trivial assertions."
+    },
+    # Groq LPUs
+    {
+        "id": "groq/llama-3.3-70b-versatile",
+        "name": "Meta Llama 3.3 70B",
+        "provider": "groq",
+        "supports_vision": False,
+        "recommended": True,
+        "context_window": "128k",
+        "description": "Blazing fast text-based DOM reasoning (~250 tokens/sec) on Groq LPUs for rapid regression execution."
+    },
+    {
+        "id": "groq/llama-3.1-8b-instant",
+        "name": "Meta Llama 3.1 8B",
+        "provider": "groq",
+        "supports_vision": False,
+        "recommended": False,
+        "context_window": "128k",
+        "description": "Ultra-fast ~800 tokens/sec for rapid navigation and high-frequency health pings."
+    },
+    {
+        "id": "groq/mixtral-8x7b-32768",
+        "name": "Mixtral 8x7B MoE",
+        "provider": "groq",
+        "supports_vision": False,
+        "recommended": False,
+        "context_window": "32k",
+        "description": "Mixture of Experts architecture on Groq for efficient natural language instruction parsing."
+    },
+    # OpenAI
+    {
+        "id": "openai/gpt-4o",
+        "name": "GPT-4o (Omni)",
+        "provider": "openai",
+        "supports_vision": True,
+        "recommended": True,
+        "context_window": "128k",
+        "description": "Flagship OpenAI multimodal intelligence with strong visual element grounding and prompt adherence."
+    },
+    {
+        "id": "openai/gpt-4o-mini",
+        "name": "GPT-4o Mini",
+        "provider": "openai",
+        "supports_vision": True,
+        "recommended": False,
+        "context_window": "128k",
+        "description": "Cost-effective multimodal model for high-volume automated testing pipelines."
+    },
+    # Google Gemini
+    {
+        "id": "gemini/gemini-1.5-pro",
+        "name": "Gemini 1.5 Pro",
+        "provider": "gemini",
+        "supports_vision": True,
+        "recommended": True,
+        "context_window": "2M",
+        "description": "Industry-leading 2 million token context window for massive single-page applications and long audit logs."
+    },
+    {
+        "id": "gemini/gemini-1.5-flash",
+        "name": "Gemini 1.5 Flash",
+        "provider": "gemini",
+        "supports_vision": True,
+        "recommended": False,
+        "context_window": "1M",
+        "description": "Lightweight, high-speed multimodal model engineered for low-cost high-frequency test suites."
+    }
+]
+
+def list_supported_models() -> Dict[str, Any]:
+    """Returns the model catalog, provider documentation links, and current active default model."""
+    default_model = get_setting("DEFAULT_MODEL") or "anthropic/claude-sonnet-4-5"
+    return {
+        "models": KNOWN_MODELS,
+        "providers": PROVIDER_DOCS,
+        "default_model": default_model
+    }
+

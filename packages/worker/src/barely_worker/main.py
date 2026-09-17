@@ -6,12 +6,16 @@ from barely_core.agent.loop import AgentLoop
 from barely_core.db import SessionLocal, RunRecord, init_db
 from barely_core.parser.goal_parser import Goal
 
+from typing import Optional
+from barely_core.settings import get_setting
+
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s")
 logger = logging.getLogger("barely_worker")
 
-def process_job(run_id: str, test_name: str, goal_text: str, start_url: str, device: str, strict_mode: bool = False, use_cache: bool = False):
+def process_job(run_id: str, test_name: str, goal_text: str, start_url: str, device: str, strict_mode: bool = False, use_cache: bool = False, model: Optional[str] = None):
     try:
-        logger.info(f"Picked up job: {run_id} ({test_name}) targeting {start_url} (strict_mode={strict_mode}, use_cache={use_cache})")
+        active_model = model or get_setting("DEFAULT_MODEL") or "anthropic/claude-sonnet-4-5"
+        logger.info(f"Picked up job: {run_id} ({test_name}) targeting {start_url} (model={active_model}, strict_mode={strict_mode}, use_cache={use_cache})")
         
         parsed_goal = Goal(
             name=test_name or "Web Test",
@@ -22,7 +26,7 @@ def process_job(run_id: str, test_name: str, goal_text: str, start_url: str, dev
         is_headless = os.getenv("HEADLESS", "true").lower() == "true"
         
         engine = BrowserEngine(headless=is_headless, device=device, strict_mode=strict_mode)
-        agent = AgentLoop(engine=engine, model="anthropic/claude-sonnet-4-5", run_id=run_id, use_cache=use_cache)
+        agent = AgentLoop(engine=engine, model=active_model, run_id=run_id, use_cache=use_cache)
         
         logger.info(f"Executing goal: {run_id}")
         agent.run(parsed_goal, start_url=start_url)
@@ -65,12 +69,13 @@ def start_worker():
                 test_name = job.name or "Automated E2E Test"
                 goal_text = job.goal
                 start_url = job.start_url
-                device = job.device
+                device = job.device or "desktop"
                 strict_mode = bool(getattr(job, "strict_mode", False))
                 use_cache = bool(getattr(job, "use_cache", False))
+                model = getattr(job, "model", None)
                 db.close()
                 
-                process_job(run_id, test_name, goal_text, start_url, device, strict_mode, use_cache)
+                process_job(run_id, test_name, goal_text, start_url, device, strict_mode, use_cache, model)
             else:
                 db.close()
                 time.sleep(2)

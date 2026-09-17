@@ -16,7 +16,8 @@ import {
   ExternalLink,
   RotateCw,
   RotateCcw,
-  Tag
+  Tag,
+  Cpu
 } from 'lucide-react';
 import NewRunForm from '../../../components/NewRunForm';
 
@@ -36,6 +37,7 @@ interface RunData {
   success: boolean | null;
   failure_reason: string | null;
   strict_mode?: boolean;
+  model?: string;
   tags?: string[];
   created_at: string | null;
   logs: string;
@@ -193,6 +195,12 @@ export default function ClientRunDetails({ id }: { id: string }) {
               <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700 uppercase">
                 {run.device || 'desktop'}
               </span>
+              {run.model && (
+                <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-purple-500/10 text-purple-300 border border-purple-500/25 flex items-center gap-1">
+                  <Cpu className="w-3 h-3 text-purple-400" />
+                  {run.model.split('/').pop() || run.model}
+                </span>
+              )}
               {run.tags && run.tags.length > 0 && run.tags.map((tag: string) => (
                 <span key={tag} className="text-[11px] font-medium font-mono px-2 py-0.5 rounded-full bg-[#0278ff]/10 text-[#0278ff] border border-[#0278ff]/30 flex items-center gap-1">
                   <Tag className="w-3 h-3 text-[#0278ff]" /> #{tag}
@@ -220,6 +228,7 @@ export default function ClientRunDetails({ id }: { id: string }) {
               device: run.device || 'desktop',
               strictMode: Boolean(run.strict_mode),
               useCache: false,
+              model: run.model,
               tags: run.tags || []
             }}
             onRunCreated={() => fetchRun()}
