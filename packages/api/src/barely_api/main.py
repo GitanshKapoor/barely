@@ -219,48 +219,25 @@ class TestKeyRequest(BaseModel):
 @app.get("/api/settings")
 def get_settings():
     from barely_core.settings import list_settings_status
-    from barely_core.db import engine, DATABASE_URL
-    from barely_core.security.crypto import mask_database_url
-    import time
+    from barely_core.db import engine
     from sqlalchemy import text
 
     settings_list = list_settings_status()
 
-    # Test DB status and latency
-    db_status = {
-        "url_masked": mask_database_url(DATABASE_URL),
-        "is_connected": False,
-        "latency_ms": None,
-        "provider": "Unknown",
-        "version": None,
-        "ssl_enabled": "sslmode=require" in DATABASE_URL or "sslmode=verify" in DATABASE_URL
-    }
-
+    # Minimal connection status check — zero leakage of credentials, URLs, or hostnames
+    is_connected = False
     try:
-        start_t = time.time()
         with engine.connect() as conn:
-            res = conn.execute(text("SELECT version();")).scalar()
-            db_status["latency_ms"] = round((time.time() - start_t) * 1000, 1)
-            db_status["is_connected"] = True
-            db_status["version"] = res.split()[0] + " " + res.split()[1] if res else "PostgreSQL"
-            
-            low_url = DATABASE_URL.lower()
-            if "rds.amazonaws.com" in low_url:
-                db_status["provider"] = "AWS RDS / Aurora"
-            elif "supabase.com" in low_url or "supabase.co" in low_url:
-                db_status["provider"] = "Supabase"
-            elif "neon.tech" in low_url:
-                db_status["provider"] = "Neon Serverless"
-            elif "barely-db" in low_url or "localhost" in low_url or "127.0.0.1" in low_url:
-                db_status["provider"] = "Local Docker Container"
-            else:
-                db_status["provider"] = "Cloud PostgreSQL"
-    except Exception as e:
-        db_status["error"] = str(e)
+            conn.execute(text("SELECT 1;"))
+            is_connected = True
+    except Exception:
+        is_connected = False
 
     return {
         "settings": settings_list,
-        "database": db_status
+        "database": {
+            "is_connected": is_connected
+        }
     }
 
 @app.post("/api/settings")

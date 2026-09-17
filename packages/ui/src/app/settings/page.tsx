@@ -14,7 +14,6 @@ import {
   ShieldCheck, 
   Trash2, 
   RefreshCw, 
-  Server,
   Lock,
   Zap,
   Info,
@@ -34,13 +33,7 @@ interface SettingItem {
 }
 
 interface DatabaseStatus {
-  url_masked: string;
   is_connected: boolean;
-  latency_ms: number | null;
-  provider: string;
-  version: string | null;
-  ssl_enabled: boolean;
-  error?: string;
 }
 
 interface SettingsResponse {
@@ -596,80 +589,30 @@ export default function SettingsPage() {
             </div>
           </div>
 
-          {/* Section 3: Cloud Database & Connection Manager */}
-          <div className="rounded-xl border border-slate-800 bg-[#0a0f1d] shadow-xl overflow-hidden">
-            <div className="px-6 py-4 border-b border-slate-800 flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <div className="w-7 h-7 rounded-lg bg-emerald-500/10 text-emerald-400 flex items-center justify-center border border-emerald-500/20">
-                  <Database className="w-4 h-4" />
-                </div>
-                <div>
-                  <h2 className="text-sm font-bold text-white">Database & Managed Cloud Connection</h2>
-                  <p className="text-xs text-slate-400">PostgreSQL state storage, telemetry, and encrypted secrets</p>
-                </div>
+          {/* Section 3: Database Connection Status */}
+          <div className="rounded-xl border border-slate-800 bg-[#0a0f1d] px-6 py-4 flex items-center justify-between shadow-xl">
+            <div className="flex items-center gap-2.5">
+              <div className="w-7 h-7 rounded-lg bg-emerald-500/10 text-emerald-400 flex items-center justify-center border border-emerald-500/20">
+                <Database className="w-4 h-4" />
               </div>
-              <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
-                PostgreSQL 15+
-              </span>
+              <div>
+                <h2 className="text-sm font-bold text-white">Database Connection</h2>
+                <p className="text-xs text-slate-400">PostgreSQL state storage & telemetry</p>
+              </div>
             </div>
 
-            <div className="p-6 space-y-5">
-              {/* Active Connection Card */}
-              {dbStatus && (
-                <div className="p-4 rounded-xl bg-[#070b14] border border-slate-800 space-y-3">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div className="flex items-center gap-2">
-                      <span className={`w-2.5 h-2.5 rounded-full ${dbStatus.is_connected ? 'bg-emerald-400 animate-pulse' : 'bg-rose-400'}`}></span>
-                      <span className="text-xs font-bold text-white">
-                        {dbStatus.is_connected ? 'Active Connection' : 'Connection Failed'}
-                      </span>
-                      <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700">
-                        {dbStatus.provider}
-                      </span>
-                    </div>
-
-                    <div className="flex items-center gap-2 text-[11px] font-mono text-slate-400">
-                      {dbStatus.latency_ms !== null && (
-                        <span className="text-emerald-400 font-bold">Latency: {dbStatus.latency_ms}ms</span>
-                      )}
-                      <span className={`px-2 py-0.5 rounded text-[10px] border ${
-                        dbStatus.ssl_enabled 
-                          ? 'bg-blue-500/10 text-blue-400 border-blue-500/25' 
-                          : 'bg-slate-800 text-slate-400 border-slate-700'
-                      }`}>
-                        {dbStatus.ssl_enabled ? 'SSL Mode: Active' : 'SSL Mode: Standard'}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-mono font-semibold uppercase text-slate-500">Current Connection URI (Password Masked)</label>
-                    <div className="p-2.5 rounded-lg bg-slate-950 border border-slate-800/80 font-mono text-xs text-slate-300 break-all select-all">
-                      {dbStatus.url_masked}
-                    </div>
-                  </div>
-                </div>
+            <div className="flex items-center gap-2">
+              {dbStatus?.is_connected ? (
+                <span className="px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                  Connected
+                </span>
+              ) : (
+                <span className="px-3 py-1 rounded-full text-xs font-semibold bg-rose-500/15 text-rose-400 border border-rose-500/30 flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-rose-400" />
+                  Disconnected
+                </span>
               )}
-
-              {/* Infrastructure Security Notice */}
-              <div className="p-4 rounded-xl bg-[#0d1322] border border-slate-800/90 space-y-2">
-                <div className="flex items-center gap-2">
-                  <Server className="w-4 h-4 text-blue-400" />
-                  <h3 className="text-xs font-bold text-white uppercase tracking-wider">
-                    Infrastructure & Helm Managed Connection
-                  </h3>
-                </div>
-                <p className="text-[11px] text-slate-400 leading-relaxed">
-                  To strictly prevent credential leakage, database connections cannot be configured or modified through the web interface. 
-                  In Kubernetes production, the connection string is injected securely via Helm <code className="text-sky-300 font-mono">values.yaml</code> or Kubernetes Secrets:
-                </p>
-                <div className="p-2.5 rounded-lg bg-[#070b14] border border-slate-800 text-[11px] font-mono text-slate-300">
-                  <span className="text-slate-500"># deploy/helm/barely/values.yaml</span><br />
-                  <span className="text-emerald-400">externalDatabase:</span><br />
-                  &nbsp;&nbsp;<span className="text-emerald-400">enabled:</span> <span className="text-white">true</span><br />
-                  &nbsp;&nbsp;<span className="text-emerald-400">url:</span> <span className="text-amber-300">&quot;postgresql://barelyadmin:pass@your-rds.amazonaws.com:5432/barelydb?sslmode=require&quot;</span>
-                </div>
-              </div>
             </div>
           </div>
 
