@@ -283,11 +283,12 @@ def get_storage_target_info():
 
 @app.get("/api/settings")
 def get_settings():
-    from barely_core.settings import list_settings_status
+    from barely_core.settings import list_settings_status, get_deployment_mode
     from barely_core.db import engine
     from sqlalchemy import text
 
     settings_list = list_settings_status()
+    deployment_info = get_deployment_mode()
 
     # Minimal connection status check — zero leakage of credentials, URLs, or hostnames
     is_connected = False
@@ -305,16 +306,26 @@ def get_settings():
         "database": {
             "is_connected": is_connected,
             **storage_info
-        }
+        },
+        "deployment": deployment_info
     }
 
 @app.post("/api/settings")
 def save_setting(req: SaveSettingRequest):
-    from barely_core.settings import set_setting
+    from barely_core.settings import set_setting, read_k8s_secret_file
     if not req.key or not req.key.strip():
         raise HTTPException(status_code=400, detail="Key cannot be empty")
-    set_setting(req.key.strip(), req.value)
-    return {"message": f"Setting '{req.key}' updated successfully", "key": req.key}
+    
+    key_clean = req.key.strip()
+    # Check if actively managed by K8s volume mount
+    if read_k8s_secret_file(key_clean):
+        raise HTTPException(
+            status_code=403, 
+            detail=f"Setting '{key_clean}' is managed externally via Helm / Kubernetes Secret (ESO) volume mount. Modifications should be made in your GitOps repository or Cloud Secret Manager."
+        )
+        
+    set_setting(key_clean, req.value)
+    return {"message": f"Setting '{key_clean}' updated successfully", "key": key_clean}
 
 @app.delete("/api/settings/{key}")
 def remove_setting(key: str):

@@ -19,11 +19,65 @@ KNOWN_SETTINGS = [
     {"key": "STRICT_MODE_DEFAULT", "is_secret": False, "label": "Default Strict Mode", "category": "defaults", "placeholder": "false"}
 ]
 
+SECRETS_DIR = os.getenv("BARELY_SECRETS_DIR", "/etc/secrets/barely")
+
+def is_k8s_environment() -> bool:
+    """Detects if the application is running within a Kubernetes / Helm deployment."""
+    return bool(
+        os.getenv("KUBERNETES_SERVICE_HOST") 
+        or os.getenv("HELM_RELEASE_NAME") 
+        or os.path.isdir(os.getenv("BARELY_SECRETS_DIR", "/etc/secrets/barely"))
+    )
+
+def read_k8s_secret_file(key: str) -> Optional[str]:
+    """
+    Reads a secret mounted by Kubernetes / Helm / External Secrets Operator (ESO)
+    e.g. from /etc/secrets/barely/ANTHROPIC_API_KEY.
+    """
+    secrets_dir = os.getenv("BARELY_SECRETS_DIR", "/etc/secrets/barely")
+    path = os.path.join(secrets_dir, key)
+    if os.path.isfile(path):
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                content = f.read().strip()
+                if content:
+                    return content
+        except Exception as e:
+            logger.debug(f"Failed to read K8s secret file {path}: {e}")
+    return None
+
+def get_deployment_mode() -> Dict[str, Any]:
+    """Returns deployment environment metadata (Kubernetes vs Standalone/PaaS)."""
+    in_k8s = is_k8s_environment()
+    secrets_dir = os.getenv("BARELY_SECRETS_DIR", "/etc/secrets/barely")
+    has_mount = os.path.isdir(secrets_dir)
+    return {
+        "is_kubernetes": in_k8s,
+        "mode": "kubernetes" if in_k8s else "standalone",
+        "provider_name": "Helm & Kubernetes Secrets (ESO)" if in_k8s else "Encrypted Database Store",
+        "subtext": (
+            "Secrets managed via Helm / External Secrets Operator (ESO) from cloud vaults" 
+            if in_k8s else 
+            "Secrets encrypted with AES-256 authenticated cipher at rest in PostgreSQL"
+        ),
+        "secrets_dir": secrets_dir if has_mount else None,
+        "has_volume_mount": has_mount
+    }
+
 def get_setting(key: str, default: Optional[str] = None) -> Optional[str]:
     """
     Retrieves a setting by key.
-    Prioritizes the encrypted database record; falls back to environment variables.
+    Resolution priority:
+    1. Kubernetes Secret Volume Mount (/etc/secrets/barely/<KEY>)
+    2. Encrypted Database Record (PostgreSQL AES-256 authenticated)
+    3. Environment Variable (K8s secretKeyRef or local .env)
     """
+    # Priority 1: Kubernetes Mounted Secret File (from Helm / ESO volume)
+    k8s_val = read_k8s_secret_file(key)
+    if k8s_val:
+        return k8s_val
+
+    # Priority 2: Encrypted Database Record
     db = SessionLocal()
     try:
         rec = db.query(SettingRecord).filter(SettingRecord.key == key).first()
@@ -41,6 +95,7 @@ def get_setting(key: str, default: Optional[str] = None) -> Optional[str]:
     finally:
         db.close()
         
+    # Priority 3: Environment variables (K8s envFrom or .env)
     return os.getenv(key, default)
 
 def set_setting(key: str, value: str, is_secret: Optional[bool] = None) -> None:
@@ -91,6 +146,7 @@ def list_settings_status() -> List[Dict[str, Any]]:
     """
     Returns the configuration status of all known settings without leaking secret keys.
     Secrets are masked to guarantee zero-leak security in UI and API responses.
+    Distinguishes between Kubernetes Secret (ESO/Helm), Database (Encrypted), and Environment.
     """
     db = SessionLocal()
     db_settings = {}
@@ -103,21 +159,30 @@ def list_settings_status() -> List[Dict[str, Any]]:
     finally:
         db.close()
 
+    in_k8s = is_k8s_environment()
     result = []
     for s in KNOWN_SETTINGS:
         key = s["key"]
         is_secret = s["is_secret"]
         db_rec = db_settings.get(key)
         env_val = os.getenv(key)
+        k8s_file_val = read_k8s_secret_file(key)
         
         is_configured = False
         source = "none"
         masked_val = ""
         updated_at = None
+        is_read_only = False
 
-        if db_rec and db_rec.value:
+        if k8s_file_val:
+            is_configured = True
+            source = "kubernetes"
+            is_read_only = True
+            masked_val = mask_secret(k8s_file_val) if is_secret else k8s_file_val
+        elif db_rec and db_rec.value:
             is_configured = True
             source = "database"
+            is_read_only = False
             updated_at = db_rec.updated_at.isoformat() if db_rec.updated_at else None
             if is_secret:
                 try:
@@ -129,7 +194,9 @@ def list_settings_status() -> List[Dict[str, Any]]:
                 masked_val = db_rec.value
         elif env_val:
             is_configured = True
-            source = "environment"
+            # If in K8s, environment variables are injected via Helm / K8s secretRef
+            source = "kubernetes" if in_k8s else "environment"
+            is_read_only = in_k8s
             masked_val = mask_secret(env_val) if is_secret else env_val
 
         result.append({
@@ -140,6 +207,7 @@ def list_settings_status() -> List[Dict[str, Any]]:
             "is_secret": is_secret,
             "is_configured": is_configured,
             "source": source,
+            "is_read_only": is_read_only,
             "masked_value": masked_val,
             "updated_at": updated_at
         })
