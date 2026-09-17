@@ -85,11 +85,6 @@ export default function SettingsPage() {
   const [testingKey, setTestingKey] = useState<string | null>(null);
   const [deletingKey, setDeletingKey] = useState<string | null>(null);
 
-  // DB Tester state
-  const [testDbUrl, setTestDbUrl] = useState('');
-  const [testingDb, setTestingDb] = useState(false);
-  const [dbTestResult, setDbTestResult] = useState<{ success: boolean; message?: string; error?: string; latency_ms?: number } | null>(null);
-
   // Toast notification
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
 
@@ -201,36 +196,6 @@ export default function SettingsPage() {
       showToast(`Key test error: ${err.message}`, 'error');
     } finally {
       setTestingKey(null);
-    }
-  };
-
-  const testDatabase = async () => {
-    if (!testDbUrl.trim()) {
-      showToast('Please enter a database connection URL to test.', 'error');
-      return;
-    }
-
-    setTestingDb(true);
-    setDbTestResult(null);
-    try {
-      const res = await fetch(`${apiUrl}/api/settings/test-db`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ database_url: testDbUrl.trim() })
-      });
-
-      const data = await res.json();
-      setDbTestResult(data);
-      if (data.success) {
-        showToast(`Connected to ${data.provider} in ${data.latency_ms}ms!`, 'success');
-      } else {
-        showToast(data.error || 'Connection failed', 'error');
-      }
-    } catch (err: any) {
-      setDbTestResult({ success: false, error: err.message });
-      showToast(`Database connection test failed: ${err.message}`, 'error');
-    } finally {
-      setTestingDb(false);
     }
   };
 
@@ -558,57 +523,24 @@ export default function SettingsPage() {
                 </div>
               )}
 
-              {/* Cloud Database Connection Tester */}
-              <div className="p-4 rounded-xl bg-[#0d1322] border border-slate-800/90 space-y-3">
+              {/* Infrastructure Security Notice */}
+              <div className="p-4 rounded-xl bg-[#0d1322] border border-slate-800/90 space-y-2">
                 <div className="flex items-center gap-2">
                   <Server className="w-4 h-4 text-blue-400" />
                   <h3 className="text-xs font-bold text-white uppercase tracking-wider">
-                    Test External Cloud Managed Database
+                    Infrastructure & Helm Managed Connection
                   </h3>
                 </div>
-                <p className="text-[11px] text-slate-400">
-                  Verify connection to AWS RDS / Aurora, Supabase, Neon, or Google Cloud SQL before updating your environment.
+                <p className="text-[11px] text-slate-400 leading-relaxed">
+                  To strictly prevent credential leakage, database connections cannot be configured or modified through the web interface. 
+                  In Kubernetes production, the connection string is injected securely via Helm <code className="text-sky-300 font-mono">values.yaml</code> or Kubernetes Secrets:
                 </p>
-
-                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
-                  <input
-                    type="password"
-                    value={testDbUrl}
-                    onChange={(e) => setTestDbUrl(e.target.value)}
-                    placeholder="postgresql://user:password@your-rds.amazonaws.com:5432/barelydb?sslmode=require"
-                    className="flex-1 bg-[#070b14] border border-slate-800 focus:border-[#0278ff] focus:ring-1 focus:ring-[#0278ff] rounded-lg px-3.5 py-2 text-xs font-mono text-white placeholder:text-slate-600 outline-none"
-                  />
-                  <button
-                    type="button"
-                    onClick={testDatabase}
-                    disabled={testingDb || !testDbUrl.trim()}
-                    className="px-4 py-2 rounded-lg text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 text-white flex items-center justify-center gap-1.5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
-                  >
-                    {testingDb ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Zap className="w-3.5 h-3.5" />}
-                    <span>Test Cloud DB</span>
-                  </button>
+                <div className="p-2.5 rounded-lg bg-[#070b14] border border-slate-800 text-[11px] font-mono text-slate-300">
+                  <span className="text-slate-500"># deploy/helm/barely/values.yaml</span><br />
+                  <span className="text-emerald-400">externalDatabase:</span><br />
+                  &nbsp;&nbsp;<span className="text-emerald-400">enabled:</span> <span className="text-white">true</span><br />
+                  &nbsp;&nbsp;<span className="text-emerald-400">url:</span> <span className="text-amber-300">&quot;postgresql://barelyadmin:pass@your-rds.amazonaws.com:5432/barelydb?sslmode=require&quot;</span>
                 </div>
-
-                {/* Test Result Message */}
-                {dbTestResult && (
-                  <div className={`p-3 rounded-lg border text-xs font-mono ${
-                    dbTestResult.success 
-                      ? 'bg-emerald-950/40 border-emerald-500/40 text-emerald-300' 
-                      : 'bg-rose-950/40 border-rose-500/40 text-rose-300'
-                  }`}>
-                    {dbTestResult.success ? (
-                      <div className="flex items-center gap-2">
-                        <Check className="w-4 h-4 text-emerald-400 shrink-0" />
-                        <span>{dbTestResult.message}</span>
-                      </div>
-                    ) : (
-                      <div className="flex items-center gap-2">
-                        <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
-                        <span>{dbTestResult.error}</span>
-                      </div>
-                    )}
-                  </div>
-                )}
               </div>
             </div>
           </div>

@@ -207,9 +207,6 @@ class TestKeyRequest(BaseModel):
     provider: str
     key: Optional[str] = None
 
-class TestDbRequest(BaseModel):
-    database_url: str
-
 @app.get("/api/settings")
 def get_settings():
     from barely_core.settings import list_settings_status
@@ -319,47 +316,5 @@ def test_key(req: TestKeyRequest):
         return {
             "success": False,
             "error": f"Verification failed: {err_str[:250]}"
-        }
-
-@app.post("/api/settings/test-db")
-def test_database_connection(req: TestDbRequest):
-    from sqlalchemy import create_engine, text
-    import time
-    
-    db_url = req.database_url.strip()
-    if not db_url.startswith("postgres://") and not db_url.startswith("postgresql://"):
-        return {
-            "success": False,
-            "error": "Invalid connection URL. Must start with postgresql:// or postgres://"
-        }
-
-    try:
-        test_engine = create_engine(db_url, connect_args={"connect_timeout": 5})
-        start_t = time.time()
-        with test_engine.connect() as conn:
-            res = conn.execute(text("SELECT version();")).scalar()
-            latency = round((time.time() - start_t) * 1000, 1)
-            
-            low_url = db_url.lower()
-            if "rds.amazonaws.com" in low_url:
-                prov = "AWS RDS / Aurora"
-            elif "supabase.com" in low_url or "supabase.co" in low_url:
-                prov = "Supabase"
-            elif "neon.tech" in low_url:
-                prov = "Neon Serverless"
-            else:
-                prov = "External Managed PostgreSQL"
-
-            return {
-                "success": True,
-                "latency_ms": latency,
-                "provider": prov,
-                "version": res.split()[0] + " " + res.split()[1] if res else "PostgreSQL",
-                "message": f"Successfully connected to {prov} in {latency}ms."
-            }
-    except Exception as e:
-        return {
-            "success": False,
-            "error": f"Connection failed: {str(e)[:250]}"
         }
 
