@@ -49,9 +49,17 @@ interface DatabaseStatus {
   engine?: string;
 }
 
+interface SecretsModeInfo {
+  mode: 'ui' | 'helm';
+  is_locked_by_env: boolean;
+  source: string;
+  description: string;
+}
+
 interface DeploymentInfo {
   is_kubernetes: boolean;
   mode: 'kubernetes' | 'standalone';
+  secrets_mode?: SecretsModeInfo;
   provider_name: string;
   subtext: string;
   secrets_dir?: string | null;
@@ -93,6 +101,8 @@ export default function SettingsPage() {
   const [settings, setSettings] = useState<SettingItem[]>([]);
   const [dbStatus, setDbStatus] = useState<DatabaseStatus | null>(null);
   const [deployment, setDeployment] = useState<DeploymentInfo | null>(null);
+  const [activeMode, setActiveMode] = useState<'ui' | 'helm'>('ui');
+  const [switchingMode, setSwitchingMode] = useState<boolean>(false);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
@@ -130,6 +140,38 @@ export default function SettingsPage() {
     setTimeout(() => setCopiedSnippet(null), 3000);
   };
 
+  const handleSwitchMode = async (newMode: 'ui' | 'helm') => {
+    if (switchingMode || activeMode === newMode) return;
+    if (deployment?.secrets_mode?.is_locked_by_env) {
+      showToast('Secrets mode is locked by BARELY_SECRETS_MODE in Helm values.', 'error');
+      return;
+    }
+
+    setSwitchingMode(true);
+    try {
+      const res = await fetch(`${apiUrl}/api/settings/mode`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode: newMode })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || 'Failed to update secrets mode');
+
+      setActiveMode(newMode);
+      showToast(
+        newMode === 'helm'
+          ? 'Switched to Helm / Kubernetes Mode. UI secret editing auto-disabled!'
+          : 'Switched to Web UI Mode. Secret editing unlocked in PostgreSQL!',
+        'success'
+      );
+      await fetchSettings();
+    } catch (err: any) {
+      showToast(`Error switching mode: ${err.message}`, 'error');
+    } finally {
+      setSwitchingMode(false);
+    }
+  };
+
   const fetchSettings = React.useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
     try {
@@ -139,6 +181,10 @@ export default function SettingsPage() {
       setSettings(data.settings);
       setDbStatus(data.database);
       setDeployment(data.deployment || null);
+
+      if (data.deployment?.secrets_mode?.mode) {
+        setActiveMode(data.deployment.secrets_mode.mode);
+      }
 
       const defaultModelSetting = data.settings.find(s => s.key === 'DEFAULT_MODEL');
       if (defaultModelSetting && defaultModelSetting.masked_value) {
@@ -393,6 +439,140 @@ export default function SettingsPage() {
       ) : (
         <div className="space-y-6">
 
+          {/* Section 0: Secrets Management Mode Switcher */}
+          <div className="rounded-xl border border-slate-800 bg-[#0a0f1d] p-5 shadow-xl space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div>
+                <div className="flex items-center gap-2">
+                  <h2 className="text-sm font-bold text-white">Secrets Management Mode</h2>
+                  {deployment?.secrets_mode?.is_locked_by_env && (
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-mono bg-amber-500/15 text-amber-400 border border-amber-500/30 flex items-center gap-1">
+                      <Lock className="w-2.5 h-2.5" /> Enforced by Helm (values.yaml)
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  Choose how credentials are supplied. When Helm mode is active, manual UI editing is automatically disabled to prevent drift.
+                </p>
+              </div>
+
+              {switchingMode && (
+                <div className="flex items-center gap-1.5 text-xs text-[#0278ff] shrink-0 font-medium">
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  <span>Switching mode...</span>
+                </div>
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {/* Option 1: Web UI & Cloud Database */}
+              <div
+                onClick={() => !deployment?.secrets_mode?.is_locked_by_env && handleSwitchMode('ui')}
+                className={`p-4 rounded-xl border transition-all relative ${
+                  activeMode === 'ui'
+                    ? 'bg-gradient-to-br from-emerald-950/30 to-[#070b14] border-emerald-500/50 shadow-lg shadow-emerald-500/5 ring-1 ring-emerald-500/30'
+                    : 'bg-[#070b14] border-slate-800 hover:border-slate-700 opacity-75 hover:opacity-100 cursor-pointer'
+                } ${deployment?.secrets_mode?.is_locked_by_env ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'}`}
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-center gap-2.5">
+                    <div className={`w-8 h-8 rounded-lg border flex items-center justify-center shrink-0 ${
+                      activeMode === 'ui'
+                        ? 'bg-emerald-500/15 border-emerald-500/30 text-emerald-400'
+                        : 'bg-slate-800 border-slate-700 text-slate-400'
+                    }`}>
+                      <ShieldCheck className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold text-white">Web UI &amp; Cloud Database</span>
+                        {activeMode === 'ui' && (
+                          <span className="px-2 py-0.2 rounded-full text-[10px] font-mono bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                            Active
+                          </span>
+                        )}
+                      </div>
+                      <span className="text-[11px] text-emerald-400/90 font-medium">Full Read/Write Access</span>
+                    </div>
+                  </div>
+                  <div className={`w-4 h-4 rounded-full border flex items-center justify-center mt-1 ${
+                    activeMode === 'ui'
+                      ? 'border-emerald-500 bg-emerald-500'
+                      : 'border-slate-700 bg-slate-900'
+                  }`}>
+                    {activeMode === 'ui' && <div className="w-1.5 h-1.5 rounded-full bg-slate-950" />}
+                  </div>
+                </div>
+                <p className="text-[11px] text-slate-400 mt-2.5 leading-relaxed">
+                  Enter and edit API keys directly from the web browser. Secrets are encrypted with AES-256 authenticated cipher at rest in PostgreSQL.
+                </p>
+              </div>
+
+              {/* Option 2: Helm & Kubernetes Secrets */}
+              <div
+                onClick={() => !deployment?.secrets_mode?.is_locked_by_env && handleSwitchMode('helm')}
+                className={`p-4 rounded-xl border transition-all relative ${
+                  activeMode === 'helm'
+                    ? 'bg-gradient-to-br from-cyan-950/30 to-[#070b14] border-cyan-500/50 shadow-lg shadow-cyan-500/5 ring-1 ring-cyan-500/30'
+                    : 'bg-[#070b14] border-slate-800 hover:border-slate-700 opacity-75 hover:opacity-100 cursor-pointer'
+                } ${deployment?.secrets_mode?.is_locked_by_env ? 'cursor-not-allowed' : 'cursor-pointer'}`}
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-center gap-2.5">
+                    <div className={`w-8 h-8 rounded-lg border flex items-center justify-center shrink-0 ${
+                      activeMode === 'helm'
+                        ? 'bg-cyan-500/15 border-cyan-500/30 text-cyan-400'
+                        : 'bg-slate-800 border-slate-700 text-slate-400'
+                    }`}>
+                      <Lock className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold text-white">Helm &amp; Kubernetes Secrets</span>
+                        {activeMode === 'helm' && (
+                          <span className="px-2 py-0.2 rounded-full text-[10px] font-mono bg-cyan-500/20 text-cyan-300 border border-cyan-500/30">
+                            Active
+                          </span>
+                        )}
+                      </div>
+                      <span className="text-[11px] text-cyan-400/90 font-medium">UI Editing Auto-Disabled (Read-Only)</span>
+                    </div>
+                  </div>
+                  <div className={`w-4 h-4 rounded-full border flex items-center justify-center mt-1 ${
+                    activeMode === 'helm'
+                      ? 'border-cyan-500 bg-cyan-500'
+                      : 'border-slate-700 bg-slate-900'
+                  }`}>
+                    {activeMode === 'helm' && <div className="w-1.5 h-1.5 rounded-full bg-slate-950" />}
+                  </div>
+                </div>
+                <p className="text-[11px] text-slate-400 mt-2.5 leading-relaxed">
+                  Supplied via Helm values.yaml, native K8s Secrets, or ESO. All secret inputs are automatically disabled in the UI to prevent drift.
+                </p>
+              </div>
+            </div>
+
+            {/* Banner when Helm Mode is active */}
+            {activeMode === 'helm' && (
+              <div className="p-3 rounded-lg bg-cyan-950/25 border border-cyan-500/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                <div className="flex items-center gap-2 text-cyan-300">
+                  <Lock className="w-4 h-4 text-cyan-400 shrink-0" />
+                  <span>
+                    <strong>Helm Mode Active:</strong> UI secret inputs below are auto-disabled. Configure secrets in Helm <code className="bg-slate-900 px-1 py-0.5 rounded text-cyan-200">values.yaml</code> or native K8s Secret.
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsEsoGuideModalOpen(true)}
+                  className="px-2.5 py-1 rounded bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-300 border border-cyan-500/30 text-[11px] font-semibold transition-colors shrink-0 self-start sm:self-auto cursor-pointer flex items-center gap-1.5"
+                >
+                  <BookOpen className="w-3 h-3" />
+                  <span>View K8s Manifests</span>
+                </button>
+              </div>
+            )}
+          </div>
+
           {/* Section 1: LLM Provider API Keys */}
           <div className="rounded-xl border border-slate-800 bg-[#0a0f1d] shadow-xl overflow-hidden">
             <div className="px-6 py-4 border-b border-slate-800 flex items-center justify-between">
@@ -406,7 +586,7 @@ export default function SettingsPage() {
                 </div>
               </div>
               <span className="text-[11px] font-mono text-slate-500 hidden sm:inline-block">
-                {deployment?.is_kubernetes ? 'Mode: Kubernetes ESO (Read-Only)' : 'Priority: DB Override > .env'}
+                {activeMode === 'helm' ? 'Mode: Helm / Kubernetes (UI Auto-Disabled)' : 'Priority: DB Override > .env'}
               </span>
             </div>
 
@@ -418,7 +598,7 @@ export default function SettingsPage() {
                 const isSaving = savingKey === item.key;
                 const isTesting = testingKey === item.key;
                 const isDeleting = deletingKey === item.key;
-                const isReadOnly = item.is_read_only || item.source === 'kubernetes';
+                const isReadOnly = item.is_read_only || item.source === 'kubernetes' || activeMode === 'helm';
 
                 return (
                   <div key={item.key} className={`${idx > 0 ? 'pt-6' : ''} space-y-2.5`}>

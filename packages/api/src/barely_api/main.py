@@ -310,13 +310,41 @@ def get_settings():
         "deployment": deployment_info
     }
 
+class SetSecretsModeRequest(BaseModel):
+    mode: str
+
+@app.post("/api/settings/mode")
+def update_secrets_mode(req: SetSecretsModeRequest):
+    from barely_core.settings import set_secrets_mode
+    try:
+        updated_mode = set_secrets_mode(req.mode)
+        return {
+            "success": True,
+            "message": f"Secrets management mode updated to '{req.mode.upper()}'",
+            "secrets_mode": updated_mode
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
 @app.post("/api/settings")
 def save_setting(req: SaveSettingRequest):
-    from barely_core.settings import set_setting, read_k8s_secret_file
+    from barely_core.settings import set_setting, read_k8s_secret_file, get_secrets_mode, KNOWN_SETTINGS
     if not req.key or not req.key.strip():
         raise HTTPException(status_code=400, detail="Key cannot be empty")
     
     key_clean = req.key.strip()
+    
+    # Check if Helm mode is active and this key is a secret
+    matching = next((s for s in KNOWN_SETTINGS if s["key"] == key_clean), None)
+    is_secret = matching["is_secret"] if matching else False
+    
+    mode_info = get_secrets_mode()
+    if mode_info["mode"] == "helm" and is_secret:
+        raise HTTPException(
+            status_code=403,
+            detail=f"Cannot edit secret '{key_clean}' via UI: Helm / GitOps Mode is active. Secrets must be configured in Helm values.yaml or Kubernetes Secrets."
+        )
+
     # Check if actively managed by K8s volume mount
     if read_k8s_secret_file(key_clean):
         raise HTTPException(
@@ -329,11 +357,23 @@ def save_setting(req: SaveSettingRequest):
 
 @app.delete("/api/settings/{key}")
 def remove_setting(key: str):
-    from barely_core.settings import delete_setting
-    deleted = delete_setting(key)
+    from barely_core.settings import delete_setting, get_secrets_mode, KNOWN_SETTINGS
+    
+    key_clean = key.strip()
+    matching = next((s for s in KNOWN_SETTINGS if s["key"] == key_clean), None)
+    is_secret = matching["is_secret"] if matching else False
+    
+    mode_info = get_secrets_mode()
+    if mode_info["mode"] == "helm" and is_secret:
+        raise HTTPException(
+            status_code=403,
+            detail=f"Cannot delete secret '{key_clean}': Helm / GitOps Mode is active."
+        )
+
+    deleted = delete_setting(key_clean)
     if not deleted:
-        return {"message": f"No database override found for '{key}'", "deleted": False}
-    return {"message": f"Setting '{key}' database override removed", "deleted": True}
+        return {"message": f"No database override found for '{key_clean}'", "deleted": False}
+    return {"message": f"Setting '{key_clean}' database override removed", "deleted": True}
 
 @app.post("/api/settings/test-key")
 def test_key(req: TestKeyRequest):

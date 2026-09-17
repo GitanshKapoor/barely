@@ -29,6 +29,79 @@ def is_k8s_environment() -> bool:
         or os.path.isdir(os.getenv("BARELY_SECRETS_DIR", "/etc/secrets/barely"))
     )
 
+def get_secrets_mode() -> Dict[str, Any]:
+    """
+    Determines the active secrets management mode ('ui' vs 'helm').
+    Priority:
+    1. BARELY_SECRETS_MODE environment variable (forces mode, locked)
+    2. SECRETS_MODE setting in database
+    3. Default: 'helm' if running in Kubernetes, otherwise 'ui'
+    """
+    env_mode = os.getenv("BARELY_SECRETS_MODE")
+    if env_mode:
+        m = env_mode.strip().lower()
+        active = "helm" if m in ("helm", "kubernetes", "k8s") else "ui"
+        return {
+            "mode": active,
+            "is_locked_by_env": True,
+            "source": "environment_variable",
+            "description": (
+                "Locked by Helm/Environment (BARELY_SECRETS_MODE=helm). UI secret editing is disabled by policy."
+                if active == "helm" else
+                "Locked by Environment (BARELY_SECRETS_MODE=ui). UI editing is enabled."
+            )
+        }
+
+    # Check database setting
+    db = SessionLocal()
+    db_mode = None
+    try:
+        rec = db.query(SettingRecord).filter(SettingRecord.key == "SECRETS_MODE").first()
+        if rec and rec.value:
+            db_mode = rec.value.strip().lower()
+    except Exception as e:
+        logger.debug(f"Error querying SECRETS_MODE from DB: {e}")
+    finally:
+        db.close()
+
+    if db_mode in ("helm", "ui"):
+        return {
+            "mode": db_mode,
+            "is_locked_by_env": False,
+            "source": "database_setting",
+            "description": (
+                "Helm / Kubernetes Mode active. Secret inputs are auto-disabled in UI to prevent drift."
+                if db_mode == "helm" else
+                "Web UI & Database Mode active. Secrets are editable and encrypted at rest."
+            )
+        }
+
+    # Fallback default: helm if in K8s, else ui
+    default_mode = "helm" if is_k8s_environment() else "ui"
+    return {
+        "mode": default_mode,
+        "is_locked_by_env": False,
+        "source": "auto_default",
+        "description": (
+            "Detected Kubernetes environment. Defaulted to Helm mode with UI secret editing auto-disabled."
+            if default_mode == "helm" else
+            "Defaulted to Web UI mode. Secrets are encrypted with AES-256 in PostgreSQL."
+        )
+    }
+
+def set_secrets_mode(mode: str) -> Dict[str, Any]:
+    """Updates the secrets management mode ('ui' or 'helm')."""
+    clean_mode = mode.strip().lower()
+    if clean_mode not in ("ui", "helm"):
+        raise ValueError("Invalid mode. Must be 'ui' or 'helm'.")
+
+    current = get_secrets_mode()
+    if current["is_locked_by_env"]:
+        raise ValueError("Cannot change secrets mode: locked by BARELY_SECRETS_MODE environment variable.")
+
+    set_setting("SECRETS_MODE", clean_mode, is_secret=False)
+    return get_secrets_mode()
+
 def read_k8s_secret_file(key: str) -> Optional[str]:
     """
     Reads a secret mounted by Kubernetes / Helm / External Secrets Operator (ESO)
@@ -51,13 +124,15 @@ def get_deployment_mode() -> Dict[str, Any]:
     in_k8s = is_k8s_environment()
     secrets_dir = os.getenv("BARELY_SECRETS_DIR", "/etc/secrets/barely")
     has_mount = os.path.isdir(secrets_dir)
+    secrets_mode = get_secrets_mode()
     return {
         "is_kubernetes": in_k8s,
         "mode": "kubernetes" if in_k8s else "standalone",
-        "provider_name": "Helm & Kubernetes Secrets (ESO)" if in_k8s else "Encrypted Database Store",
+        "secrets_mode": secrets_mode,
+        "provider_name": "Helm & Kubernetes Secrets" if (in_k8s or secrets_mode["mode"] == "helm") else "Encrypted Database Store",
         "subtext": (
-            "Secrets managed via Helm / External Secrets Operator (ESO) from cloud vaults" 
-            if in_k8s else 
+            "Secrets managed via Helm values / Kubernetes Secrets / ESO (UI editing auto-disabled)" 
+            if secrets_mode["mode"] == "helm" else 
             "Secrets encrypted with AES-256 authenticated cipher at rest in PostgreSQL"
         ),
         "secrets_dir": secrets_dir if has_mount else None,
@@ -160,6 +235,9 @@ def list_settings_status() -> List[Dict[str, Any]]:
         db.close()
 
     in_k8s = is_k8s_environment()
+    secrets_mode = get_secrets_mode()
+    is_helm_mode = secrets_mode["mode"] == "helm"
+
     result = []
     for s in KNOWN_SETTINGS:
         key = s["key"]
@@ -172,7 +250,7 @@ def list_settings_status() -> List[Dict[str, Any]]:
         source = "none"
         masked_val = ""
         updated_at = None
-        is_read_only = False
+        is_read_only = is_helm_mode and is_secret
 
         if k8s_file_val:
             is_configured = True
@@ -182,7 +260,8 @@ def list_settings_status() -> List[Dict[str, Any]]:
         elif db_rec and db_rec.value:
             is_configured = True
             source = "database"
-            is_read_only = False
+            # If Helm mode is active, even database secrets cannot be edited in the UI
+            is_read_only = True if (is_helm_mode and is_secret) else False
             updated_at = db_rec.updated_at.isoformat() if db_rec.updated_at else None
             if is_secret:
                 try:
@@ -194,10 +273,12 @@ def list_settings_status() -> List[Dict[str, Any]]:
                 masked_val = db_rec.value
         elif env_val:
             is_configured = True
-            # If in K8s, environment variables are injected via Helm / K8s secretRef
-            source = "kubernetes" if in_k8s else "environment"
-            is_read_only = in_k8s
+            source = "kubernetes" if (in_k8s or is_helm_mode) else "environment"
+            is_read_only = True if (in_k8s or (is_helm_mode and is_secret)) else False
             masked_val = mask_secret(env_val) if is_secret else env_val
+        elif is_helm_mode and is_secret:
+            # Not configured in Helm mode: marked read-only to prevent adding via UI
+            is_read_only = True
 
         result.append({
             "key": key,
