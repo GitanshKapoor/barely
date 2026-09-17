@@ -19,10 +19,7 @@ import {
   Info,
   ExternalLink,
   Pencil,
-  X,
-  Server,
-  HardDrive,
-  Cloud
+  X
 } from 'lucide-react';
 import { formatModelName } from '../../utils/models';
 
@@ -40,9 +37,10 @@ interface SettingItem {
 
 interface DatabaseStatus {
   is_connected: boolean;
-  target?: string;
-  storage_type?: 'docker' | 'aws' | 'azure' | 'gcp' | 'neon' | 'supabase' | 'cloud';
-  storage_driver?: string;
+  provider_name?: string;
+  storage_type?: 'docker' | 'gcp' | 'aws' | 'azure' | 'neon' | 'supabase' | 'cloud';
+  subtext?: string;
+  chip?: string;
   engine?: string;
 }
 
@@ -88,7 +86,6 @@ export default function SettingsPage() {
   const [savingModel, setSavingModel] = useState<boolean>(false);
   const [modelTestResult, setModelTestResult] = useState<{ success: boolean; message: string } | null>(null);
   const [isEditModelModalOpen, setIsEditModelModalOpen] = useState<boolean>(false);
-  const [isStorageGuideOpen, setIsStorageGuideOpen] = useState<boolean>(false);
 
   // Form input states
   const [inputValues, setInputValues] = useState<Record<string, string>>({});
@@ -714,225 +711,61 @@ export default function SettingsPage() {
             </div>
           )}
 
-          {/* Section 3: Database & Storage Connection Status */}
-          <div className="rounded-xl border border-slate-800 bg-[#0a0f1d] shadow-xl overflow-hidden">
-            <div className="px-6 py-4 border-b border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div className="flex items-center gap-2.5">
-                <div className="w-7 h-7 rounded-lg bg-emerald-500/10 text-emerald-400 flex items-center justify-center border border-emerald-500/20">
-                  <Database className="w-4 h-4" />
-                </div>
-                <div>
-                  <h2 className="text-sm font-bold text-white">Database &amp; Storage Connection</h2>
-                  <p className="text-xs text-slate-400">PostgreSQL state persistence, telemetry &amp; storage driver</p>
-                </div>
+          {/* Section 3: Database Connection Status */}
+          <div className="rounded-xl border border-slate-800 bg-[#0a0f1d] p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3.5 shadow-xl">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded-lg bg-emerald-500/10 text-emerald-400 flex items-center justify-center border border-emerald-500/20 shrink-0">
+                <Database className="w-4 h-4" />
               </div>
-
-              <div className="flex items-center gap-2">
-                <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold border flex items-center gap-1 ${
-                  dbStatus?.storage_type === 'aws'
-                    ? 'bg-amber-500/10 text-amber-400 border-amber-500/30'
-                    : 'bg-blue-500/10 text-blue-400 border-blue-500/30'
-                }`}>
-                  {dbStatus?.storage_type === 'aws' ? (
-                    <>
-                      <Cloud className="w-3 h-3 text-amber-400" />
-                      <span>AWS Cloud Storage</span>
-                    </>
-                  ) : (
-                    <>
-                      <HardDrive className="w-3 h-3 text-blue-400" />
-                      <span>Docker Storage</span>
-                    </>
-                  )}
-                </span>
-
-                {dbStatus?.is_connected ? (
-                  <span className="px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                    Connected
+              <div>
+                <div className="flex items-center gap-2">
+                  <h2 className="text-sm font-bold text-white">Database Connection</h2>
+                  <span className="text-[10px] font-mono text-slate-500 hidden sm:inline">
+                    {dbStatus?.chip || 'PostgreSQL 15 (TLS)'}
                   </span>
-                ) : (
-                  <span className="px-3 py-1 rounded-full text-xs font-semibold bg-rose-500/15 text-rose-400 border border-rose-500/30 flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-full bg-rose-400" />
-                    Disconnected
-                  </span>
-                )}
+                </div>
+                <p className="text-xs text-slate-400">
+                  {dbStatus?.subtext || 'PostgreSQL state storage & telemetry'}
+                </p>
               </div>
             </div>
 
-            {/* High-level Overview Grid */}
-            <div className="p-6 space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
-                {/* Card 1: Connected Target */}
-                <div className="p-3.5 rounded-xl bg-[#070b14] border border-slate-800 space-y-1">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[11px] font-medium text-slate-400">Deployment Target</span>
-                    <span className="text-[10px] font-mono text-slate-500">Environment</span>
-                  </div>
-                  <p className="text-xs font-bold text-white tracking-tight flex items-center gap-1.5">
-                    {dbStatus?.target || 'Docker Container (Local)'}
-                  </p>
-                  <p className="text-[10px] text-slate-500">Zero public exposure (Private Network)</p>
-                </div>
+            <div className="flex items-center gap-2 self-start sm:self-auto">
+              {/* Dynamic Provider Badge */}
+              <span className={`px-2.5 py-1 rounded-full text-xs font-semibold font-mono border flex items-center gap-1.5 transition-all ${
+                dbStatus?.storage_type === 'gcp'
+                  ? 'bg-sky-500/15 text-sky-300 border-sky-500/30'
+                  : dbStatus?.storage_type === 'aws'
+                  ? 'bg-amber-500/15 text-amber-300 border-amber-500/30'
+                  : dbStatus?.storage_type === 'azure'
+                  ? 'bg-blue-500/15 text-blue-300 border-blue-500/30'
+                  : dbStatus?.storage_type === 'supabase' || dbStatus?.storage_type === 'neon'
+                  ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
+                  : 'bg-indigo-500/15 text-indigo-300 border-indigo-500/30'
+              }`}>
+                {dbStatus?.storage_type === 'gcp' && <span>☁️</span>}
+                {dbStatus?.storage_type === 'aws' && <span>🟧</span>}
+                {dbStatus?.storage_type === 'azure' && <span>🟦</span>}
+                {(dbStatus?.storage_type === 'supabase' || dbStatus?.storage_type === 'neon') && <span>⚡</span>}
+                {dbStatus?.storage_type === 'docker' && <span>🐳</span>}
+                {!['gcp', 'aws', 'azure', 'supabase', 'neon', 'docker'].includes(dbStatus?.storage_type || '') && <span>☁️</span>}
+                <span>{dbStatus?.provider_name || 'Docker (Local)'}</span>
+              </span>
 
-                {/* Card 2: Storage Driver */}
-                <div className="p-3.5 rounded-xl bg-[#070b14] border border-slate-800 space-y-1">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[11px] font-medium text-slate-400">Storage Architecture</span>
-                    <span className="text-[10px] font-mono text-slate-500">Volume Driver</span>
-                  </div>
-                  <p className="text-xs font-bold text-white tracking-tight truncate" title={dbStatus?.storage_driver}>
-                    {dbStatus?.storage_driver || 'Docker Volume (barely_pgdata)'}
-                  </p>
-                  <p className="text-[10px] text-slate-500">Autonomous runs &amp; cache records</p>
-                </div>
-
-                {/* Card 3: Database Engine */}
-                <div className="p-3.5 rounded-xl bg-[#070b14] border border-slate-800 space-y-1">
-                  <div className="flex items-center justify-between">
-                    <span className="text-[11px] font-medium text-slate-400">Database Engine</span>
-                    <span className="text-[10px] font-mono text-emerald-400">TLS Ready</span>
-                  </div>
-                  <p className="text-xs font-bold text-white tracking-tight flex items-center gap-1.5">
-                    {dbStatus?.engine || 'PostgreSQL 15'}
-                  </p>
-                  <p className="text-[10px] text-slate-500">ACID Relational State Store</p>
-                </div>
-              </div>
-
-              {/* High-level Architecture Option Guide */}
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2 border-t border-slate-800/60">
-                <p className="text-[11px] text-slate-400">
-                  Switch effortlessly between local Docker and AWS Cloud storage via Helm values or container environment.
-                </p>
-                <button
-                  type="button"
-                  onClick={() => setIsStorageGuideOpen(true)}
-                  className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 hover:border-blue-500/40 flex items-center gap-1.5 transition-colors cursor-pointer shrink-0 self-start sm:self-auto"
-                >
-                  <Server className="w-3.5 h-3.5 text-[#0278ff]" />
-                  <span>Deployment Architecture</span>
-                </button>
-              </div>
+              {/* Live Connection Status Badge */}
+              {dbStatus?.is_connected ? (
+                <span className="px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 flex items-center gap-1.5 shrink-0">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                  Connected
+                </span>
+              ) : (
+                <span className="px-3 py-1 rounded-full text-xs font-semibold bg-rose-500/15 text-rose-400 border border-rose-500/30 flex items-center gap-1.5 shrink-0">
+                  <span className="w-2 h-2 rounded-full bg-rose-400" />
+                  Disconnected
+                </span>
+              )}
             </div>
           </div>
-
-          {/* Storage Architecture Modal */}
-          {isStorageGuideOpen && (
-            <div 
-              className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4 animate-in fade-in duration-150"
-              onClick={(e) => {
-                if (e.target === e.currentTarget) setIsStorageGuideOpen(false);
-              }}
-            >
-              <div className="bg-[#0a0f1d] border border-slate-800 rounded-2xl w-full max-w-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-150 text-left">
-                {/* Modal Header */}
-                <div className="px-6 py-4 border-b border-slate-800 flex items-center justify-between">
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-8 h-8 rounded-lg bg-blue-500/15 text-blue-400 flex items-center justify-center border border-blue-500/30">
-                      <Server className="w-4 h-4" />
-                    </div>
-                    <div>
-                      <h3 className="text-sm font-bold text-white">Storage &amp; Database Architecture</h3>
-                      <p className="text-[11px] text-slate-400">High-level deployment overview: Docker vs AWS Cloud</p>
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setIsStorageGuideOpen(false)}
-                    className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                </div>
-
-                {/* Modal Body */}
-                <div className="p-6 space-y-4 max-h-[75vh] overflow-y-auto">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {/* Option 1: Docker Container Storage */}
-                    <div className={`p-4 rounded-xl border space-y-3 ${
-                      dbStatus?.storage_type !== 'aws' 
-                        ? 'bg-blue-950/20 border-blue-500/40 ring-1 ring-blue-500/30' 
-                        : 'bg-[#070b14] border-slate-800'
-                    }`}>
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <HardDrive className="w-4 h-4 text-blue-400" />
-                          <span className="text-xs font-bold text-white">Docker Storage</span>
-                        </div>
-                        {dbStatus?.storage_type !== 'aws' && (
-                          <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-blue-500/15 text-blue-300 border border-blue-500/30">
-                            Current Active
-                          </span>
-                        )}
-                      </div>
-                      <ul className="text-xs text-slate-400 space-y-1.5 list-disc list-inside">
-                        <li><strong className="text-slate-200">State Database</strong>: Local PostgreSQL container (<code className="font-mono text-[11px] text-slate-300">barely-db</code>).</li>
-                        <li><strong className="text-slate-200">Persistence</strong>: Named volume <code className="font-mono text-[11px] text-slate-300">barely_pgdata</code>.</li>
-                        <li><strong className="text-slate-200">Best for</strong>: Local testing, single-node VMs, and rapid prototyping.</li>
-                        <li><strong className="text-slate-200">Zero Cloud Setup</strong>: Runs entirely offline on your local host.</li>
-                      </ul>
-                    </div>
-
-                    {/* Option 2: AWS Managed Storage & RDS */}
-                    <div className={`p-4 rounded-xl border space-y-3 ${
-                      dbStatus?.storage_type === 'aws' 
-                        ? 'bg-amber-950/20 border-amber-500/40 ring-1 ring-amber-500/30' 
-                        : 'bg-[#070b14] border-slate-800'
-                    }`}>
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <Cloud className="w-4 h-4 text-amber-400" />
-                          <span className="text-xs font-bold text-white">AWS Cloud Storage</span>
-                        </div>
-                        {dbStatus?.storage_type === 'aws' && (
-                          <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-amber-500/15 text-amber-300 border border-amber-500/30">
-                            Current Active
-                          </span>
-                        )}
-                      </div>
-                      <ul className="text-xs text-slate-400 space-y-1.5 list-disc list-inside">
-                        <li><strong className="text-slate-200">State Database</strong>: AWS RDS PostgreSQL or Aurora Serverless.</li>
-                        <li><strong className="text-slate-200">Persistence</strong>: AWS EBS multi-AZ storage + optional S3 bucket.</li>
-                        <li><strong className="text-slate-200">Best for</strong>: Production Kubernetes (EKS), high availability, automated backups.</li>
-                        <li><strong className="text-slate-200">Zero-Leak Security</strong>: Injected via Helm secrets / IAM, never exposed to UI.</li>
-                      </ul>
-                    </div>
-                  </div>
-
-                  {/* How to Switch section */}
-                  <div className="p-4 rounded-xl bg-[#070b14] border border-slate-800 space-y-2.5">
-                    <div className="flex items-center gap-2 text-xs font-bold text-white">
-                      <ShieldCheck className="w-4 h-4 text-emerald-400" />
-                      <span>How to connect to AWS Cloud Storage</span>
-                    </div>
-                    <p className="text-xs text-slate-400 leading-relaxed">
-                      To switch Barely from Docker to AWS, update your deployment environment or Helm <code className="text-slate-300 font-mono">values.yaml</code> with your managed database endpoint:
-                    </p>
-                    <div className="p-3 rounded-lg bg-[#040711] border border-slate-800 font-mono text-[11px] text-slate-300 space-y-1">
-                      <p className="text-slate-500"># In Helm values.yaml or .env:</p>
-                      <p><span className="text-purple-400">DATABASE_URL</span>=<span className="text-emerald-400">&quot;postgresql://app_user:&lt;SECRET&gt;@my-cluster.xyz.rds.amazonaws.com:5432/barelydb&quot;</span></p>
-                      <p><span className="text-purple-400">AWS_REGION</span>=<span className="text-emerald-400">&quot;us-east-1&quot;</span></p>
-                    </div>
-                    <p className="text-[11px] text-slate-500">
-                      Barely automatically detects the AWS RDS / S3 provider, verifies connectivity with TLS, and updates the status indicator without exposing passwords.
-                    </p>
-                  </div>
-                </div>
-
-                {/* Modal Footer */}
-                <div className="px-6 py-4 border-t border-slate-800 bg-slate-900/40 flex items-center justify-end">
-                  <button
-                    type="button"
-                    onClick={() => setIsStorageGuideOpen(false)}
-                    className="px-4 py-2 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition-colors cursor-pointer"
-                  >
-                    Close
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
 
           {/* Section 4: Agent Defaults */}
           <div className="rounded-xl border border-slate-800 bg-[#0a0f1d] shadow-xl overflow-hidden">

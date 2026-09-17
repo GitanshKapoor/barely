@@ -217,7 +217,7 @@ class TestKeyRequest(BaseModel):
     key: Optional[str] = None
 
 def get_storage_target_info():
-    """Classifies database & storage target at a high level (Docker vs AWS vs Cloud) with ZERO credential leakage."""
+    """Classifies database & storage target at a high level (Docker vs GCP vs AWS vs Azure) with ZERO credential leakage."""
     import os
     from urllib.parse import urlparse
 
@@ -226,54 +226,58 @@ def get_storage_target_info():
     aws_region = os.getenv("AWS_REGION") or os.getenv("AWS_DEFAULT_REGION")
     s3_bucket = os.getenv("S3_BUCKET") or os.getenv("AWS_S3_BUCKET")
 
-    target = "Docker Container (Local)"
+    provider_name = "Docker (Local)"
     storage_type = "docker"
-    storage_driver = "Docker Persistent Volume (barely_pgdata)"
+    subtext = "Local PostgreSQL container on docker-compose network"
+    chip = "Docker Volume (barely_pgdata)"
 
-    if storage_provider_env == "aws" or s3_bucket or (aws_region and "amazonaws" in db_url):
-        target = "AWS Cloud (RDS / S3)"
+    if storage_provider_env == "gcp" or "cloudsql" in db_url or "googleapis.com" in db_url:
+        provider_name = "GCP Cloud SQL"
+        storage_type = "gcp"
+        subtext = "State storage connected to Google Cloud SQL (Private VNet)"
+        chip = "PostgreSQL 15 (TLS)"
+    elif storage_provider_env == "aws" or s3_bucket or "rds.amazonaws.com" in db_url or "aurora.amazonaws.com" in db_url or (aws_region and "amazonaws" in db_url):
+        provider_name = "AWS RDS"
         storage_type = "aws"
-        storage_driver = f"AWS S3 & Managed RDS ({aws_region or 'us-east-1'})"
-
-    if db_url:
+        subtext = "State storage connected to AWS RDS / Aurora Cluster"
+        chip = "PostgreSQL 15 (TLS)"
+    elif storage_provider_env == "azure" or "postgres.database.azure.com" in db_url:
+        provider_name = "Azure PostgreSQL"
+        storage_type = "azure"
+        subtext = "State storage connected to Azure Database for PostgreSQL"
+        chip = "PostgreSQL 15 (TLS)"
+    elif "neon.tech" in db_url:
+        provider_name = "Neon Cloud"
+        storage_type = "neon"
+        subtext = "State storage connected to Neon Serverless PostgreSQL"
+        chip = "PostgreSQL 15 (TLS)"
+    elif "supabase.co" in db_url:
+        provider_name = "Supabase"
+        storage_type = "supabase"
+        subtext = "State storage connected to Supabase PostgreSQL"
+        chip = "PostgreSQL 15 (TLS)"
+    elif db_url:
         try:
             parsed = urlparse(db_url)
             host = (parsed.hostname or "").lower()
-            if "rds.amazonaws.com" in host or "aurora.amazonaws.com" in host:
-                target = "AWS RDS (PostgreSQL)"
-                storage_type = "aws"
-                storage_driver = "AWS RDS Aurora/Postgres & S3"
-            elif "postgres.database.azure.com" in host:
-                target = "Azure PostgreSQL"
-                storage_type = "azure"
-                storage_driver = "Azure Managed DB & Blob Storage"
-            elif "cloudsql" in host or "googleapis.com" in host:
-                target = "Google Cloud SQL"
-                storage_type = "gcp"
-                storage_driver = "GCP Cloud SQL & GCS"
-            elif "neon.tech" in host:
-                target = "Neon Serverless Postgres"
-                storage_type = "neon"
-                storage_driver = "Neon Cloud DB"
-            elif "supabase.co" in host:
-                target = "Supabase PostgreSQL"
-                storage_type = "supabase"
-                storage_driver = "Supabase Storage & DB"
-            elif host in ("barely-db", "localhost", "127.0.0.1", "postgres", "db"):
-                target = "Docker Container (Local)"
+            if host in ("barely-db", "localhost", "127.0.0.1", "postgres", "db"):
+                provider_name = "Docker (Local)"
                 storage_type = "docker"
-                storage_driver = "Docker Persistent Volume (barely_pgdata)"
-            elif storage_type != "aws":
-                target = "Managed Cloud Database"
+                subtext = "Local PostgreSQL container on docker-compose network"
+                chip = "Docker Volume (barely_pgdata)"
+            else:
+                provider_name = "Managed Cloud DB"
                 storage_type = "cloud"
-                storage_driver = "External Cloud Storage"
+                subtext = "State storage connected to managed PostgreSQL cluster"
+                chip = "PostgreSQL 15 (TLS)"
         except Exception:
             pass
 
     return {
-        "target": target,
+        "provider_name": provider_name,
         "storage_type": storage_type,
-        "storage_driver": storage_driver,
+        "subtext": subtext,
+        "chip": chip,
         "engine": "PostgreSQL 15"
     }
 
