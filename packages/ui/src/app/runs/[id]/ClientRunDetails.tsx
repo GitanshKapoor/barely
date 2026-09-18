@@ -147,7 +147,7 @@ export default function ClientRunDetails({ id }: { id: string }) {
   }, [id]);
 
   useEffect(() => {
-    if (!run || run.status === 'running' || run.status === 'pending') {
+    if (!run || run.status === 'running' || run.status === 'pending' || run.status === 'queued') {
       const timer = setInterval(fetchRun, 2000);
       return () => clearInterval(timer);
     }
@@ -197,7 +197,7 @@ export default function ClientRunDetails({ id }: { id: string }) {
     );
   }
 
-  const isRunning = run.status === 'running' || run.status === 'pending';
+  const isRunning = run.status === 'running' || run.status === 'pending' || run.status === 'queued';
   const activeStep = run.steps && run.steps[selectedStepIdx] ? run.steps[selectedStepIdx] : run.steps[run.steps.length - 1];
 
   return (
@@ -216,12 +216,14 @@ export default function ClientRunDetails({ id }: { id: string }) {
                 run.status === 'completed' && !run.success ? 'bg-rose-500/10 text-rose-400 border-rose-500/25' :
                 run.status === 'running' ? 'bg-[#0278ff]/10 text-[#0278ff] border-[#0278ff]/30 animate-pulse' :
                 run.status === 'cancelled' ? 'bg-orange-500/10 text-orange-400 border-orange-500/25' :
+                run.status === 'queued' ? 'bg-purple-500/10 text-purple-400 border-purple-500/25 animate-pulse' :
                 'bg-amber-500/10 text-amber-400 border-amber-500/25'
               }`}>
                 {run.status === 'completed' && run.success && <CheckCircle2 className="w-3.5 h-3.5" />}
                 {run.status === 'completed' && !run.success && <XCircle className="w-3.5 h-3.5" />}
                 {run.status === 'cancelled' && <Ban className="w-3.5 h-3.5 text-orange-400" />}
                 {run.status === 'running' && <span className="w-2 h-2 rounded-full bg-[#0278ff] animate-ping" />}
+                {run.status === 'queued' && <Clock className="w-3.5 h-3.5 text-purple-400" />}
                 {run.status === 'pending' && <Clock className="w-3.5 h-3.5" />}
                 <span className="uppercase">{run.status}</span>
               </span>

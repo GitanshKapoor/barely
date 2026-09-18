@@ -6,6 +6,7 @@ import logging
 import urllib.request
 import urllib.error
 from typing import Optional, Tuple, Dict, Any
+from barely_core.settings import get_setting
 
 logger = logging.getLogger("barely_k8s_spawner")
 
@@ -256,16 +257,110 @@ class K8sJobSpawner:
             logger.error(f"Failed to communicate with Kubernetes API: {e}")
             return False, None, f"Cluster communication failure: {str(e)}"
 
+def get_active_runner_count(db=None) -> int:
+    """Counts active isolated runner pods currently pending or running in the cluster."""
+    from barely_core.db import SessionLocal, RunRecord
+    local_db = db or SessionLocal()
+    try:
+        return local_db.query(RunRecord).filter(
+            RunRecord.isolated_env == True,
+            RunRecord.status.in_(["pending", "running"]),
+            RunRecord.runner_pod.isnot(None)
+        ).count()
+    finally:
+        if db is None:
+            local_db.close()
+
+def get_queued_runner_count(db=None) -> int:
+    """Counts isolated runs waiting in the FIFO queue for an available runner slot."""
+    from barely_core.db import SessionLocal, RunRecord
+    local_db = db or SessionLocal()
+    try:
+        return local_db.query(RunRecord).filter(
+            RunRecord.isolated_env == True,
+            RunRecord.status == "queued"
+        ).count()
+    finally:
+        if db is None:
+            local_db.close()
+
+def can_spawn_runner(db=None) -> Tuple[bool, int, int]:
+    """
+    Determines if a new ephemeral pod can be spawned without exceeding the Helm capacity limit.
+    Returns: (can_spawn: bool, active_pods: int, max_pods: int)
+    """
+    max_pods = int(get_setting("MAX_PARALLEL_PODS") or "10")
+    active_pods = get_active_runner_count(db)
+    return (active_pods < max_pods, active_pods, max_pods)
+
+def drain_queued_runs(db=None) -> int:
+    """
+    Checks if there are runner slots available and auto-dispatches queued runs (FIFO order).
+    Returns the number of queued runs successfully dispatched.
+    """
+    from barely_core.db import SessionLocal, RunRecord
+    from datetime import datetime
+
+    spawner = K8sJobSpawner()
+    if not spawner.is_available:
+        return 0
+
+    local_db = db or SessionLocal()
+    dispatched = 0
+    try:
+        while True:
+            can_spawn, active_pods, max_pods = can_spawn_runner(local_db)
+            if not can_spawn:
+                break
+
+            # Fetch oldest queued run
+            next_run = (
+                local_db.query(RunRecord)
+                .filter(RunRecord.status == "queued", RunRecord.isolated_env == True)
+                .order_by(RunRecord.created_at.asc())
+                .first()
+            )
+            if not next_run:
+                break
+
+            ok, job_name, err = spawner.spawn_job(next_run.id)
+            now_str = datetime.now().strftime("%H:%M:%S")
+            if ok:
+                next_run.status = "pending"
+                next_run.runner_pod = job_name
+                append_log = (
+                    f"\n[{now_str}] 🚀 Runner Slot Available: Dispatched from queue to Kubernetes Job '{job_name}' "
+                    f"(Active slots: {active_pods + 1}/{max_pods}).\n"
+                )
+                next_run.logs = (next_run.logs or "") + append_log
+                local_db.commit()
+                dispatched += 1
+                logger.info(f"Auto-drained queued run {next_run.id} to K8s Job {job_name}")
+            else:
+                logger.error(f"Failed to auto-drain queued run {next_run.id}: {err}")
+                break
+    except Exception as e:
+        logger.error(f"Error draining queued runs: {e}")
+    finally:
+        if db is None:
+            local_db.close()
+
+    return dispatched
+
 def get_execution_engine_status() -> Dict[str, Any]:
-    """Provides a consolidated summary of the execution engine and pod isolation configuration."""
-    from barely_core.settings import get_setting
+    """Provides a consolidated summary of the execution engine, cluster telemetry, and Helm concurrency limit."""
     spawner = K8sJobSpawner()
     mode = (get_setting("EXECUTION_MODE") or "worker_pool").strip().lower()
-    max_pods = int(get_setting("MAX_PARALLEL_PODS") or "5")
+    can_spawn, active_pods, max_pods = can_spawn_runner()
+    queued_runs = get_queued_runner_count()
 
     return {
         "mode": mode,
         "max_parallel_pods": max_pods,
+        "active_pods": active_pods,
+        "queued_runs": queued_runs,
+        "can_spawn_now": can_spawn,
+        "concurrency_source": "Helm values.yaml (execution.maxParallelPods)",
         "cluster": spawner.get_cluster_status(),
         "is_k8s_available": spawner.is_available,
         "mode_description": (

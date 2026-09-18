@@ -12,6 +12,8 @@ for mod in [
         if mod == "pydantic":
             m.BaseModel = object
             m.Field = lambda *args, **kwargs: None
+        elif mod in ("sqlalchemy.orm", "sqlalchemy.ext.declarative"):
+            m.declarative_base = lambda: object
         sys.modules[mod] = m
 
 if "litellm" not in sys.modules:

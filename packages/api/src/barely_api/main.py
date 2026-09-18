@@ -40,8 +40,13 @@ def startup_event():
 
 @app.get("/api/runs")
 def list_runs():
+    from barely_core.k8s.spawner import drain_queued_runs
     db = SessionLocal()
     try:
+        try:
+            drain_queued_runs(db)
+        except Exception:
+            pass
         records = db.query(RunRecord).order_by(RunRecord.created_at.desc()).all()
         runs = []
         for r in records:
@@ -163,6 +168,7 @@ def get_models():
 
 @app.post("/api/runs/{run_id}/cancel")
 def cancel_run(run_id: str):
+    from barely_core.k8s.spawner import drain_queued_runs
     db = SessionLocal()
     try:
         r = db.query(RunRecord).filter(RunRecord.id == run_id).first()
@@ -171,11 +177,20 @@ def cancel_run(run_id: str):
         if r.status in ["completed", "cancelled"]:
             return {"message": f"Run is already {r.status}", "status": r.status}
         
+        was_isolated = bool(r.isolated_env)
         r.status = "cancelled"
         r.success = False
         r.failure_reason = "Cancelled by user"
         r.logs = (r.logs or "") + f"[{datetime.datetime.now().strftime('%H:%M:%S')}] 🛑 Run cancelled via API.\n"
         db.commit()
+
+        # If an isolated run slot was freed, auto-drain queued runs
+        if was_isolated:
+            try:
+                drain_queued_runs(db)
+            except Exception as de:
+                logger.error(f"Error auto-draining queue on run cancellation: {de}")
+
         return {"message": "Run cancelled successfully", "status": "cancelled"}
     finally:
         db.close()
@@ -183,7 +198,7 @@ def cancel_run(run_id: str):
 @app.post("/api/runs")
 def trigger_run(req: RunRequest):
     from barely_core.settings import get_setting
-    from barely_core.k8s.spawner import K8sJobSpawner
+    from barely_core.k8s.spawner import K8sJobSpawner, can_spawn_runner
 
     job_id = f"job_{uuid.uuid4().hex[:8]}"
     tag_str = ",".join([t.strip().lstrip("#") for t in (req.tags or []) if t.strip()]) if req.tags else None
@@ -198,20 +213,33 @@ def trigger_run(req: RunRequest):
     now_str = datetime.datetime.now().strftime("%H:%M:%S")
     initial_logs = ""
     runner_pod_name = None
+    initial_status = "pending"
 
     if should_isolate:
         spawner = K8sJobSpawner()
         if spawner.is_available:
-            ok, job_name, err = spawner.spawn_job(job_id)
-            if ok:
-                runner_pod_name = job_name
-                initial_logs = (
-                    f"[{now_str}] 🛡️ Ephemeral Pod Dispatched: Kubernetes Job '{job_name}' spawned in namespace '{spawner._namespace}'.\n"
-                    f"[{now_str}] 🔒 Security Hardening: Non-Root UID 10001, GID 10001, allowPrivilegeEscalation: false, capabilities: drop: ['ALL'], /dev/shm 1Gi.\n"
-                )
+            can_spawn, active_pods, max_pods = can_spawn_runner()
+            if can_spawn:
+                ok, job_name, err = spawner.spawn_job(job_id)
+                if ok:
+                    runner_pod_name = job_name
+                    initial_status = "pending"
+                    initial_logs = (
+                        f"[{now_str}] 🛡️ Ephemeral Pod Dispatched: Kubernetes Job '{job_name}' spawned in namespace '{spawner._namespace}' "
+                        f"(Active slots: {active_pods + 1}/{max_pods} - Helm values.yaml).\n"
+                        f"[{now_str}] 🔒 Security Hardening: Non-Root UID 10001, GID 10001, allowPrivilegeEscalation: false, capabilities: drop: ['ALL'], /dev/shm 1Gi.\n"
+                    )
+                else:
+                    initial_logs = f"[{now_str}] ⚠️ Kubernetes Job Spawner notice: {err}. Falling back to persistent worker pool.\n"
+                    should_isolate = False
             else:
-                initial_logs = f"[{now_str}] ⚠️ Kubernetes Job Spawner notice: {err}. Falling back to persistent worker pool.\n"
-                should_isolate = False
+                # Concurrency cap reached! Queue the run
+                initial_status = "queued"
+                runner_pod_name = None
+                initial_logs = (
+                    f"[{now_str}] ⏳ Concurrency Cap Reached: All {active_pods}/{max_pods} runner pod slots in use (configured via Helm execution.maxParallelPods).\n"
+                    f"[{now_str}] 📋 Run queued. Will automatically spawn as soon as an active pod finishes execution.\n"
+                )
         else:
             initial_logs = f"[{now_str}] ℹ️ Running outside Kubernetes cluster. Executing run on persistent worker pool.\n"
             should_isolate = False
@@ -228,7 +256,7 @@ def trigger_run(req: RunRequest):
             use_cache=req.use_cache,
             model=req.model.strip() if req.model and req.model.strip() else None,
             tags=tag_str,
-            status="pending",
+            status=initial_status,
             isolated_env=should_isolate,
             runner_pod=runner_pod_name,
             logs=initial_logs or None

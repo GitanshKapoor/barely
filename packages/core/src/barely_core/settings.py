@@ -32,7 +32,7 @@ KNOWN_SETTINGS = [
     {"key": "TEAMS_NOTIFY_ON", "is_secret": False, "label": "Microsoft Teams Notification Trigger", "category": "teams", "placeholder": "failure_only"},
     # Execution Engine & Pod Isolation
     {"key": "EXECUTION_MODE", "is_secret": False, "label": "Execution Engine Mode", "category": "execution", "placeholder": "worker_pool"},
-    {"key": "MAX_PARALLEL_PODS", "is_secret": False, "label": "Max Parallel Pods", "category": "execution", "placeholder": "5"}
+    {"key": "MAX_PARALLEL_PODS", "is_secret": False, "label": "Max Parallel Pods", "category": "execution", "placeholder": "10"}
 ]
 
 SECRETS_DIR = os.getenv("BARELY_SECRETS_DIR", "/etc/secrets/barely")
@@ -163,6 +163,13 @@ def get_setting(key: str, default: Optional[str] = None) -> Optional[str]:
     2. Encrypted Database Record (PostgreSQL AES-256 authenticated)
     3. Environment Variable (K8s secretKeyRef or local .env)
     """
+    # Concurrency limit: Helm / Environment variable has absolute priority as infrastructure capacity
+    if key == "MAX_PARALLEL_PODS":
+        env_pods = os.getenv("MAX_PARALLEL_PODS") or os.getenv("BARELY_MAX_PARALLEL_PODS")
+        if env_pods and env_pods.strip():
+            return env_pods.strip()
+        default = default or "10"
+
     # Priority 1: Kubernetes Mounted Secret File (from Helm / ESO volume)
     k8s_val = read_k8s_secret_file(key)
     if k8s_val:

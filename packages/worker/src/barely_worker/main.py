@@ -86,13 +86,21 @@ def run_single_job(run_id: str):
     finally:
         db.close()
 
+    exit_code = 0
     try:
         process_job(run_id, test_name, goal_text, start_url, device, strict_mode, use_cache, model)
         logger.info(f"Isolated execution finished for {run_id}. Terminating ephemeral runner pod.")
-        sys.exit(0)
     except Exception as e:
         logger.error(f"Isolated execution error for {run_id}: {e}")
-        sys.exit(1)
+        exit_code = 1
+    finally:
+        # A runner pod slot has now been freed; auto-drain next queued run if any exist
+        try:
+            from barely_core.k8s.spawner import drain_queued_runs
+            drain_queued_runs()
+        except Exception as qe:
+            logger.debug(f"Queue drain check on runner exit: {qe}")
+        sys.exit(exit_code)
 
 def start_worker():
     init_db()

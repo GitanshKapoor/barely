@@ -1601,39 +1601,32 @@ export default function SettingsPage() {
                     </div>
                   </div>
 
-                  {/* Parallel Pod Concurrency Slider */}
-                  <div className="p-4 rounded-xl bg-[#070b14] border border-slate-800/80 space-y-3">
-                    <div className="flex items-center justify-between">
-                      <div className="space-y-0.5">
-                        <label className="text-xs font-bold text-slate-200 flex items-center gap-2">
-                          Max Parallel Isolated Pods
-                          <span className="px-2 py-0.2 rounded-full text-[10px] font-mono bg-blue-500/10 text-blue-300 border border-blue-500/20">
-                            {maxParallelPods} Concurrent Pods
-                          </span>
-                        </label>
-                        <p className="text-[11px] text-slate-400">
-                          Maximum number of isolated runner pods scheduled concurrently before queueing in PostgreSQL
-                        </p>
+                  {/* Concurrency Limit: Display-only card managed via Helm values.yaml */}
+                  <div className="p-4 rounded-xl bg-[#070b14] border border-slate-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-xs font-bold text-white flex items-center gap-1.5">
+                          <span>⚡</span>
+                          <span>Max Concurrent Runner Pods: {maxParallelPods || 10}</span>
+                        </span>
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-mono bg-cyan-500/10 text-cyan-300 border border-cyan-500/25 font-semibold">
+                          Helm Managed
+                        </span>
                       </div>
-                      <span className="text-base font-bold font-mono text-white px-3 py-1 rounded-lg bg-slate-900 border border-slate-800">
-                        {maxParallelPods}
-                      </span>
+                      <p className="text-xs text-slate-400">
+                        Configured via Helm <code className="text-slate-300 font-mono text-[11px]">values.yaml</code> (<code className="text-cyan-400 font-mono text-[11px]">execution.maxParallelPods</code>)
+                      </p>
+                      <p className="text-[11px] text-slate-500">
+                        Cluster hardware capacity limit ({maxParallelPods || 10} pods × 2.5GB RAM = {(maxParallelPods || 10) * 2.5}GB required). If runs exceed this capacity, excess runs are placed into a managed FIFO queue and auto-start as pods finish.
+                      </p>
                     </div>
 
-                    <div className="flex items-center gap-4">
-                      <input
-                        type="range"
-                        min={1}
-                        max={20}
-                        step={1}
-                        value={maxParallelPods}
-                        onChange={(e) => setMaxParallelPods(parseInt(e.target.value))}
-                        className="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-[#0278ff]"
-                      />
-                      <div className="flex items-center gap-1.5 text-[10px] font-mono text-slate-500 shrink-0">
-                        <span>1</span>
-                        <span>...</span>
-                        <span>20 pods</span>
+                    <div className="flex items-center gap-3 shrink-0 self-start sm:self-auto">
+                      <div className="text-right px-3.5 py-2 rounded-lg bg-slate-900/90 border border-slate-800">
+                        <div className="text-lg font-black font-mono text-cyan-400 leading-tight">
+                          {maxParallelPods || 10} Pods
+                        </div>
+                        <div className="text-[10px] font-mono text-slate-500">Cluster Capacity Limit</div>
                       </div>
                     </div>
                   </div>
