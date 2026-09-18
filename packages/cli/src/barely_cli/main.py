@@ -34,6 +34,8 @@ def init():
 def run(
     goal: str = typer.Argument(..., help="Path to the goal markdown file"),
     url: Optional[str] = typer.Option(None, "--url", help="Override the starting URL"),
+    context: Optional[str] = typer.Option(None, "--context", "-c", help="Application & domain context (credentials, test rules, sandbox notes)"),
+    model: Optional[str] = typer.Option(None, "--model", "-m", help="AI model to use (default: anthropic/claude-sonnet-4-5)"),
     headless: bool = typer.Option(False, "--headless", help="Run browser in headless mode")
 ):
     load_dotenv()
@@ -44,11 +46,15 @@ def run(
         raise typer.Exit(1)
         
     parsed_goal = GoalParser.parse(goal_path)
-    start_url = url or "https://example.com"
+    if context:
+        parsed_goal.context = context
 
-    typer.echo("🤖 Booting Barely AI Agent...")
+    start_url = url or "https://example.com"
+    selected_model = model or os.getenv("BARELY_MODEL") or "anthropic/claude-sonnet-4-5"
+
+    typer.echo(f"🤖 Booting Barely AI Agent (model: {selected_model})...")
     engine = BrowserEngine(headless=headless)
-    agent = AgentLoop(engine=engine, model="groq/llama3-70b-8192")
+    agent = AgentLoop(engine=engine, model=selected_model)
     
     try:
         result = agent.run(parsed_goal, start_url=start_url)

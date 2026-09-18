@@ -17,10 +17,14 @@ class GoalParser:
             raise FileNotFoundError(f"Goal file not found: {path}")
             
         content = path.read_text(encoding="utf-8")
+        return cls.parse_content(content, default_name=path.stem)
+
+    @classmethod
+    def parse_content(cls, content: str, default_name: str = "Goal") -> Goal:
         metadata, body = cls._extract_frontmatter(content)
         
-        # Extract the title (first H1)
-        name = path.stem
+        # Extract the title (first H1 or name in metadata)
+        name = metadata.get("name", default_name)
         title_match = re.search(r'^#\s+(.+)$', body, re.MULTILINE)
         if title_match:
             name = title_match.group(1).strip()
@@ -37,10 +41,18 @@ class GoalParser:
                 steps.append(Step(index=step_index, instruction=instruction))
                 step_index += 1
                 
+        # Extract context if provided in frontmatter or markdown section
+        context = metadata.get("context")
+        if not context:
+            context_match = re.search(r'##\s+(?:Context|Background)\s*\n(.*?)(?=\n##|\Z)', body, re.DOTALL | re.IGNORECASE)
+            if context_match:
+                context = context_match.group(1).strip()
+
         return Goal(
             name=name,
             tags=metadata.get("tags", []),
             timeout=metadata.get("timeout", 120),
+            context=context,
             steps=steps,
             raw_content=body,
             metadata=metadata

@@ -1,0 +1,27 @@
+# ==============================================================================
+# Barely AI Testing - Example GitLab CI Pipeline
+# Add this job to your repository's .gitlab-ci.yml
+# ==============================================================================
+
+stages:
+  - test
+
+barely-ai-e2e-test:
+  stage: test
+  image: python:3.12-slim
+  variables:
+    # ANTHROPIC_API_KEY is configured in: Settings > CI/CD > Variables (Masked)
+    ANTHROPIC_API_KEY: $ANTHROPIC_API_KEY
+  before_script:
+    - apt-get update && apt-get install -y wget curl
+    - pip install barely
+    - playwright install --with-deps chromium
+  script:
+    - barely run --url $CI_ENVIRONMENT_URL --goal .barely/goals/checkout.md --headless
+  artifacts:
+    when: always
+    paths:
+      - .barely/reports/*.pdf
+      - .barely/reports/report.html
+      - .barely/screenshots/*.png
+    expire_in: 2 weeks

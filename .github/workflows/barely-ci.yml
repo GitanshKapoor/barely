@@ -1,10 +1,7 @@
 name: Barely CI
 
+# Manual trigger only - No automated pipeline runs on push or PR in this repository
 on:
-  push:
-    branches: [ "main" ]
-  pull_request:
-    branches: [ "main" ]
   workflow_dispatch:
 
 jobs:

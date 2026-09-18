@@ -10,8 +10,12 @@ for mod in [
     if mod not in sys.modules:
         m = MagicMock()
         if mod == "pydantic":
-            m.BaseModel = object
-            m.Field = lambda *args, **kwargs: None
+            class MockBaseModel:
+                def __init__(self, **kwargs):
+                    for k, v in kwargs.items():
+                        setattr(self, k, v)
+            m.BaseModel = MockBaseModel
+            m.Field = lambda default=None, default_factory=None, **kwargs: (default_factory() if default_factory else default)
         elif mod in ("sqlalchemy.orm", "sqlalchemy.ext.declarative"):
             m.declarative_base = lambda: object
         sys.modules[mod] = m

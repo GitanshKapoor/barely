@@ -1,30 +1,77 @@
 name: 'Barely AI Testing'
-description: 'Autonomous AI-driven end-to-end testing for web applications.'
+description: 'Autonomous AI-driven end-to-end testing for web applications in CI/CD pipelines.'
 branding:
   icon: 'check-circle'
-  color: 'blue'
+  color: 'orange'
+
 inputs:
   goal:
-    description: 'Path to the goal markdown file (e.g. .barely/goals/checkout.md)'
+    description: 'Path to the goal markdown file or directory (e.g. .barely/goals/checkout.md)'
     required: true
   url:
-    description: 'Override the starting URL (optional)'
+    description: 'Target starting URL under test (e.g. https://staging.myapp.com or PR preview URL)'
+    required: false
+  model:
+    description: 'AI model to use (default: anthropic/claude-sonnet-4-5)'
+    required: false
+    default: 'anthropic/claude-sonnet-4-5'
+  tags:
+    description: 'Filter test execution by tags (e.g. smoke, p0, regression)'
+    required: false
+  context:
+    description: 'Application & test context (credentials, test payment cards, domain rules) to guide the AI agent'
+    required: false
+
+  # --- AI Provider Secrets (Configured in GitHub Secrets) ---
+  anthropic_api_key:
+    description: 'Anthropic API key (from secrets.ANTHROPIC_API_KEY)'
+    required: false
+  openai_api_key:
+    description: 'OpenAI API key (from secrets.OPENAI_API_KEY)'
+    required: false
+  gemini_api_key:
+    description: 'Google Gemini API key (from secrets.GEMINI_API_KEY)'
+    required: false
+  groq_api_key:
+    description: 'Groq API key (from secrets.GROQ_API_KEY)'
     required: false
   api_key:
-    description: 'The API key for the AI provider (e.g. GROQ_API_KEY)'
-    required: true
+    description: 'Legacy generic AI provider API key'
+    required: false
+
+  # --- Database Persistence (Optional) ---
+  database_url:
+    description: 'PostgreSQL database connection string to persist run results & artifacts'
+    required: false
+
+  # --- Notification Webhooks (Optional) ---
+  slack_webhook_url:
+    description: 'Slack incoming webhook URL for test outcome notifications'
+    required: false
+  teams_webhook_url:
+    description: 'Microsoft Teams webhook URL for test outcome notifications'
+    required: false
+
+  # --- Jira Integration (Optional) ---
   jira_domain:
-    description: 'Jira Domain for auto-bug filing (optional)'
+    description: 'Jira Cloud Domain for auto-bug filing (e.g. yourcompany.atlassian.net)'
     required: false
   jira_email:
-    description: 'Jira Email (optional)'
+    description: 'Jira User Email'
     required: false
   jira_api_token:
-    description: 'Jira API Token (optional)'
+    description: 'Jira API Token'
     required: false
   jira_project_key:
-    description: 'Jira Project Key (optional)'
+    description: 'Jira Project Key (e.g. QA, BUG)'
     required: false
+
+outputs:
+  status:
+    description: 'Execution status of the test run (passed, failed, errored)'
+  report_path:
+    description: 'Path to the generated PDF audit report and artifact directory'
+
 runs:
   using: 'docker'
   image: 'Dockerfile'
@@ -33,7 +80,17 @@ runs:
     - "${{ inputs.goal }}"
     - "--headless"
   env:
-    GROQ_API_KEY: ${{ inputs.api_key }}
+    BARELY_TARGET_URL: ${{ inputs.url }}
+    BARELY_MODEL: ${{ inputs.model }}
+    BARELY_TAGS: ${{ inputs.tags }}
+    BARELY_CONTEXT: ${{ inputs.context }}
+    ANTHROPIC_API_KEY: ${{ inputs.anthropic_api_key || inputs.api_key }}
+    OPENAI_API_KEY: ${{ inputs.openai_api_key || inputs.api_key }}
+    GEMINI_API_KEY: ${{ inputs.gemini_api_key || inputs.api_key }}
+    GROQ_API_KEY: ${{ inputs.groq_api_key || inputs.api_key }}
+    DATABASE_URL: ${{ inputs.database_url }}
+    SLACK_WEBHOOK_URL: ${{ inputs.slack_webhook_url }}
+    TEAMS_WEBHOOK_URL: ${{ inputs.teams_webhook_url }}
     JIRA_DOMAIN: ${{ inputs.jira_domain }}
     JIRA_EMAIL: ${{ inputs.jira_email }}
     JIRA_API_TOKEN: ${{ inputs.jira_api_token }}

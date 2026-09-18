@@ -10,6 +10,7 @@ export interface RunConfigData {
   name?: string;
   url?: string;
   goalText?: string;
+  context?: string;
   device?: string;
   strictMode?: boolean;
   useCache?: boolean;
@@ -48,6 +49,7 @@ export default function NewRunForm({ initialData, triggerButton, onRunCreated }:
   const [name, setName] = useState(initialData?.name || '');
   const [url, setUrl] = useState(initialData?.url || 'https://');
   const [goalText, setGoalText] = useState(initialData?.goalText || '');
+  const [context, setContext] = useState(initialData?.context || '');
   const [device, setDevice] = useState(initialData?.device || 'desktop');
   const [strictMode, setStrictMode] = useState(Boolean(initialData?.strictMode));
   const [useCache, setUseCache] = useState(Boolean(initialData?.useCache));
@@ -184,6 +186,7 @@ export default function NewRunForm({ initialData, triggerButton, onRunCreated }:
       setName(initialData.name || '');
       setUrl(initialData.url || 'https://');
       setGoalText(initialData.goalText || '');
+      setContext(initialData.context || '');
       setDevice(initialData.device || 'desktop');
       setStrictMode(Boolean(initialData.strictMode));
       setUseCache(Boolean(initialData.useCache));
@@ -214,6 +217,7 @@ export default function NewRunForm({ initialData, triggerButton, onRunCreated }:
       setName('');
       setUrl('https://');
       setGoalText('');
+      setContext('');
       setDevice('desktop');
       setStrictMode(false);
       setUseCache(false);
@@ -240,6 +244,7 @@ export default function NewRunForm({ initialData, triggerButton, onRunCreated }:
           name, 
           url, 
           goal_text: goalText, 
+          context: context.trim() || undefined,
           device,
           strict_mode: strictMode,
           use_cache: useCache,
@@ -356,15 +361,42 @@ export default function NewRunForm({ initialData, triggerButton, onRunCreated }:
             </div>
           </div>
 
-          {/* Test Instructions */}
+          {/* Application Context (Given to Model Before Testing) */}
           <div className="space-y-1.5 text-left">
-            <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider text-left">Test Instructions</label>
+            <div className="flex items-center justify-between">
+              <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5 text-left">
+                <span className="w-2 h-2 rounded-full bg-purple-400 inline-block"></span>
+                Application Context <span className="text-[10px] text-slate-500 font-normal lowercase">(given to model before testing)</span>
+              </label>
+              <span className="text-[11px] text-purple-400/80 font-medium">App identity, persona &amp; domain knowledge</span>
+            </div>
+            <textarea 
+              rows={3} 
+              value={context} 
+              onChange={e => setContext(e.target.value)}
+              placeholder={"You are testing an e-commerce store ABC. Act as a customer browsing the catalog, adding items to cart, and proceeding through checkout.\nContext: Dismiss any promotional modal if shown. Sandbox card: 4242-4242-4242-4242."}
+              className="w-full block bg-[#070b14] border border-purple-500/30 rounded-lg p-3 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:border-purple-400 focus:ring-1 focus:ring-purple-400 resize-none font-mono leading-relaxed text-xs" 
+            />
+            <p className="text-[11px] text-slate-500">
+              Injected into the AI agent's system prompt to ground it in your application's domain (e.g. e-commerce, banking, SaaS).
+            </p>
+          </div>
+
+          {/* Test Goal & Instructions (Separate Input Field) */}
+          <div className="space-y-1.5 text-left">
+            <div className="flex items-center justify-between">
+              <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5 text-left">
+                <span className="w-2 h-2 rounded-full bg-[#0278ff] inline-block"></span>
+                Test Goal &amp; Instructions <span className="text-[10px] text-slate-500 font-normal lowercase">(separate step list)</span>
+              </label>
+              <span className="text-[11px] text-slate-500">Numbered sequence of actions</span>
+            </div>
             <textarea 
               required 
               rows={4} 
               value={goalText} 
               onChange={e => setGoalText(e.target.value)}
-              placeholder={"1. Type Artificial Intelligence into the search box\n2. Click search\n3. Verify the article title appears"}
+              placeholder={"1. Type running shoes into search box\n2. Click search button\n3. Click on the first product\n4. Click Add to Cart\n5. Verify cart counter displays 1"}
               className="w-full block bg-[#070b14] border border-slate-800 rounded-lg p-3 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:border-[#0278ff] focus:ring-1 focus:ring-[#0278ff] resize-none font-mono leading-relaxed" 
             />
           </div>

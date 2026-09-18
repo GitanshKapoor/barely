@@ -36,6 +36,7 @@ class RunRecord(Base):
     runner_pod = Column(String, nullable=True)
     create_jira_ticket = Column(Boolean, nullable=True)
     notification_channel = Column(String, nullable=True)
+    context = Column(Text, nullable=True)
     
     steps = relationship("RunStep", back_populates="run", cascade="all, delete-orphan")
 

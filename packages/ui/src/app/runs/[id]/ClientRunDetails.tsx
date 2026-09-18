@@ -35,6 +35,7 @@ interface RunData {
   id: string;
   name: string;
   goal: string;
+  context?: string | null;
   start_url: string;
   device: string;
   status: string;
@@ -330,6 +331,7 @@ export default function ClientRunDetails({ id }: { id: string }) {
               name: run.name || run.id,
               url: run.start_url || 'https://',
               goalText: run.goal,
+              context: run.context || undefined,
               device: run.device || 'desktop',
               strictMode: Boolean(run.strict_mode),
               useCache: false,
@@ -405,9 +407,23 @@ export default function ClientRunDetails({ id }: { id: string }) {
         </div>
       )}
 
-      {/* Goal Instructions Card */}
+      {/* Application Context Card (Given to Model Before Testing) */}
+      {run.context && (
+        <div className="rounded-xl border border-purple-900/40 bg-purple-950/20 p-4 text-xs font-mono space-y-1">
+          <div className="flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full bg-purple-400"></span>
+            <span className="text-[10px] uppercase font-bold text-purple-400 tracking-wider">Application Context (Model Persona &amp; Domain)</span>
+          </div>
+          <p className="text-purple-200/90 whitespace-pre-wrap leading-relaxed">{run.context}</p>
+        </div>
+      )}
+
+      {/* Goal & Test Instructions Card */}
       <div className="rounded-xl border border-slate-800 bg-[#0d1322] p-4 text-xs font-mono space-y-1">
-        <span className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Goal & Test Instructions</span>
+        <div className="flex items-center gap-1.5">
+          <span className="w-2 h-2 rounded-full bg-[#0278ff]"></span>
+          <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Test Goal &amp; Step-by-Step Instructions</span>
+        </div>
         <p className="text-slate-300 whitespace-pre-wrap leading-relaxed">{run.goal}</p>
       </div>
 

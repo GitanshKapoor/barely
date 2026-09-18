@@ -87,11 +87,13 @@ uv pip install barely
 barely init
 ```
 
-**2. Write a Test Goal** (`.barely/goals/checkout.md`)
+**2. Write a Test Goal with Application Context** (`.barely/goals/checkout.md`)
 ```markdown
 ---
+name: Checkout Flow
 tags: [smoke, e2e]
 timeout: 120
+context: "You are testing an e-commerce store ABC. Act as a shopper browsing the catalog, managing cart, and purchasing."
 ---
 # Test Checkout Flow
 1. Navigate to the homepage
@@ -100,9 +102,13 @@ timeout: 120
 4. Verify the cart badge displays "1"
 ```
 
-**3. Run the Agent**
+**3. Run the Agent (with optional CLI context override)**
 ```bash
-barely run --url https://staging.myapp.com --goal .barely/goals/checkout.md
+barely run \
+  --url https://staging.myapp.com \
+  --goal .barely/goals/checkout.md \
+  --context "You are testing an e-commerce store ABC" \
+  --model anthropic/claude-sonnet-4-5
 ```
 
 ## 🏗️ Enterprise Deployment Architectures
@@ -116,6 +122,7 @@ Barely provides production-grade deployment manifests across three environments:
 | 🐳 **Docker Compose** | Multi-bridge network isolation, non-root execution, 1GB `/dev/shm` for Chromium, zero DB host ports. | [📖 deploy/docker/README.md](deploy/docker/README.md) |
 | ⎈ **Kubernetes (Helm)** | NGINX Ingress Controller, LoadBalancer Service, zero-trust `NetworkPolicy`, HPA, Cloud DB, External Secrets (ESO). | [📖 charts/barely/README.md](charts/barely/README.md) |
 | ☁️ **AWS ECS (Terraform)** | 100% Private VPC subnets (`assign_public_ip = false`), ALB path routing, AWS Cloud Map DNS, Secrets Manager. | [📖 deploy/terraform/README.md](deploy/terraform/README.md) |
+| 🚀 **CI/CD Integration** | Autonomous AI tests on Pull Requests, GitHub Secrets setup, PR merge gating, PDF report artifacts. | [📖 deploy/ci-cd/README.md](deploy/ci-cd/README.md) |
 
 ---
 
@@ -263,6 +270,7 @@ For detailed setup, configuration parameters, and step-by-step installation runb
 - 🐳 **[Docker Compose Deployment Guide](deploy/docker/README.md)**
 - ⎈ **[Kubernetes Helm Chart Guide](charts/barely/README.md)**
 - ☁️ **[AWS ECS Fargate Terraform Guide](deploy/terraform/README.md)**
+- 🚀 **[CI/CD Pipeline Integration Guide](deploy/ci-cd/README.md)**
 
 
 ## 💬 Community

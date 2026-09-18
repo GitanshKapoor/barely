@@ -35,6 +35,7 @@ class RunRequest(BaseModel):
     isolated_env: Optional[bool] = None
     create_jira_ticket: Optional[bool] = None
     notification_channel: Optional[str] = None
+    context: Optional[str] = None
 
 @app.on_event("startup")
 def startup_event():
@@ -71,6 +72,7 @@ def list_runs():
                 "notification_channel": getattr(r, "notification_channel", None),
                 "isolated_env": bool(getattr(r, "isolated_env", False)),
                 "runner_pod": getattr(r, "runner_pod", None),
+                "context": getattr(r, "context", None),
                 "created_at": r.created_at.isoformat() if r.created_at else None
             })
         return {"runs": runs}
@@ -162,6 +164,7 @@ def get_run(run_id: str):
             "notification_channel": getattr(r, "notification_channel", None),
             "isolated_env": bool(getattr(r, "isolated_env", False)),
             "runner_pod": getattr(r, "runner_pod", None),
+            "context": getattr(r, "context", None),
             "steps": [{"description": s.description, "thought": s.thought, "screenshot": s.screenshot_base64} for s in steps]
         }
     finally:
@@ -268,6 +271,7 @@ def trigger_run(req: RunRequest):
             runner_pod=runner_pod_name,
             create_jira_ticket=req.create_jira_ticket,
             notification_channel=req.notification_channel.strip().lower() if req.notification_channel else None,
+            context=req.context.strip() if req.context and req.context.strip() else None,
             logs=initial_logs or None
         )
         db.add(new_run)

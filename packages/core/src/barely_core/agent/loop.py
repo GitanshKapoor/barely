@@ -19,8 +19,9 @@ SYSTEM_PROMPT = """You are Barely, an autonomous precision E2E QA testing agent.
 Your objective is to execute the user's test instructions sequentially and accurately.
 You will receive:
 1. USER TEST INSTRUCTIONS (the exact numbered steps you must follow)
-2. PAST ACTIONS ALREADY PERFORMED (actions you have already taken)
-3. CURRENT DOM ACCESSIBILITY TREE (the interactive elements on the page)
+2. APPLICATION & TEST CONTEXT (optional domain knowledge, credentials, or background rules to guide your decisions)
+3. PAST ACTIONS ALREADY PERFORMED (actions you have already taken)
+4. CURRENT DOM ACCESSIBILITY TREE (the interactive elements on the page)
 
 Rules:
 - Strictly follow the numbered user instructions in sequence.
@@ -91,6 +92,8 @@ class AgentLoop:
         step_history = []
         rich_history = []
         self._append_log(f"🚀 Initializing Barely Agent Runner on {start_url}...")
+        if getattr(goal, "context", None) and str(goal.context).strip():
+            self._append_log(f"🧠 Application Context: \"{goal.context.strip()}\"")
         
         try:
             self.engine.start()
@@ -125,7 +128,7 @@ class AgentLoop:
                 else:
                     self._append_log(f"🧠 Step {step_count}: Analyzing DOM and prompting AI agent...")
                     prompt = self._build_prompt(goal, dom_elements, step_history)
-                    action_payload = self._call_llm(prompt)
+                    action_payload = self._call_llm(prompt, context=getattr(goal, "context", None))
                     thought_log = action_payload.get('thought') or 'No thought provided'
                     self._append_log(f"💭 Agent Thought: {thought_log}")
                 
@@ -265,8 +268,15 @@ class AgentLoop:
 
     def _build_prompt(self, goal, dom, history):
         prompt = f"""TEST NAME: {goal.name}
+"""
+        if getattr(goal, "context", None) and str(goal.context).strip():
+            prompt += f"""
+APPLICATION CONTEXT (WHAT YOU ARE TESTING):
+{goal.context.strip()}
+"""
 
-USER TEST INSTRUCTIONS:
+        prompt += f"""
+USER TEST GOAL & INSTRUCTIONS:
 {goal.raw_content}
 
 PAST ACTIONS ALREADY PERFORMED:
@@ -277,22 +287,34 @@ PAST ACTIONS ALREADY PERFORMED:
             for i, h in enumerate(history):
                 prompt += f"- Step {i + 1}: {h}\n"
 
+        context_instruction = " within the specified APPLICATION CONTEXT" if getattr(goal, "context", None) and str(goal.context).strip() else ""
+
         prompt += f"""
 CURRENT DOM ACCESSIBILITY TREE:
 {json.dumps(dom, indent=2)}
 
 INSTRUCTION:
-Review PAST ACTIONS ALREADY PERFORMED against USER TEST INSTRUCTIONS.
+Review PAST ACTIONS ALREADY PERFORMED against USER TEST GOAL & INSTRUCTIONS{context_instruction}.
 - If the current step or all instructions have already been completed, IMMEDIATELY return: {{"thought": "All user instructions are complete. Finishing test.", "action": "finish"}}
 - Otherwise, execute the single NEXT pending user instruction without repeating past actions.
 """
         return prompt
 
-    def _call_llm(self, prompt: str) -> Dict[str, Any]:
+    def _call_llm(self, prompt: str, context: str = None) -> Dict[str, Any]:
         import re
 
+        system_content = SYSTEM_PROMPT
+        if context and str(context).strip():
+            system_content += f"""
+
+APPLICATION CONTEXT & TESTING PERSONA:
+You are testing the following application:
+"{context.strip()}"
+Always adopt the persona, domain knowledge, and testing mindset appropriate for this specific application (e.g. e-commerce shopping flow, FinTech banking portal, SaaS dashboard). Interpret navigation, buttons, forms, and validation states accordingly.
+"""
+
         messages = [
-            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "system", "content": system_content},
             {"role": "user", "content": prompt}
         ]
         

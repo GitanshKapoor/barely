@@ -79,7 +79,8 @@ export default function ExecutionsPage() {
         const matchesId = (run.id || '').toLowerCase().includes(q);
         const matchesUrl = (run.start_url || '').toLowerCase().includes(q);
         const matchesGoal = (run.goal || '').toLowerCase().includes(q);
-        if (!matchesName && !matchesId && !matchesUrl && !matchesGoal) return false;
+        const matchesContext = (run.context || '').toLowerCase().includes(q);
+        if (!matchesName && !matchesId && !matchesUrl && !matchesGoal && !matchesContext) return false;
       }
 
       // Device filter
@@ -447,11 +448,15 @@ export default function ExecutionsPage() {
                           name: run.name || run.id,
                           url: run.start_url || 'https://',
                           goalText: run.goal,
+                          context: run.context || undefined,
                           device: run.device || 'desktop',
                           strictMode: Boolean(run.strict_mode),
                           useCache: false,
                           isolatedEnv: Boolean(run.isolated_env),
-                          tags: run.tags || []
+                          model: run.model,
+                          tags: run.tags || [],
+                          createJiraTicket: run.create_jira_ticket ?? undefined,
+                          notificationChannel: run.notification_channel ?? undefined
                         }}
                         onRunCreated={() => fetchRuns()}
                         triggerButton={(openModal) => (
