@@ -33,6 +33,8 @@ class RunRequest(BaseModel):
     model: Optional[str] = None
     tags: Optional[List[str]] = []
     isolated_env: Optional[bool] = None
+    create_jira_ticket: Optional[bool] = None
+    notification_channel: Optional[str] = None
 
 @app.on_event("startup")
 def startup_event():
@@ -65,6 +67,8 @@ def list_runs():
                 "tags": [t for t in r.tags.split(",") if t] if r.tags else [],
                 "jira_issue_key": getattr(r, "jira_issue_key", None),
                 "jira_issue_url": getattr(r, "jira_issue_url", None),
+                "create_jira_ticket": getattr(r, "create_jira_ticket", None),
+                "notification_channel": getattr(r, "notification_channel", None),
                 "isolated_env": bool(getattr(r, "isolated_env", False)),
                 "runner_pod": getattr(r, "runner_pod", None),
                 "created_at": r.created_at.isoformat() if r.created_at else None
@@ -154,6 +158,8 @@ def get_run(run_id: str):
             "logs": r.logs or "",
             "jira_issue_key": getattr(r, "jira_issue_key", None),
             "jira_issue_url": getattr(r, "jira_issue_url", None),
+            "create_jira_ticket": getattr(r, "create_jira_ticket", None),
+            "notification_channel": getattr(r, "notification_channel", None),
             "isolated_env": bool(getattr(r, "isolated_env", False)),
             "runner_pod": getattr(r, "runner_pod", None),
             "steps": [{"description": s.description, "thought": s.thought, "screenshot": s.screenshot_base64} for s in steps]
@@ -260,6 +266,8 @@ def trigger_run(req: RunRequest):
             status=initial_status,
             isolated_env=should_isolate,
             runner_pod=runner_pod_name,
+            create_jira_ticket=req.create_jira_ticket,
+            notification_channel=req.notification_channel.strip().lower() if req.notification_channel else None,
             logs=initial_logs or None
         )
         db.add(new_run)
@@ -642,6 +650,7 @@ class SaveIntegrationsRequest(BaseModel):
     slack_notify_on: Optional[str] = None
     teams_webhook_url: Optional[str] = None
     teams_notify_on: Optional[str] = None
+    default_notification_mechanism: Optional[str] = None
 
 @app.get("/api/integrations")
 def get_integrations():
@@ -700,6 +709,10 @@ def save_integrations(req: SaveIntegrationsRequest):
         set_setting("TEAMS_WEBHOOK_URL", req.teams_webhook_url.strip(), is_secret=True)
     if req.teams_notify_on is not None:
         set_setting("TEAMS_NOTIFY_ON", req.teams_notify_on.strip(), is_secret=False)
+
+    # Save General Notification settings
+    if req.default_notification_mechanism is not None:
+        set_setting("DEFAULT_NOTIFICATION_MECHANISM", req.default_notification_mechanism.strip().lower(), is_secret=False)
 
     return {
         "success": True,

@@ -19,7 +19,8 @@ import {
   Tag,
   Cpu,
   Loader2,
-  AlertCircle
+  AlertCircle,
+  Bell
 } from 'lucide-react';
 import NewRunForm from '../../../components/NewRunForm';
 import { formatModelName } from '../../../utils/models';
@@ -48,6 +49,8 @@ interface RunData {
   jira_issue_url?: string | null;
   isolated_env?: boolean;
   runner_pod?: string | null;
+  create_jira_ticket?: boolean | null;
+  notification_channel?: string | null;
   steps: RunStep[];
 }
 
@@ -265,6 +268,20 @@ export default function ClientRunDetails({ id }: { id: string }) {
                   <span>Pod: {run.runner_pod || 'isolated'}</span>
                 </span>
               )}
+              {run.create_jira_ticket && !run.jira_issue_key && (
+                <span className="text-[10px] font-semibold px-2.5 py-0.5 rounded-full bg-blue-500/10 text-[#2684ff] border border-blue-500/25 flex items-center gap-1 shadow-sm" title="Auto-creates Jira defect if test fails">
+                  <svg className="w-2.5 h-2.5 fill-current" viewBox="0 0 24 24">
+                    <path d="M11.53 2c0 2.4 1.97 4.35 4.35 4.35h1.78v1.7c0 2.4 1.94 4.34 4.34 4.35V2.84A.84.84 0 0 0 21.16 2H11.53zM5.77 7.76c0 2.4 1.96 4.34 4.34 4.34h1.78v1.7c0 2.4 1.94 4.35 4.35 4.35V8.6a.84.84 0 0 0-.84-.84H5.77zm-5.77 5.76c0 2.4 1.95 4.34 4.34 4.34h1.79v1.7c0 2.4 1.94 4.35 4.34 4.35V14.36a.84.84 0 0 0-.84-.84H0z"/>
+                  </svg>
+                  <span>Jira Auto-Filing</span>
+                </span>
+              )}
+              {run.notification_channel && run.notification_channel !== 'default' && (
+                <span className="text-[10px] font-mono px-2.5 py-0.5 rounded-full bg-amber-500/10 text-amber-300 border border-amber-500/20 flex items-center gap-1">
+                  <Bell className="w-3 h-3 text-amber-400" />
+                  <span>{run.notification_channel === 'none' ? 'Muted' : run.notification_channel === 'slack' ? 'Slack' : run.notification_channel === 'teams' ? 'Teams' : 'Slack & Teams'}</span>
+                </span>
+              )}
             </div>
             <div className="flex items-center gap-3 text-xs text-slate-400 flex-wrap">
               <span className="font-mono text-slate-500">{run.id}</span>
@@ -318,7 +335,9 @@ export default function ClientRunDetails({ id }: { id: string }) {
               useCache: false,
               isolatedEnv: Boolean(run.isolated_env),
               model: run.model,
-              tags: run.tags || []
+              tags: run.tags || [],
+              createJiraTicket: run.create_jira_ticket ?? undefined,
+              notificationChannel: run.notification_channel ?? undefined
             }}
             onRunCreated={() => fetchRun()}
             triggerButton={(openModal) => (

@@ -25,6 +25,7 @@ import {
   BookOpen, 
   Terminal, 
   Bell, 
+  BellOff,
   Send,
   ChevronDown,
   ChevronRight,
@@ -169,6 +170,10 @@ export default function SettingsPage() {
   const [savingTeams, setSavingTeams] = useState(false);
   const [teamsTestResult, setTeamsTestResult] = useState<{ success: boolean; message: string } | null>(null);
 
+  // General Notification Defaults
+  const [defaultNotificationMechanism, setDefaultNotificationMechanism] = useState<'both' | 'slack' | 'teams' | 'none'>('both');
+  const [savingDefaultMechanism, setSavingDefaultMechanism] = useState(false);
+
   // Execution Engine & Pod Isolation States
   const [executionMode, setExecutionMode] = useState<'worker_pool' | 'k8s_job'>('worker_pool');
   const [maxParallelPods, setMaxParallelPods] = useState<number>(10);
@@ -273,6 +278,9 @@ export default function SettingsPage() {
             setTeamsNotifyOn(intg.teams.notify_on || 'failure_only');
             setTeamsConfigured(Boolean(intg.teams.configured));
             setTeamsMaskedWebhook(intg.teams.masked_webhook || '');
+          }
+          if (intg?.default_notification_mechanism) {
+            setDefaultNotificationMechanism(intg.default_notification_mechanism as any);
           }
         }
       } catch (ie) {
@@ -558,6 +566,29 @@ export default function SettingsPage() {
       showToast(`Save error: ${e.message}`, 'error');
     } finally {
       setSavingTeams(false);
+    }
+  };
+
+  const handleSaveDefaultMechanism = async (newMechanism?: 'both' | 'slack' | 'teams' | 'none') => {
+    const val = newMechanism || defaultNotificationMechanism;
+    setSavingDefaultMechanism(true);
+    try {
+      const res = await fetch(`${apiUrl}/api/integrations`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ default_notification_mechanism: val })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        showToast(`Default notification channel updated to ${val.toUpperCase()}!`, 'success');
+        setDefaultNotificationMechanism(val);
+      } else {
+        showToast(data.detail || data.error || 'Failed to update default notification channel', 'error');
+      }
+    } catch (e: any) {
+      showToast(`Save error: ${e.message}`, 'error');
+    } finally {
+      setSavingDefaultMechanism(false);
     }
   };
 
@@ -2337,6 +2368,99 @@ secrets:
 
               {!collapsedSections.notifications && (
                 <div className="p-6 space-y-6">
+                  {/* Default Notification Mechanism Card */}
+                  <div className="rounded-xl border border-slate-800/80 bg-[#070b14]/70 p-5 space-y-4 shadow-sm hover:border-slate-700/80 transition-colors">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-8 h-8 rounded-lg bg-amber-500/15 text-amber-400 flex items-center justify-center border border-amber-500/30 shrink-0">
+                          <Sliders className="w-4 h-4" />
+                        </div>
+                        <div>
+                          <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                            Default Notification Channel
+                            <span className="text-[10px] font-mono text-slate-500 font-normal">Platform Default</span>
+                          </h3>
+                          <p className="text-xs text-slate-400">
+                            Sets the default alert destination when test runs finish or fail. Can be overridden per run in the Test Configurator.
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-500/10 text-amber-300 border border-amber-500/20 font-mono">
+                          Active: {defaultNotificationMechanism === 'both' ? 'Both (Slack & Teams)' : defaultNotificationMechanism === 'slack' ? 'Slack Only' : defaultNotificationMechanism === 'teams' ? 'Teams Only' : 'Muted'}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2.5 pt-1">
+                      {[
+                        {
+                          id: 'both',
+                          label: 'Both Slack & Teams',
+                          desc: 'Broadcast incidents to both Slack & Teams channels',
+                          badge: 'Recommended'
+                        },
+                        {
+                          id: 'slack',
+                          label: 'Slack Only',
+                          desc: 'Dispatch interactive Block Kit cards to Slack only'
+                        },
+                        {
+                          id: 'teams',
+                          label: 'Teams Only',
+                          desc: 'Post rich Adaptive Cards to Microsoft Teams only'
+                        },
+                        {
+                          id: 'none',
+                          label: 'Muted / None',
+                          desc: 'Suppress automated webhook channel alerts by default'
+                        }
+                      ].map((opt) => {
+                        const isSelected = defaultNotificationMechanism === opt.id;
+                        return (
+                          <button
+                            key={opt.id}
+                            type="button"
+                            onClick={() => handleSaveDefaultMechanism(opt.id as any)}
+                            disabled={savingDefaultMechanism}
+                            className={`p-3 rounded-lg border text-left transition-all cursor-pointer flex flex-col justify-between ${
+                              isSelected
+                                ? 'bg-amber-500/15 border-amber-500/60 shadow-md shadow-amber-950/20 text-white'
+                                : 'bg-[#0a0f1d] border-slate-800 hover:border-slate-700 text-slate-400 hover:text-slate-200'
+                            }`}
+                          >
+                            <div className="space-y-1">
+                              <div className="flex items-center justify-between">
+                                <span className={`text-xs font-bold flex items-center gap-1.5 ${isSelected ? 'text-amber-300' : 'text-slate-200'}`}>
+                                  {opt.id === 'none' && <BellOff className="w-3.5 h-3.5 text-slate-500 shrink-0" />}
+                                  {opt.label}
+                                </span>
+                                {opt.badge && (
+                                  <span className="px-1.5 py-0.2 rounded text-[9px] font-semibold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                                    {opt.badge}
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-[11px] text-slate-400 leading-snug">{opt.desc}</p>
+                            </div>
+                            <div className="pt-2 flex items-center justify-end">
+                              {isSelected ? (
+                                <span className="text-[10px] font-mono font-bold text-amber-400 flex items-center gap-1">
+                                  <Check className="w-3 h-3" /> Default Active
+                                </span>
+                              ) : (
+                                <span className="text-[10px] font-mono text-slate-500 hover:text-slate-300">
+                                  Click to Set
+                                </span>
+                              )}
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
                   {/* 1. Slack Incident Notifications Card */}
                   <div className="rounded-xl border border-slate-800/80 bg-[#070b14]/70 p-5 space-y-4 shadow-sm hover:border-slate-700/80 transition-colors">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">

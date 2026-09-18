@@ -30,6 +30,8 @@ KNOWN_SETTINGS = [
     # Microsoft Teams Incident Alerts
     {"key": "TEAMS_WEBHOOK_URL", "is_secret": True, "label": "Microsoft Teams Webhook URL", "category": "teams", "placeholder": "https://company.webhook.office.com/..."},
     {"key": "TEAMS_NOTIFY_ON", "is_secret": False, "label": "Microsoft Teams Notification Trigger", "category": "teams", "placeholder": "failure_only"},
+    # General Incident Notification Defaults
+    {"key": "DEFAULT_NOTIFICATION_MECHANISM", "is_secret": False, "label": "Default Notification Channel", "category": "notifications", "placeholder": "both"},
     # Execution Engine & Pod Isolation
     {"key": "EXECUTION_MODE", "is_secret": False, "label": "Execution Engine Mode", "category": "execution", "placeholder": "worker_pool"},
     {"key": "MAX_PARALLEL_PODS", "is_secret": False, "label": "Max Parallel Pods", "category": "execution", "placeholder": "10"}
@@ -545,7 +547,8 @@ def get_integrations_summary() -> Dict[str, Any]:
             "notify_on": get_setting("TEAMS_NOTIFY_ON") or "failure_only",
             "has_webhook": bool(teams_url),
             "masked_webhook": mask_secret(teams_url) if teams_url else ""
-        }
+        },
+        "default_notification_mechanism": (get_setting("DEFAULT_NOTIFICATION_MECHANISM") or "both").strip().lower()
     }
 
 

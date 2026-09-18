@@ -49,7 +49,11 @@ def dispatch_run_notifications(run_id: str):
         # -------------------------------------------------------------
         # 1. Jira Automated Issue Creation (if failed and toggle active)
         # -------------------------------------------------------------
-        auto_jira = (get_setting("JIRA_AUTO_CREATE") or "").strip().lower() in ("true", "1", "yes")
+        if getattr(run, "create_jira_ticket", None) is not None:
+            auto_jira = bool(run.create_jira_ticket)
+        else:
+            auto_jira = (get_setting("JIRA_AUTO_CREATE") or "").strip().lower() in ("true", "1", "yes")
+
         is_failure = run.success is False or run.status == "failed"
 
         if is_failure and auto_jira and not run_data.get("jira_issue_key"):
@@ -68,38 +72,49 @@ def dispatch_run_notifications(run_id: str):
                     logger.warning(f"Failed to auto-create Jira ticket: {error}")
 
         # -------------------------------------------------------------
+        # Determine Notification Mechanism (Run-level override vs default)
+        # -------------------------------------------------------------
+        run_channel = getattr(run, "notification_channel", None)
+        if not run_channel or run_channel.strip().lower() == "default":
+            effective_channel = (get_setting("DEFAULT_NOTIFICATION_MECHANISM") or "both").strip().lower()
+        else:
+            effective_channel = run_channel.strip().lower()
+
+        # -------------------------------------------------------------
         # 2. Slack Incident Notifications
         # -------------------------------------------------------------
-        slack_client = SlackClient()
-        slack_trigger = (get_setting("SLACK_NOTIFY_ON") or "failure_only").strip().lower()
+        if effective_channel in ("both", "slack"):
+            slack_client = SlackClient()
+            slack_trigger = (get_setting("SLACK_NOTIFY_ON") or "failure_only").strip().lower()
 
-        if slack_client.is_configured and slack_trigger != "disabled":
-            should_notify_slack = (
-                slack_trigger == "all" or
-                (slack_trigger == "failure_only" and is_failure)
-            )
-            if should_notify_slack:
-                try:
-                    slack_client.send_notification(run_data)
-                except Exception as se:
-                    logger.error(f"Error dispatching Slack notification: {se}")
+            if slack_client.is_configured and slack_trigger != "disabled":
+                should_notify_slack = (
+                    slack_trigger == "all" or
+                    (slack_trigger == "failure_only" and is_failure)
+                )
+                if should_notify_slack:
+                    try:
+                        slack_client.send_notification(run_data)
+                    except Exception as se:
+                        logger.error(f"Error dispatching Slack notification: {se}")
 
         # -------------------------------------------------------------
         # 3. Microsoft Teams Incident Notifications
         # -------------------------------------------------------------
-        teams_client = TeamsClient()
-        teams_trigger = (get_setting("TEAMS_NOTIFY_ON") or "failure_only").strip().lower()
+        if effective_channel in ("both", "teams"):
+            teams_client = TeamsClient()
+            teams_trigger = (get_setting("TEAMS_NOTIFY_ON") or "failure_only").strip().lower()
 
-        if teams_client.is_configured and teams_trigger != "disabled":
-            should_notify_teams = (
-                teams_trigger == "all" or
-                (teams_trigger == "failure_only" and is_failure)
-            )
-            if should_notify_teams:
-                try:
-                    teams_client.send_notification(run_data)
-                except Exception as te:
-                    logger.error(f"Error dispatching Teams notification: {te}")
+            if teams_client.is_configured and teams_trigger != "disabled":
+                should_notify_teams = (
+                    teams_trigger == "all" or
+                    (teams_trigger == "failure_only" and is_failure)
+                )
+                if should_notify_teams:
+                    try:
+                        teams_client.send_notification(run_data)
+                    except Exception as te:
+                        logger.error(f"Error dispatching Teams notification: {te}")
 
     except Exception as e:
         logger.error(f"Unexpected error in dispatch_run_notifications for run {run_id}: {e}")

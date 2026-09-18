@@ -191,5 +191,66 @@ class TestTeamsIntegration(unittest.TestCase):
         self.assertEqual(card["@type"], "MessageCard")
         self.assertEqual(card["themeColor"], "2EB67D")
 
+class TestDispatcherPerRunPreferences(unittest.TestCase):
+    @patch("barely_core.integrations.dispatcher.SessionLocal")
+    @patch("barely_core.integrations.dispatcher.get_setting")
+    @patch("barely_core.integrations.dispatcher.SlackClient")
+    @patch("barely_core.integrations.dispatcher.TeamsClient")
+    @patch("barely_core.integrations.dispatcher.JiraClient")
+    def test_per_run_dispatcher_options(self, mock_jira_cls, mock_teams_cls, mock_slack_cls, mock_get_setting, mock_session_cls):
+        from barely_core.integrations.dispatcher import dispatch_run_notifications
+
+        mock_db = MagicMock()
+        mock_session_cls.return_value = mock_db
+
+        mock_run = MagicMock()
+        mock_run.id = "run-test-override"
+        mock_run.name = "Test Run"
+        mock_run.start_url = "https://example.com"
+        mock_run.device = "desktop"
+        mock_run.status = "failed"
+        mock_run.success = False
+        mock_run.failure_reason = "Assertion failed"
+        mock_run.model = "claude-sonnet-4-5"
+        mock_run.jira_issue_key = None
+        mock_run.jira_issue_url = None
+        mock_run.create_jira_ticket = True
+        mock_run.notification_channel = "slack"
+
+        mock_db.query.return_value.filter.return_value.first.return_value = mock_run
+        mock_db.query.return_value.filter.return_value.order_by.return_value.all.return_value = []
+
+        mock_jira = MagicMock()
+        mock_jira.is_configured = True
+        mock_jira.create_issue.return_value = (True, "QA-101", "https://jira/QA-101", None)
+        mock_jira_cls.return_value = mock_jira
+
+        mock_slack = MagicMock()
+        mock_slack.is_configured = True
+        mock_slack_cls.return_value = mock_slack
+
+        mock_teams = MagicMock()
+        mock_teams.is_configured = True
+        mock_teams_cls.return_value = mock_teams
+
+        # Global JIRA_AUTO_CREATE is false, but run.create_jira_ticket is True
+        mock_get_setting.side_effect = lambda k: {
+            "JIRA_AUTO_CREATE": "false",
+            "DEFAULT_NOTIFICATION_MECHANISM": "both",
+            "SLACK_NOTIFY_ON": "failure_only",
+            "TEAMS_NOTIFY_ON": "failure_only"
+        }.get(k, "")
+
+        dispatch_run_notifications("run-test-override")
+
+        # 1. Jira issue should be created because of per-run override True
+        mock_jira.create_issue.assert_called_once()
+
+        # 2. Slack should be called because channel is 'slack'
+        mock_slack.send_notification.assert_called_once()
+
+        # 3. Teams should NOT be called because channel is 'slack'
+        mock_teams.send_notification.assert_not_called()
+
 if __name__ == "__main__":
     unittest.main()

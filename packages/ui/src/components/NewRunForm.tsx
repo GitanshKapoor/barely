@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
-import { Play, Globe, Smartphone, Monitor, Tablet, X, Info, Tag, ArrowRight, Loader2, Cpu, ChevronDown } from 'lucide-react';
+import { Play, Globe, Smartphone, Monitor, Tablet, X, Info, Tag, ArrowRight, Loader2, Cpu, ChevronDown, Bell } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { formatModelName } from '../utils/models';
 
@@ -16,6 +16,8 @@ export interface RunConfigData {
   model?: string;
   tags?: string[];
   isolatedEnv?: boolean;
+  createJiraTicket?: boolean;
+  notificationChannel?: string;
 }
 
 interface ModelOption {
@@ -61,6 +63,15 @@ export default function NewRunForm({ initialData, triggerButton, onRunCreated }:
   const [tagInput, setTagInput] = useState('');
   const [toast, setToast] = useState<{ id: string; name: string } | null>(null);
 
+  // Enterprise Integrations (Jira, Slack, Teams)
+  const [jiraConfigured, setJiraConfigured] = useState(false);
+  const [jiraProjectKey, setJiraProjectKey] = useState('QA');
+  const [createJiraTicket, setCreateJiraTicket] = useState(Boolean(initialData?.createJiraTicket));
+  const [slackConfigured, setSlackConfigured] = useState(false);
+  const [teamsConfigured, setTeamsConfigured] = useState(false);
+  const [defaultNotificationMechanism, setDefaultNotificationMechanism] = useState<string>('both');
+  const [notificationChannel, setNotificationChannel] = useState<string>(initialData?.notificationChannel || 'default');
+
   const router = useRouter();
 
   useEffect(() => {
@@ -85,6 +96,29 @@ export default function NewRunForm({ initialData, triggerButton, onRunCreated }:
           setIsK8sAvailable(Boolean(engData.is_k8s_available));
           if (engData.mode === 'k8s_job' && !initialData) {
             setIsolatedEnv(true);
+          }
+        }
+
+        // Fetch enterprise integrations configuration
+        const intgRes = await fetch(`${apiUrl}/api/integrations`);
+        if (intgRes.ok) {
+          const intgData = await intgRes.json();
+          const intg = intgData.integrations;
+          if (intg?.jira) {
+            setJiraConfigured(Boolean(intg.jira.configured));
+            setJiraProjectKey(intg.jira.project_key || 'QA');
+            if (initialData?.createJiraTicket === undefined) {
+              setCreateJiraTicket(Boolean(intg.jira.auto_create));
+            }
+          }
+          if (intg?.slack) {
+            setSlackConfigured(Boolean(intg.slack.configured));
+          }
+          if (intg?.teams) {
+            setTeamsConfigured(Boolean(intg.teams.configured));
+          }
+          if (intg?.default_notification_mechanism) {
+            setDefaultNotificationMechanism(intg.default_notification_mechanism);
           }
         }
       } catch {
@@ -170,6 +204,12 @@ export default function NewRunForm({ initialData, triggerButton, onRunCreated }:
       }
       setTags(initialData.tags || []);
       setTagInput('');
+      if (initialData.createJiraTicket !== undefined) {
+        setCreateJiraTicket(Boolean(initialData.createJiraTicket));
+      }
+      if (initialData.notificationChannel) {
+        setNotificationChannel(initialData.notificationChannel);
+      }
     } else {
       setName('');
       setUrl('https://');
@@ -183,6 +223,7 @@ export default function NewRunForm({ initialData, triggerButton, onRunCreated }:
       setCustomModelSlug('');
       setTags([]);
       setTagInput('');
+      setNotificationChannel('default');
     }
     setIsOpen(true);
   };
@@ -204,7 +245,9 @@ export default function NewRunForm({ initialData, triggerButton, onRunCreated }:
           use_cache: useCache,
           model: model.trim() || undefined,
           tags,
-          isolated_env: isK8sAvailable ? isolatedEnv : false
+          isolated_env: isK8sAvailable ? isolatedEnv : false,
+          create_jira_ticket: createJiraTicket,
+          notification_channel: notificationChannel
         })
       });
       if (res.ok) {
@@ -648,6 +691,135 @@ export default function NewRunForm({ initialData, triggerButton, onRunCreated }:
                 <div className="w-9 h-5 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-500"></div>
               </label>
             </div>
+          </div>
+
+          {/* Enterprise Jira Ticket Auto-Creation Toggle */}
+          <div className="text-left">
+            <div className="flex items-center justify-between p-3 rounded-lg border border-slate-800 bg-[#070b14]">
+              <div className="space-y-0.5 pr-3 text-left">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
+                    <svg className="w-3.5 h-3.5 fill-[#2684ff]" viewBox="0 0 24 24">
+                      <path d="M11.53 2c0 2.4 1.97 4.35 4.35 4.35h1.78v1.7c0 2.4 1.94 4.34 4.34 4.35V2.84a.84.84 0 0 0-.84-.84H11.53zM6.77 6.8a4.36 4.36 0 0 0 4.34 4.34h1.8v1.72a4.36 4.36 0 0 0 4.34 4.34V7.63a.84.84 0 0 0-.83-.83H6.77zM2 11.6a4.36 4.36 0 0 0 4.34 4.34h1.8v1.72a4.35 4.35 0 0 0 4.35 4.34v-9.57a.84.84 0 0 0-.84-.83H2z"/>
+                    </svg>
+                    Auto-Create Jira Bug on Failure
+                  </span>
+                  <div className="relative group cursor-help">
+                    <Info className="w-3.5 h-3.5 text-slate-400 hover:text-[#0278ff] transition-colors" />
+                    <div className="absolute left-0 bottom-full mb-2 hidden group-hover:block w-72 p-3 rounded-lg bg-[#0d1322] border border-slate-700 shadow-2xl text-[11px] text-slate-300 leading-relaxed z-50 pointer-events-none text-left whitespace-normal">
+                      <p className="font-bold text-white mb-1">Jira Auto-Defect Creation</p>
+                      <p>
+                        When <strong className="text-[#2684ff]">Enabled</strong>: If this test execution encounters an assertion failure or timeout, Barely automatically files a rich Jira bug ticket with reproduction steps, error details, and failure screenshots.
+                      </p>
+                    </div>
+                  </div>
+                  <span className={`text-[10px] font-mono font-bold px-1.5 py-0.2 rounded border ${
+                    !jiraConfigured
+                      ? 'bg-slate-800/80 text-slate-500 border-slate-700'
+                      : createJiraTicket 
+                      ? 'bg-blue-500/15 text-[#2684ff] border-blue-500/30' 
+                      : 'bg-slate-800 text-slate-400 border-slate-700'
+                  }`}>
+                    {!jiraConfigured ? 'Not Configured' : createJiraTicket ? `Active (${jiraProjectKey})` : 'Off'}
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-400 text-left">
+                  {!jiraConfigured
+                    ? 'Configure Jira Cloud integration in Settings to enable automatic bug ticketing.'
+                    : createJiraTicket 
+                    ? `Auto-files bug issue in project '${jiraProjectKey}' with reproduction artifacts if test fails.` 
+                    : 'Bug ticket will not be auto-filed. Manual 1-click filing is still available in run audit.'}
+                </p>
+              </div>
+
+              <label className={`relative inline-flex items-center ${!jiraConfigured ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'} flex-shrink-0`}>
+                <input
+                  type="checkbox"
+                  disabled={!jiraConfigured}
+                  checked={jiraConfigured && createJiraTicket}
+                  onChange={(e) => jiraConfigured && setCreateJiraTicket(e.target.checked)}
+                  className="sr-only peer"
+                />
+                <div className="w-9 h-5 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#0052cc]"></div>
+              </label>
+            </div>
+          </div>
+
+          {/* Incident Notification Mechanism Dropdown */}
+          <div className="space-y-1.5 text-left pt-2 border-t border-slate-800/80">
+            <div className="flex items-center justify-between">
+              <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5 text-left">
+                <Bell className="w-3.5 h-3.5 text-amber-400" /> Incident Notifications
+              </label>
+              <span className="text-[11px] text-slate-400 font-medium">
+                Default: <span className="text-amber-300 font-semibold font-mono">
+                  {defaultNotificationMechanism === 'both' ? 'Both (Slack & Teams)' : defaultNotificationMechanism === 'slack' ? 'Slack' : defaultNotificationMechanism === 'teams' ? 'Teams' : 'Muted'}
+                </span>
+              </span>
+            </div>
+
+            <div className="relative w-full">
+              <select
+                value={notificationChannel}
+                onChange={(e) => setNotificationChannel(e.target.value)}
+                disabled={!slackConfigured && !teamsConfigured}
+                className="w-full bg-[#070b14] border border-slate-800 rounded-lg px-3.5 py-2.5 text-xs font-mono text-slate-200 outline-none focus:border-[#0278ff] focus:ring-1 focus:ring-[#0278ff] transition-all cursor-pointer appearance-none pr-8 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {!slackConfigured && !teamsConfigured ? (
+                  <option value="default">⚠️ No notification channels configured (set up in Settings)</option>
+                ) : (
+                  <>
+                    <option value="default">
+                      ⚡ Default Channel ({defaultNotificationMechanism === 'both' ? 'Slack & Teams' : defaultNotificationMechanism === 'slack' ? 'Slack' : defaultNotificationMechanism === 'teams' ? 'Teams' : 'None'})
+                    </option>
+
+                    {slackConfigured && teamsConfigured && (
+                      <option value="both">
+                        🔔 Both Slack &amp; Microsoft Teams
+                      </option>
+                    )}
+
+                    {slackConfigured && (
+                      <option value="slack">
+                        💬 Slack Channel Only
+                      </option>
+                    )}
+
+                    {teamsConfigured && (
+                      <option value="teams">
+                        👥 Microsoft Teams Channel Only
+                      </option>
+                    )}
+
+                    <option value="none">
+                      🔕 Mute Notifications for this Run
+                    </option>
+                  </>
+                )}
+              </select>
+
+              <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-slate-500">
+                <ChevronDown className="w-4 h-4" />
+              </div>
+            </div>
+
+            {(!slackConfigured && !teamsConfigured) ? (
+              <p className="text-[10px] text-slate-500">
+                Add Slack or Microsoft Teams incoming webhook URLs in <span className="text-slate-300 underline">Settings</span> to stream alerts.
+              </p>
+            ) : (
+              <p className="text-[10px] text-slate-400">
+                {notificationChannel === 'default'
+                  ? `Dispatches alerts using platform default (${defaultNotificationMechanism === 'both' ? 'Both Slack & Teams' : defaultNotificationMechanism === 'slack' ? 'Slack' : defaultNotificationMechanism === 'teams' ? 'Teams' : 'Muted'}).`
+                  : notificationChannel === 'both'
+                  ? 'Dispatches alerts to both Slack (Block Kit) and Microsoft Teams (Adaptive Cards).'
+                  : notificationChannel === 'slack'
+                  ? 'Dispatches alerts strictly to the configured Slack channel.'
+                  : notificationChannel === 'teams'
+                  ? 'Dispatches alerts strictly to the configured Microsoft Teams channel.'
+                  : 'Suppresses webhook alerts for this execution.'}
+              </p>
+            )}
           </div>
 
           {/* AI Decision Caching Toggle - Only relevant when Re-running an existing test */}
