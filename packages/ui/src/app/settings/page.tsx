@@ -1957,12 +1957,12 @@ export default function SettingsPage() {
               </div>
 
               {!collapsedSections.notifications && (
-                <div className="p-6 space-y-8 divide-y divide-slate-800/60">
+                <div className="p-6 space-y-6">
                   {/* 1. Slack Incident Notifications Card */}
-                  <div className="space-y-4">
+                  <div className="rounded-xl border border-slate-800/80 bg-[#070b14]/70 p-5 space-y-4 shadow-sm hover:border-slate-700/80 transition-colors">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                       <div className="flex items-center gap-2.5">
-                        <div className="w-7 h-7 rounded-lg bg-[#4A154B]/30 text-[#E01E5A] flex items-center justify-center border border-[#4A154B]/50 shrink-0">
+                        <div className="w-8 h-8 rounded-lg bg-[#4A154B]/30 text-[#E01E5A] flex items-center justify-center border border-[#4A154B]/50 shrink-0">
                           <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
                             <path d="M5.042 15.165a2.528 2.528 0 0 1-2.52 2.523A2.528 2.528 0 0 1 0 15.165a2.527 2.527 0 0 1 2.522-2.52h2.52v2.52zM6.313 15.165a2.527 2.527 0 0 1 2.521-2.52 2.527 2.527 0 0 1 2.521 2.52v6.313A2.528 2.528 0 0 1 8.834 24a2.528 2.528 0 0 1-2.521-2.522v-6.313zM8.834 5.042a2.528 2.528 0 0 1-2.521-2.52A2.528 2.528 0 0 1 8.834 0a2.528 2.528 0 0 1 2.521 2.522v2.52H8.834zM8.834 6.313a2.528 2.528 0 0 1 2.521 2.521 2.528 2.528 0 0 1-2.521 2.521H2.522A2.528 2.528 0 0 1 0 8.834a2.528 2.528 0 0 1 2.522-2.521h6.312zM18.956 8.834a2.528 2.528 0 0 1 2.522-2.521A2.528 2.528 0 0 1 24 8.834a2.528 2.528 0 0 1-2.522 2.521h-2.522V8.834zM17.688 8.834a2.528 2.528 0 0 1-2.523 2.521 2.527 2.527 0 0 1-2.52-2.521V2.522A2.527 2.527 0 0 1 15.165 0a2.528 2.528 0 0 1 2.523 2.522v6.312zM15.165 18.956a2.528 2.528 0 0 1 2.523 2.522A2.528 2.528 0 0 1 15.165 24a2.527 2.527 0 0 1-2.52-2.522v-2.522h2.52zM15.165 17.688a2.527 2.527 0 0 1-2.52-2.523 2.526 2.526 0 0 1 2.52-2.52h6.313A2.527 2.527 0 0 1 24 15.165a2.528 2.528 0 0 1-2.522 2.523h-6.313z"/>
                           </svg>
@@ -1992,7 +1992,7 @@ export default function SettingsPage() {
 
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5 pt-1">
                       <div className="md:col-span-2 space-y-1">
-                        <div className="flex items-center justify-between">
+                        <div className="flex items-center justify-between min-h-[16px]">
                           <label className="text-[11px] font-bold text-slate-300">Slack Incoming Webhook URL</label>
                           {activeMode === 'helm' && (
                             <span className="text-[10px] font-mono text-cyan-400 flex items-center gap-1">
@@ -2007,17 +2007,17 @@ export default function SettingsPage() {
                             onChange={(e) => setSlackWebhookUrl(e.target.value)}
                             disabled={activeMode === 'helm'}
                             placeholder={slackConfigured ? (slackMaskedWebhook || 'https://hooks.slack.com/services/...') : 'https://hooks.slack.com/services/...'}
-                            className={`w-full border rounded-lg pl-3 pr-10 py-2 text-xs font-mono outline-none ${
+                            className={`w-full h-9 border rounded-lg pl-3 pr-10 py-1.5 text-xs font-mono outline-none ${
                               activeMode === 'helm'
                                 ? 'bg-slate-900/60 border-slate-800/80 text-slate-400 cursor-not-allowed'
-                                : 'bg-[#070b14] border-slate-800 focus:border-[#0278ff] text-white placeholder:text-slate-600'
+                                : 'bg-[#0a0f1d] border-slate-800 focus:border-[#0278ff] text-white placeholder:text-slate-600'
                             }`}
                           />
                           {activeMode !== 'helm' && (
                             <button
                               type="button"
                               onClick={() => setShowSlackWebhook(!showSlackWebhook)}
-                              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300"
+                              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 cursor-pointer"
                             >
                               {showSlackWebhook ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                             </button>
@@ -2026,11 +2026,13 @@ export default function SettingsPage() {
                       </div>
 
                       <div className="space-y-1">
-                        <label className="text-[11px] font-bold text-slate-300">Alert Trigger</label>
+                        <div className="flex items-center min-h-[16px]">
+                          <label className="text-[11px] font-bold text-slate-300">Alert Trigger</label>
+                        </div>
                         <select
                           value={slackNotifyOn}
                           onChange={(e) => setSlackNotifyOn(e.target.value)}
-                          className="w-full bg-[#070b14] border border-slate-800 focus:border-[#0278ff] rounded-lg px-3 py-2 text-xs font-mono text-white outline-none cursor-pointer"
+                          className="w-full h-9 bg-[#0a0f1d] border border-slate-800 focus:border-[#0278ff] rounded-lg px-3 py-1.5 text-xs font-mono text-white outline-none cursor-pointer"
                         >
                           <option value="failure_only">Failures Only (Recommended)</option>
                           <option value="all">All Executions (Pass &amp; Fail)</option>
@@ -2055,13 +2057,13 @@ export default function SettingsPage() {
                       </div>
                     )}
 
-                    {/* Slack Actions */}
-                    <div className="flex items-center justify-end gap-2.5 pt-1">
+                    {/* Slack Actions Footer */}
+                    <div className="pt-3 border-t border-slate-800/60 flex items-center justify-end gap-2.5">
                       <button
                         type="button"
                         onClick={handleTestSlack}
                         disabled={testingSlack}
-                        className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 flex items-center gap-1.5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                        className="px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 flex items-center gap-1.5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
                       >
                         {testingSlack ? <Loader2 className="w-3.5 h-3.5 animate-spin text-[#0278ff]" /> : <Send className="w-3.5 h-3.5 text-amber-400" />}
                         <span>Send Test Card</span>
@@ -2080,10 +2082,10 @@ export default function SettingsPage() {
                   </div>
 
                   {/* 2. Microsoft Teams Incident Notifications Card */}
-                  <div className="pt-6 space-y-4">
+                  <div className="rounded-xl border border-slate-800/80 bg-[#070b14]/70 p-5 space-y-4 shadow-sm hover:border-slate-700/80 transition-colors">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                       <div className="flex items-center gap-2.5">
-                        <div className="w-7 h-7 rounded-lg bg-[#5059C9]/20 text-[#7B83EB] flex items-center justify-center border border-[#5059C9]/40 shrink-0">
+                        <div className="w-8 h-8 rounded-lg bg-[#5059C9]/20 text-[#7B83EB] flex items-center justify-center border border-[#5059C9]/40 shrink-0">
                           <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
                             <path d="M19.5 7.5a2.5 2.5 0 1 1-5 0 2.5 2.5 0 0 1 5 0zM12 9a3 3 0 1 0-6 0 3 3 0 0 0 6 0zm7.5 4.5h-4a2.5 2.5 0 0 0-2.5 2.5v3h9v-3a2.5 2.5 0 0 0-2.5-2.5zm-9 1.5h-3A3.5 3.5 0 0 0 4 18.5V20h7v-5z"/>
                           </svg>
@@ -2113,7 +2115,7 @@ export default function SettingsPage() {
 
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-3.5 pt-1">
                       <div className="md:col-span-2 space-y-1">
-                        <div className="flex items-center justify-between">
+                        <div className="flex items-center justify-between min-h-[16px]">
                           <label className="text-[11px] font-bold text-slate-300">Teams Incoming Webhook URL</label>
                           {activeMode === 'helm' && (
                             <span className="text-[10px] font-mono text-cyan-400 flex items-center gap-1">
@@ -2128,17 +2130,17 @@ export default function SettingsPage() {
                             onChange={(e) => setTeamsWebhookUrl(e.target.value)}
                             disabled={activeMode === 'helm'}
                             placeholder={teamsConfigured ? (teamsMaskedWebhook || 'https://outlook.office.com/webhook/...') : 'https://outlook.office.com/webhook/...'}
-                            className={`w-full border rounded-lg pl-3 pr-10 py-2 text-xs font-mono outline-none ${
+                            className={`w-full h-9 border rounded-lg pl-3 pr-10 py-1.5 text-xs font-mono outline-none ${
                               activeMode === 'helm'
                                 ? 'bg-slate-900/60 border-slate-800/80 text-slate-400 cursor-not-allowed'
-                                : 'bg-[#070b14] border-slate-800 focus:border-[#0278ff] text-white placeholder:text-slate-600'
+                                : 'bg-[#0a0f1d] border-slate-800 focus:border-[#0278ff] text-white placeholder:text-slate-600'
                             }`}
                           />
                           {activeMode !== 'helm' && (
                             <button
                               type="button"
                               onClick={() => setShowTeamsWebhook(!showTeamsWebhook)}
-                              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300"
+                              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 cursor-pointer"
                             >
                               {showTeamsWebhook ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                             </button>
@@ -2147,11 +2149,13 @@ export default function SettingsPage() {
                       </div>
 
                       <div className="space-y-1">
-                        <label className="text-[11px] font-bold text-slate-300">Alert Trigger</label>
+                        <div className="flex items-center min-h-[16px]">
+                          <label className="text-[11px] font-bold text-slate-300">Alert Trigger</label>
+                        </div>
                         <select
                           value={teamsNotifyOn}
                           onChange={(e) => setTeamsNotifyOn(e.target.value)}
-                          className="w-full bg-[#070b14] border border-slate-800 focus:border-[#0278ff] rounded-lg px-3 py-2 text-xs font-mono text-white outline-none cursor-pointer"
+                          className="w-full h-9 bg-[#0a0f1d] border border-slate-800 focus:border-[#0278ff] rounded-lg px-3 py-1.5 text-xs font-mono text-white outline-none cursor-pointer"
                         >
                           <option value="failure_only">Failures Only (Recommended)</option>
                           <option value="all">All Executions (Pass &amp; Fail)</option>
@@ -2176,13 +2180,13 @@ export default function SettingsPage() {
                       </div>
                     )}
 
-                    {/* Teams Actions */}
-                    <div className="flex items-center justify-end gap-2.5 pt-1">
+                    {/* Teams Actions Footer */}
+                    <div className="pt-3 border-t border-slate-800/60 flex items-center justify-end gap-2.5">
                       <button
                         type="button"
                         onClick={handleTestTeams}
                         disabled={testingTeams}
-                        className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 flex items-center gap-1.5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                        className="px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 flex items-center gap-1.5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
                       >
                         {testingTeams ? <Loader2 className="w-3.5 h-3.5 animate-spin text-[#0278ff]" /> : <Send className="w-3.5 h-3.5 text-amber-400" />}
                         <span>Send Test Card</span>
