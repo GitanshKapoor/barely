@@ -52,6 +52,9 @@ WORKDIR /workspace
 COPY --from=builder /opt/.venv /opt/.venv
 COPY --from=builder /workspace /workspace
 
+# Install curl for container health checks
+RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
+
 # Create unprivileged non-root user (UID 10001, GID 10001) to prevent privilege escalation
 RUN groupadd -g 10001 barely \
     && useradd -u 10001 -g barely -s /bin/bash -m -d /home/barely barely \
@@ -81,7 +84,7 @@ COPY --from=builder /workspace /workspace
 # Explicitly purge apt lists, package caches, and temporary files to minimize image layers
 # Create unprivileged non-root user (UID 10001) for strict container sandbox isolation
 RUN apt-get update && apt-get install -y --no-install-recommends curl \
-    && /opt/.venv/bin/python3 -m playwright install chromium --with-deps \
+    && (/opt/.venv/bin/python3 -m playwright install chromium --with-deps || (sleep 3 && /opt/.venv/bin/python3 -m playwright install chromium --with-deps)) \
     && apt-get purge -y --auto-remove curl \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* /root/.cache \

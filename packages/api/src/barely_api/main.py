@@ -23,6 +23,12 @@ app.add_middleware(
 
 app.include_router(report_router)
 
+@app.get("/health")
+@app.get("/healthz")
+@app.get("/")
+def health_check():
+    return {"status": "ok", "timestamp": datetime.datetime.utcnow().isoformat()}
+
 class RunRequest(BaseModel):
     url: str
     name: str = ""
