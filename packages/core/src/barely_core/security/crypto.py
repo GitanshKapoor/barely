@@ -9,22 +9,72 @@ from typing import Optional
 # Version tag to allow future crypto migration if needed
 VERSION_TAG = "v1"
 
+_CACHED_MASTER_KEY: Optional[bytes] = None
+
 def get_master_key() -> bytes:
     """
-    Retrieves the master encryption key from environment variable BARELY_SECRET_KEY,
-    or generates and persists a 256-bit key in .barely_master.key if none exists.
+    Retrieves the master encryption key.
+    Resolution priority:
+    1. Environment variable BARELY_SECRET_KEY (highest priority, 12-factor / Kubernetes)
+    2. Shared database record (_INTERNAL_MASTER_KEY) so multi-container services (API, Worker, Pods) share the same key
+    3. Persistent key file in working directory (.barely_master.key)
+    4. Deterministic fallback
     """
-    env_key = os.getenv("BARELY_SECRET_KEY")
-    if env_key:
-        return hashlib.sha256(env_key.encode("utf-8")).digest()
+    global _CACHED_MASTER_KEY
+    if _CACHED_MASTER_KEY is not None:
+        return _CACHED_MASTER_KEY
 
-    # Search for persistent key file
+    # Priority 1: Environment variable
+    env_key = os.getenv("BARELY_SECRET_KEY")
+    if env_key and env_key.strip():
+        _CACHED_MASTER_KEY = hashlib.sha256(env_key.strip().encode("utf-8")).digest()
+        return _CACHED_MASTER_KEY
+
+    # Priority 2: Shared database store (PostgreSQL)
+    try:
+        from barely_core.db import SessionLocal, SettingRecord
+        db = SessionLocal()
+        try:
+            rec = db.query(SettingRecord).filter(SettingRecord.key == "_INTERNAL_MASTER_KEY").first()
+            if rec and rec.value and rec.value.strip():
+                _CACHED_MASTER_KEY = hashlib.sha256(rec.value.strip().encode("utf-8")).digest()
+                return _CACHED_MASTER_KEY
+            else:
+                # Check if local file exists to migrate/preserve existing keys
+                key_file = Path(os.getcwd()) / ".barely_master.key"
+                new_key = None
+                if key_file.exists():
+                    c = key_file.read_text(encoding="utf-8").strip()
+                    if c:
+                        new_key = c
+                if not new_key:
+                    new_key = secrets.token_hex(32)
+
+                try:
+                    master_rec = SettingRecord(
+                        key="_INTERNAL_MASTER_KEY",
+                        value=new_key,
+                        is_secret=False
+                    )
+                    db.add(master_rec)
+                    db.commit()
+                except Exception:
+                    db.rollback()
+                _CACHED_MASTER_KEY = hashlib.sha256(new_key.encode("utf-8")).digest()
+                return _CACHED_MASTER_KEY
+        finally:
+            db.close()
+    except Exception:
+        pass
+
+    # Priority 3: Local persistent file fallback (e.g. unit tests without DB)
     key_file = Path(os.getcwd()) / ".barely_master.key"
     try:
         if key_file.exists():
             content = key_file.read_text(encoding="utf-8").strip()
             if content:
-                return hashlib.sha256(content.encode("utf-8")).digest()
+                _CACHED_MASTER_KEY = hashlib.sha256(content.encode("utf-8")).digest()
+                return _CACHED_MASTER_KEY
         
         # Generate new 256-bit master key
         new_key = secrets.token_hex(32)
@@ -33,11 +83,13 @@ def get_master_key() -> bytes:
             os.chmod(key_file, 0o600)
         except Exception:
             pass
-        return hashlib.sha256(new_key.encode("utf-8")).digest()
+        _CACHED_MASTER_KEY = hashlib.sha256(new_key.encode("utf-8")).digest()
+        return _CACHED_MASTER_KEY
     except Exception:
         # Fallback to deterministic host/workspace key if file write is restricted
         fallback = f"barely-master-{os.getenv('USER', 'default')}-static-seed"
-        return hashlib.sha256(fallback.encode("utf-8")).digest()
+        _CACHED_MASTER_KEY = hashlib.sha256(fallback.encode("utf-8")).digest()
+        return _CACHED_MASTER_KEY
 
 def _derive_keys(master_key: bytes, salt: bytes):
     """Derives separate encryption and HMAC keys from the master key using PBKDF2."""

@@ -70,6 +70,12 @@ def dispatch_run_notifications(run_id: str):
                     logger.info(f"Auto-created Jira ticket {issue_key} for run {run_id}")
                 else:
                     logger.warning(f"Failed to auto-create Jira ticket: {error}")
+            else:
+                logger.warning(
+                    f"Jira auto-create active for failed run {run_id}, but JiraClient is not fully configured "
+                    f"(host={bool(jira_client._host)}, email={bool(jira_client._email)}, "
+                    f"token={bool(jira_client._api_token)}, project={bool(jira_client._project_key)})"
+                )
 
         # -------------------------------------------------------------
         # Determine Notification Mechanism (Run-level override vs default)

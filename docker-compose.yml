@@ -39,6 +39,7 @@ services:
       - DATABASE_URL=postgresql://${POSTGRES_USER:-barely}:${POSTGRES_PASSWORD:-barelypassword}@barely-db:5432/${POSTGRES_DB:-barelydb}
       - ENVIRONMENT=production
       - LOG_LEVEL=info
+      - BARELY_SECRET_KEY=${BARELY_SECRET_KEY:-}
     ports:
       - "8000:8000"
     networks:
@@ -72,6 +73,7 @@ services:
       - API_URL=http://barely-api:8000
       - ENVIRONMENT=production
       - LOG_LEVEL=info
+      - BARELY_SECRET_KEY=${BARELY_SECRET_KEY:-}
     # Security: Worker accepts zero inbound traffic from host
     networks:
       - barely_backend
