@@ -23,7 +23,7 @@ class JiraClient:
         project_key: Optional[str] = None,
         issue_type: Optional[str] = None
     ):
-        self._host = (host or get_setting("JIRA_HOST") or "").strip().rstrip("/")
+        self._host = (host or get_setting("JIRA_HOST") or get_setting("JIRA_DOMAIN") or "").strip().rstrip("/")
         if self._host and not self._host.startswith("http://") and not self._host.startswith("https://"):
             self._host = f"https://{self._host}"
         

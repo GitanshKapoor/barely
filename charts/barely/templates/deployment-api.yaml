@@ -62,6 +62,12 @@ spec:
               {{- end }}
             - name: BARELY_SECRETS_DIR
               value: "/etc/secrets/barely"
+            - name: BARELY_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.secrets.name | default "barely-secrets" }}
+                  key: barely_secret_key
+                  optional: true
           volumeMounts:
             - name: secrets-volume
               mountPath: /etc/secrets/barely

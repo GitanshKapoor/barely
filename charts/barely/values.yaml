@@ -211,6 +211,7 @@ secrets:
     geminiApiKey: ""
     jiraApiToken: ""
     slackWebhookUrl: ""
+    barelySecretKey: ""
 
 # --- Global AI Models Configuration ---
 models:
