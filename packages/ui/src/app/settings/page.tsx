@@ -857,14 +857,513 @@ export default function SettingsPage() {
                         </p>
                       </div>
 
-                      <button
-                        type="button"
-                        onClick={() => setIsEsoGuideModalOpen(true)}
-                        className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 text-xs font-semibold transition-colors shrink-0 self-start sm:self-auto cursor-pointer flex items-center gap-1.5 shadow-sm"
-                      >
-                        <BookOpen className="w-3.5 h-3.5 text-cyan-400" />
-                        <span>K8s Vault Guide</span>
-                      </button>
+                      <div className="relative shrink-0 self-start sm:self-auto">
+                        <button
+                          type="button"
+                          onClick={() => setIsEsoGuideModalOpen(!isEsoGuideModalOpen)}
+                          className={`px-3 py-1.5 rounded-lg border text-xs font-semibold transition-colors cursor-pointer flex items-center gap-1.5 shadow-sm ${
+                            isEsoGuideModalOpen
+                              ? 'bg-cyan-500/20 text-cyan-300 border-cyan-500/40'
+                              : 'bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700'
+                          }`}
+                        >
+                          <BookOpen className="w-3.5 h-3.5 text-cyan-400" />
+                          <span>K8s Vault Guide</span>
+                        </button>
+
+                        {/* Floating Popup (Anchored popover without dark screen backdrop) */}
+                        {isEsoGuideModalOpen && (
+                          <>
+                            {/* Transparent click-outside overlay (NO dark background, NO blur) */}
+                            <div 
+                              className="fixed inset-0 z-40 bg-transparent cursor-default"
+                              onClick={() => setIsEsoGuideModalOpen(false)}
+                            />
+
+                            <div className="absolute right-0 top-full mt-2 w-[340px] sm:w-[580px] md:w-[680px] max-w-[92vw] bg-[#0a0f1d] border border-slate-700 shadow-2xl rounded-2xl z-50 overflow-hidden text-left animate-in fade-in zoom-in-95 duration-150 flex flex-col max-h-[80vh]">
+                              
+                              {/* Popup Header */}
+                              <div className="px-5 py-3.5 border-b border-slate-800 flex items-center justify-between shrink-0 bg-slate-900/40">
+                                <div className="flex items-center gap-2.5">
+                                  <div className="w-7 h-7 rounded-lg bg-cyan-500/15 text-cyan-400 flex items-center justify-center border border-cyan-500/30">
+                                    <Terminal className="w-3.5 h-3.5" />
+                                  </div>
+                                  <div>
+                                    <h3 className="text-xs font-bold text-white flex items-center gap-1.5">
+                                      Enterprise Cloud Vault &amp; ESO Integration
+                                      <span className="px-1.5 py-0.2 rounded-full text-[9px] font-mono bg-cyan-500/10 text-cyan-300 border border-cyan-500/25 font-semibold">
+                                        CNCF Standard
+                                      </span>
+                                    </h3>
+                                    <p className="text-[10px] text-slate-400">
+                                      Sync cloud secrets into Kubernetes via External Secrets Operator without hardcoding credentials
+                                    </p>
+                                  </div>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => setIsEsoGuideModalOpen(false)}
+                                  className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+                                >
+                                  <X className="w-4 h-4" />
+                                </button>
+                              </div>
+
+                              {/* Provider Tabs */}
+                              <div className="flex border-b border-slate-800 px-5 bg-slate-950/50 shrink-0 gap-1 overflow-x-auto">
+                                <button
+                                  type="button"
+                                  onClick={() => setActiveEsoTab('aws')}
+                                  className={`py-2 px-2.5 text-xs font-semibold border-b-2 flex items-center gap-1.5 transition-colors cursor-pointer shrink-0 ${
+                                    activeEsoTab === 'aws'
+                                      ? 'border-amber-400 text-amber-300'
+                                      : 'border-transparent text-slate-400 hover:text-slate-200'
+                                  }`}
+                                >
+                                  <span>🟧 AWS Secrets Manager</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setActiveEsoTab('azure')}
+                                  className={`py-2 px-2.5 text-xs font-semibold border-b-2 flex items-center gap-1.5 transition-colors cursor-pointer shrink-0 ${
+                                    activeEsoTab === 'azure'
+                                      ? 'border-blue-400 text-blue-300'
+                                      : 'border-transparent text-slate-400 hover:text-slate-200'
+                                  }`}
+                                >
+                                  <span>🟦 Azure Key Vault</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setActiveEsoTab('vault')}
+                                  className={`py-2 px-2.5 text-xs font-semibold border-b-2 flex items-center gap-1.5 transition-colors cursor-pointer shrink-0 ${
+                                    activeEsoTab === 'vault'
+                                      ? 'border-indigo-400 text-indigo-300'
+                                      : 'border-transparent text-slate-400 hover:text-slate-200'
+                                  }`}
+                                >
+                                  <span>🗝️ HashiCorp Vault</span>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setActiveEsoTab('gcp')}
+                                  className={`py-2 px-2.5 text-xs font-semibold border-b-2 flex items-center gap-1.5 transition-colors cursor-pointer shrink-0 ${
+                                    activeEsoTab === 'gcp'
+                                      ? 'border-emerald-400 text-emerald-300'
+                                      : 'border-transparent text-slate-400 hover:text-slate-200'
+                                  }`}
+                                >
+                                  <span>☁️ GCP Secret Manager</span>
+                                </button>
+                              </div>
+
+                              {/* Popup Body */}
+                              <div className="p-5 overflow-y-auto space-y-3.5 text-xs">
+                                
+                                {/* Architecture Context Banner */}
+                                <div className="p-3 rounded-lg bg-cyan-950/20 border border-cyan-500/20 text-slate-300 text-xs flex items-start gap-2.5">
+                                  <Info className="w-4 h-4 text-cyan-400 shrink-0 mt-0.5" />
+                                  <div className="space-y-1">
+                                    <p className="font-semibold text-white">How External Secrets Operator (ESO) Works:</p>
+                                    <p className="text-slate-400 leading-relaxed text-[11px]">
+                                      ESO runs as an in-cluster controller. It securely connects to your cloud vault using native IAM roles (AWS IRSA, Azure Workload Identity, or K8s Service Accounts) and keeps a Kubernetes Secret named <code className="text-cyan-300 bg-slate-900 px-1 py-0.5 rounded">barely-secrets</code> synchronized in real-time. Barely mounts this secret directly into its runtime container with zero credential exposure.
+                                    </p>
+                                  </div>
+                                </div>
+
+                                {/* Tab 1: AWS Secrets Manager */}
+                                {activeEsoTab === 'aws' && (
+                                  <div className="space-y-3">
+                                    <div className="flex items-center justify-between">
+                                      <span className="font-bold text-white text-xs">AWS Secrets Manager Manifest (IRSA):</span>
+                                      <button
+                                        type="button"
+                                        onClick={() => copyToClipboard(
+`apiVersion: external-secrets.io/v1beta1
+kind: ClusterSecretStore
+metadata:
+  name: aws-secrets-manager
+spec:
+  provider:
+    aws:
+      service: SecretsManager
+      region: us-east-1
+      auth:
+        jwt:
+          serviceAccountRef:
+            name: barely-eso-sa
+            namespace: default
+---
+apiVersion: external-secrets.io/v1beta1
+kind: ExternalSecret
+metadata:
+  name: barely-cloud-secrets
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    name: aws-secrets-manager
+    kind: ClusterSecretStore
+  target:
+    name: barely-secrets
+  data:
+    - secretKey: ANTHROPIC_API_KEY
+      remoteRef:
+        key: barely/production
+        property: ANTHROPIC_API_KEY
+    - secretKey: OPENAI_API_KEY
+      remoteRef:
+        key: barely/production
+        property: OPENAI_API_KEY`,
+                                          'AWS Secrets Manager'
+                                        )}
+                                        className="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 flex items-center gap-1.5 transition-colors cursor-pointer text-[11px]"
+                                      >
+                                        {copiedSnippet === 'AWS Secrets Manager' ? <CheckCheck className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                                        <span>{copiedSnippet === 'AWS Secrets Manager' ? 'Copied!' : 'Copy YAML'}</span>
+                                      </button>
+                                    </div>
+                                    <pre className="p-3.5 rounded-lg bg-[#070b14] border border-slate-800 text-[11px] font-mono text-slate-300 overflow-x-auto leading-relaxed">
+{`# 1. ClusterSecretStore using AWS IAM Roles for Service Accounts (IRSA)
+apiVersion: external-secrets.io/v1beta1
+kind: ClusterSecretStore
+metadata:
+  name: aws-secrets-manager
+spec:
+  provider:
+    aws:
+      service: SecretsManager
+      region: us-east-1
+      auth:
+        jwt:
+          serviceAccountRef:
+            name: barely-eso-sa
+            namespace: default
+---
+# 2. ExternalSecret generating 'barely-secrets' in Kubernetes
+apiVersion: external-secrets.io/v1beta1
+kind: ExternalSecret
+metadata:
+  name: barely-cloud-secrets
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    name: aws-secrets-manager
+    kind: ClusterSecretStore
+  target:
+    name: barely-secrets
+  data:
+    - secretKey: ANTHROPIC_API_KEY
+      remoteRef:
+        key: barely/production
+        property: ANTHROPIC_API_KEY
+    - secretKey: OPENAI_API_KEY
+      remoteRef:
+        key: barely/production
+        property: OPENAI_API_KEY`}
+                                    </pre>
+                                  </div>
+                                )}
+
+                                {/* Tab 2: Azure Key Vault */}
+                                {activeEsoTab === 'azure' && (
+                                  <div className="space-y-3">
+                                    <div className="flex items-center justify-between">
+                                      <span className="font-bold text-white text-xs">Azure Key Vault Manifest (Workload Identity):</span>
+                                      <button
+                                        type="button"
+                                        onClick={() => copyToClipboard(
+`apiVersion: external-secrets.io/v1beta1
+kind: ClusterSecretStore
+metadata:
+  name: azure-key-vault
+spec:
+  provider:
+    azurekv:
+      authType: WorkloadIdentity
+      vaultUrl: "https://my-barely-vault.vault.azure.net"
+      serviceAccountRef:
+        name: barely-eso-sa
+        namespace: default
+---
+apiVersion: external-secrets.io/v1beta1
+kind: ExternalSecret
+metadata:
+  name: barely-cloud-secrets
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    name: azure-key-vault
+    kind: ClusterSecretStore
+  target:
+    name: barely-secrets
+  data:
+    - secretKey: ANTHROPIC_API_KEY
+      remoteRef:
+        key: ANTHROPIC-API-KEY`,
+                                          'Azure Key Vault'
+                                        )}
+                                        className="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 flex items-center gap-1.5 transition-colors cursor-pointer text-[11px]"
+                                      >
+                                        {copiedSnippet === 'Azure Key Vault' ? <CheckCheck className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                                        <span>{copiedSnippet === 'Azure Key Vault' ? 'Copied!' : 'Copy YAML'}</span>
+                                      </button>
+                                    </div>
+                                    <pre className="p-3.5 rounded-lg bg-[#070b14] border border-slate-800 text-[11px] font-mono text-slate-300 overflow-x-auto leading-relaxed">
+{`# 1. ClusterSecretStore using Azure Workload Identity (Zero hardcoded keys)
+apiVersion: external-secrets.io/v1beta1
+kind: ClusterSecretStore
+metadata:
+  name: azure-key-vault
+spec:
+  provider:
+    azurekv:
+      authType: WorkloadIdentity
+      vaultUrl: "https://my-barely-vault.vault.azure.net"
+      serviceAccountRef:
+        name: barely-eso-sa
+        namespace: default
+---
+# 2. ExternalSecret generating 'barely-secrets' in Kubernetes
+apiVersion: external-secrets.io/v1beta1
+kind: ExternalSecret
+metadata:
+  name: barely-cloud-secrets
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    name: azure-key-vault
+    kind: ClusterSecretStore
+  target:
+    name: barely-secrets
+  data:
+    - secretKey: ANTHROPIC_API_KEY
+      remoteRef:
+        key: ANTHROPIC-API-KEY`}
+                                    </pre>
+                                  </div>
+                                )}
+
+                                {/* Tab 3: HashiCorp Vault */}
+                                {activeEsoTab === 'vault' && (
+                                  <div className="space-y-3">
+                                    <div className="flex items-center justify-between">
+                                      <span className="font-bold text-white text-xs">HashiCorp Vault Manifest (Kubernetes Auth):</span>
+                                      <button
+                                        type="button"
+                                        onClick={() => copyToClipboard(
+`apiVersion: external-secrets.io/v1beta1
+kind: ClusterSecretStore
+metadata:
+  name: hashicorp-vault
+spec:
+  provider:
+    vault:
+      server: "https://vault.internal:8200"
+      path: "secret"
+      version: "v2"
+      auth:
+        kubernetes:
+          mountPath: "kubernetes"
+          role: "barely-role"
+          serviceAccountRef:
+            name: barely-eso-sa
+            namespace: default
+---
+apiVersion: external-secrets.io/v1beta1
+kind: ExternalSecret
+metadata:
+  name: barely-cloud-secrets
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    name: hashicorp-vault
+    kind: ClusterSecretStore
+  target:
+    name: barely-secrets
+  dataFrom:
+    - extract:
+        key: barely/production`,
+                                          'HashiCorp Vault'
+                                        )}
+                                        className="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 flex items-center gap-1.5 transition-colors cursor-pointer text-[11px]"
+                                      >
+                                        {copiedSnippet === 'HashiCorp Vault' ? <CheckCheck className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                                        <span>{copiedSnippet === 'HashiCorp Vault' ? 'Copied!' : 'Copy YAML'}</span>
+                                      </button>
+                                    </div>
+                                    <pre className="p-3.5 rounded-lg bg-[#070b14] border border-slate-800 text-[11px] font-mono text-slate-300 overflow-x-auto leading-relaxed">
+{`# 1. ClusterSecretStore using HashiCorp Vault Kubernetes Service Account Auth
+apiVersion: external-secrets.io/v1beta1
+kind: ClusterSecretStore
+metadata:
+  name: hashicorp-vault
+spec:
+  provider:
+    vault:
+      server: "https://vault.internal:8200"
+      path: "secret"
+      version: "v2"
+      auth:
+        kubernetes:
+          mountPath: "kubernetes"
+          role: "barely-role"
+          serviceAccountRef:
+            name: barely-eso-sa
+            namespace: default
+---
+# 2. ExternalSecret generating 'barely-secrets' in Kubernetes
+apiVersion: external-secrets.io/v1beta1
+kind: ExternalSecret
+metadata:
+  name: barely-cloud-secrets
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    name: hashicorp-vault
+    kind: ClusterSecretStore
+  target:
+    name: barely-secrets
+  dataFrom:
+    - extract:
+        key: barely/production`}
+                                    </pre>
+                                  </div>
+                                )}
+
+                                {/* Tab 4: GCP Secret Manager */}
+                                {activeEsoTab === 'gcp' && (
+                                  <div className="space-y-3">
+                                    <div className="flex items-center justify-between">
+                                      <span className="font-bold text-white text-xs">Google Cloud Secret Manager Manifest (Workload Identity):</span>
+                                      <button
+                                        type="button"
+                                        onClick={() => copyToClipboard(
+`apiVersion: external-secrets.io/v1beta1
+kind: ClusterSecretStore
+metadata:
+  name: gcp-secret-manager
+spec:
+  provider:
+    gcpsm:
+      projectID: my-gcp-project
+      auth:
+        workloadIdentity:
+          clusterLocation: us-central1
+          clusterName: barely-cluster
+          serviceAccountRef:
+            name: barely-eso-sa
+            namespace: default
+---
+apiVersion: external-secrets.io/v1beta1
+kind: ExternalSecret
+metadata:
+  name: barely-cloud-secrets
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    name: gcp-secret-manager
+    kind: ClusterSecretStore
+  target:
+    name: barely-secrets
+  data:
+    - secretKey: ANTHROPIC_API_KEY
+      remoteRef:
+        key: barely_anthropic_api_key`,
+                                          'GCP Secret Manager'
+                                        )}
+                                        className="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 flex items-center gap-1.5 transition-colors cursor-pointer text-[11px]"
+                                      >
+                                        {copiedSnippet === 'GCP Secret Manager' ? <CheckCheck className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                                        <span>{copiedSnippet === 'GCP Secret Manager' ? 'Copied!' : 'Copy YAML'}</span>
+                                      </button>
+                                    </div>
+                                    <pre className="p-3.5 rounded-lg bg-[#070b14] border border-slate-800 text-[11px] font-mono text-slate-300 overflow-x-auto leading-relaxed">
+{`# 1. ClusterSecretStore using Google Cloud Workload Identity
+apiVersion: external-secrets.io/v1beta1
+kind: ClusterSecretStore
+metadata:
+  name: gcp-secret-manager
+spec:
+  provider:
+    gcpsm:
+      projectID: my-gcp-project
+      auth:
+        workloadIdentity:
+          clusterLocation: us-central1
+          clusterName: barely-cluster
+          serviceAccountRef:
+            name: barely-eso-sa
+            namespace: default
+---
+# 2. ExternalSecret generating 'barely-secrets' in Kubernetes
+apiVersion: external-secrets.io/v1beta1
+kind: ExternalSecret
+metadata:
+  name: barely-cloud-secrets
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    name: gcp-secret-manager
+    kind: ClusterSecretStore
+  target:
+    name: barely-secrets
+  data:
+    - secretKey: ANTHROPIC_API_KEY
+      remoteRef:
+        key: barely_anthropic_api_key`}
+                                    </pre>
+                                  </div>
+                                )}
+
+                                {/* Helm Consumption values.yaml */}
+                                <div className="pt-2 border-t border-slate-800 space-y-2">
+                                  <div className="flex items-center justify-between">
+                                    <span className="font-bold text-white text-xs">Helm values.yaml Integration:</span>
+                                    <button
+                                      type="button"
+                                      onClick={() => copyToClipboard(
+`# Barely Helm values.yaml
+secrets:
+  # Reference the Kubernetes secret generated by ESO
+  existingSecret: "barely-secrets"
+  # Mount secret files for hot-reloading without pod restarts
+  mountPath: "/etc/secrets/barely"`,
+                                        'Helm values.yaml'
+                                      )}
+                                      className="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 flex items-center gap-1.5 transition-colors cursor-pointer text-[11px]"
+                                    >
+                                      {copiedSnippet === 'Helm values.yaml' ? <CheckCheck className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                                      <span>{copiedSnippet === 'Helm values.yaml' ? 'Copied!' : 'Copy YAML'}</span>
+                                    </button>
+                                  </div>
+                                  <pre className="p-3.5 rounded-lg bg-[#070b14] border border-slate-800 text-[11px] font-mono text-slate-300 overflow-x-auto leading-relaxed">
+{`# Configure Barely Helm chart to consume the ESO-generated secret:
+secrets:
+  existingSecret: "barely-secrets"
+  mountPath: "/etc/secrets/barely"`}
+                                  </pre>
+                                </div>
+
+                              </div>
+
+                              {/* Popup Footer */}
+                              <div className="px-5 py-2.5 border-t border-slate-800 bg-slate-900/40 flex items-center justify-between shrink-0">
+                                <span className="text-[10px] text-slate-500">
+                                  Follows CNCF and enterprise GitOps security guidelines
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => setIsEsoGuideModalOpen(false)}
+                                  className="px-3 py-1 rounded-lg text-xs font-semibold bg-[#0278ff] hover:bg-[#0062d6] text-white shadow-md cursor-pointer transition-all"
+                                >
+                                  Close
+                                </button>
+                              </div>
+
+                            </div>
+                          </>
+                        )}
+                      </div>
                     </div>
 
                     <div className="p-6 rounded-xl bg-[#070b14] border border-slate-800/80 space-y-6 divide-y divide-slate-800/60">
@@ -2256,497 +2755,6 @@ export default function SettingsPage() {
         </div>
       )}
 
-      {/* Enterprise ESO Guide Modal */}
-      {isEsoGuideModalOpen && (
-        <div 
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-in fade-in duration-150"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) setIsEsoGuideModalOpen(false);
-          }}
-        >
-          <div className="bg-[#0a0f1d] border border-slate-800 rounded-2xl w-full max-w-3xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-150 text-left flex flex-col max-h-[90vh]">
-            
-            {/* Modal Header */}
-            <div className="px-6 py-4 border-b border-slate-800 flex items-center justify-between shrink-0 bg-slate-900/30">
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-lg bg-cyan-500/15 text-cyan-400 flex items-center justify-center border border-cyan-500/30">
-                  <Terminal className="w-4 h-4" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-bold text-white flex items-center gap-2">
-                    Enterprise Cloud Vault &amp; ESO Integration
-                    <span className="px-2 py-0.2 rounded-full text-[10px] font-mono bg-cyan-500/10 text-cyan-300 border border-cyan-500/25">
-                      CNCF Standard
-                    </span>
-                  </h3>
-                  <p className="text-[11px] text-slate-400">
-                    Sync cloud secrets into Kubernetes via External Secrets Operator without hardcoding credentials
-                  </p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setIsEsoGuideModalOpen(false)}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            {/* Provider Tabs */}
-            <div className="flex border-b border-slate-800 px-6 bg-slate-950/40 shrink-0 gap-1 overflow-x-auto">
-              <button
-                type="button"
-                onClick={() => setActiveEsoTab('aws')}
-                className={`py-3 px-3 text-xs font-semibold border-b-2 flex items-center gap-2 transition-colors cursor-pointer shrink-0 ${
-                  activeEsoTab === 'aws'
-                    ? 'border-amber-400 text-amber-300'
-                    : 'border-transparent text-slate-400 hover:text-slate-200'
-                }`}
-              >
-                <span>🟧 AWS Secrets Manager</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setActiveEsoTab('azure')}
-                className={`py-3 px-3 text-xs font-semibold border-b-2 flex items-center gap-2 transition-colors cursor-pointer shrink-0 ${
-                  activeEsoTab === 'azure'
-                    ? 'border-blue-400 text-blue-300'
-                    : 'border-transparent text-slate-400 hover:text-slate-200'
-                }`}
-              >
-                <span>🟦 Azure Key Vault</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setActiveEsoTab('vault')}
-                className={`py-3 px-3 text-xs font-semibold border-b-2 flex items-center gap-2 transition-colors cursor-pointer shrink-0 ${
-                  activeEsoTab === 'vault'
-                    ? 'border-indigo-400 text-indigo-300'
-                    : 'border-transparent text-slate-400 hover:text-slate-200'
-                }`}
-              >
-                <span>🗝️ HashiCorp Vault</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setActiveEsoTab('gcp')}
-                className={`py-3 px-3 text-xs font-semibold border-b-2 flex items-center gap-2 transition-colors cursor-pointer shrink-0 ${
-                  activeEsoTab === 'gcp'
-                    ? 'border-emerald-400 text-emerald-300'
-                    : 'border-transparent text-slate-400 hover:text-slate-200'
-                }`}
-              >
-                <span>☁️ GCP Secret Manager</span>
-              </button>
-            </div>
-
-            {/* Modal Body with Code Snippets */}
-            <div className="p-6 overflow-y-auto space-y-4 text-xs">
-              
-              {/* Architecture Context Banner */}
-              <div className="p-3 rounded-lg bg-cyan-950/20 border border-cyan-500/20 text-slate-300 text-xs flex items-start gap-2.5">
-                <Info className="w-4 h-4 text-cyan-400 shrink-0 mt-0.5" />
-                <div className="space-y-1">
-                  <p className="font-semibold text-white">How External Secrets Operator (ESO) Works:</p>
-                  <p className="text-slate-400 leading-relaxed text-[11px]">
-                    ESO runs as an in-cluster controller. It securely connects to your cloud vault using native IAM roles (AWS IRSA, Azure Workload Identity, or K8s Service Accounts) and keeps a Kubernetes Secret named <code className="text-cyan-300 bg-slate-900 px-1 py-0.5 rounded">barely-secrets</code> synchronized in real-time. Barely mounts this secret directly into its runtime container with zero credential exposure.
-                  </p>
-                </div>
-              </div>
-
-              {/* Tab 1: AWS Secrets Manager */}
-              {activeEsoTab === 'aws' && (
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="font-bold text-white text-xs">AWS Secrets Manager Manifest (IRSA):</span>
-                    <button
-                      type="button"
-                      onClick={() => copyToClipboard(
-`apiVersion: external-secrets.io/v1beta1
-kind: ClusterSecretStore
-metadata:
-  name: aws-secrets-manager
-spec:
-  provider:
-    aws:
-      service: SecretsManager
-      region: us-east-1
-      auth:
-        jwt:
-          serviceAccountRef:
-            name: barely-eso-sa
-            namespace: default
----
-apiVersion: external-secrets.io/v1beta1
-kind: ExternalSecret
-metadata:
-  name: barely-cloud-secrets
-spec:
-  refreshInterval: 1h
-  secretStoreRef:
-    name: aws-secrets-manager
-    kind: ClusterSecretStore
-  target:
-    name: barely-secrets
-  data:
-    - secretKey: ANTHROPIC_API_KEY
-      remoteRef:
-        key: barely/production
-        property: ANTHROPIC_API_KEY
-    - secretKey: OPENAI_API_KEY
-      remoteRef:
-        key: barely/production
-        property: OPENAI_API_KEY`,
-                        'AWS Secrets Manager'
-                      )}
-                      className="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 flex items-center gap-1.5 transition-colors cursor-pointer text-[11px]"
-                    >
-                      {copiedSnippet === 'AWS Secrets Manager' ? <CheckCheck className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
-                      <span>{copiedSnippet === 'AWS Secrets Manager' ? 'Copied!' : 'Copy YAML'}</span>
-                    </button>
-                  </div>
-                  <pre className="p-3.5 rounded-lg bg-[#070b14] border border-slate-800 text-[11px] font-mono text-slate-300 overflow-x-auto leading-relaxed">
-{`# 1. ClusterSecretStore using AWS IAM Roles for Service Accounts (IRSA)
-apiVersion: external-secrets.io/v1beta1
-kind: ClusterSecretStore
-metadata:
-  name: aws-secrets-manager
-spec:
-  provider:
-    aws:
-      service: SecretsManager
-      region: us-east-1
-      auth:
-        jwt:
-          serviceAccountRef:
-            name: barely-eso-sa
-            namespace: default
----
-# 2. ExternalSecret generating 'barely-secrets' in Kubernetes
-apiVersion: external-secrets.io/v1beta1
-kind: ExternalSecret
-metadata:
-  name: barely-cloud-secrets
-spec:
-  refreshInterval: 1h
-  secretStoreRef:
-    name: aws-secrets-manager
-    kind: ClusterSecretStore
-  target:
-    name: barely-secrets
-  data:
-    - secretKey: ANTHROPIC_API_KEY
-      remoteRef:
-        key: barely/production
-        property: ANTHROPIC_API_KEY
-    - secretKey: OPENAI_API_KEY
-      remoteRef:
-        key: barely/production
-        property: OPENAI_API_KEY`}
-                  </pre>
-                </div>
-              )}
-
-              {/* Tab 2: Azure Key Vault */}
-              {activeEsoTab === 'azure' && (
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="font-bold text-white text-xs">Azure Key Vault Manifest (Workload Identity):</span>
-                    <button
-                      type="button"
-                      onClick={() => copyToClipboard(
-`apiVersion: external-secrets.io/v1beta1
-kind: ClusterSecretStore
-metadata:
-  name: azure-key-vault
-spec:
-  provider:
-    azurekv:
-      authType: WorkloadIdentity
-      vaultUrl: "https://my-barely-vault.vault.azure.net"
-      serviceAccountRef:
-        name: barely-eso-sa
-        namespace: default
----
-apiVersion: external-secrets.io/v1beta1
-kind: ExternalSecret
-metadata:
-  name: barely-cloud-secrets
-spec:
-  refreshInterval: 1h
-  secretStoreRef:
-    name: azure-key-vault
-    kind: ClusterSecretStore
-  target:
-    name: barely-secrets
-  data:
-    - secretKey: ANTHROPIC_API_KEY
-      remoteRef:
-        key: ANTHROPIC-API-KEY`,
-                        'Azure Key Vault'
-                      )}
-                      className="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 flex items-center gap-1.5 transition-colors cursor-pointer text-[11px]"
-                    >
-                      {copiedSnippet === 'Azure Key Vault' ? <CheckCheck className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
-                      <span>{copiedSnippet === 'Azure Key Vault' ? 'Copied!' : 'Copy YAML'}</span>
-                    </button>
-                  </div>
-                  <pre className="p-3.5 rounded-lg bg-[#070b14] border border-slate-800 text-[11px] font-mono text-slate-300 overflow-x-auto leading-relaxed">
-{`# 1. ClusterSecretStore using Azure Workload Identity (Zero hardcoded keys)
-apiVersion: external-secrets.io/v1beta1
-kind: ClusterSecretStore
-metadata:
-  name: azure-key-vault
-spec:
-  provider:
-    azurekv:
-      authType: WorkloadIdentity
-      vaultUrl: "https://my-barely-vault.vault.azure.net"
-      serviceAccountRef:
-        name: barely-eso-sa
-        namespace: default
----
-# 2. ExternalSecret generating 'barely-secrets' in Kubernetes
-apiVersion: external-secrets.io/v1beta1
-kind: ExternalSecret
-metadata:
-  name: barely-cloud-secrets
-spec:
-  refreshInterval: 1h
-  secretStoreRef:
-    name: azure-key-vault
-    kind: ClusterSecretStore
-  target:
-    name: barely-secrets
-  data:
-    - secretKey: ANTHROPIC_API_KEY
-      remoteRef:
-        key: ANTHROPIC-API-KEY`}
-                  </pre>
-                </div>
-              )}
-
-              {/* Tab 3: HashiCorp Vault */}
-              {activeEsoTab === 'vault' && (
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="font-bold text-white text-xs">HashiCorp Vault Manifest (Kubernetes Auth):</span>
-                    <button
-                      type="button"
-                      onClick={() => copyToClipboard(
-`apiVersion: external-secrets.io/v1beta1
-kind: ClusterSecretStore
-metadata:
-  name: hashicorp-vault
-spec:
-  provider:
-    vault:
-      server: "https://vault.internal:8200"
-      path: "secret"
-      version: "v2"
-      auth:
-        kubernetes:
-          mountPath: "kubernetes"
-          role: "barely-role"
-          serviceAccountRef:
-            name: barely-eso-sa
-            namespace: default
----
-apiVersion: external-secrets.io/v1beta1
-kind: ExternalSecret
-metadata:
-  name: barely-cloud-secrets
-spec:
-  refreshInterval: 1h
-  secretStoreRef:
-    name: hashicorp-vault
-    kind: ClusterSecretStore
-  target:
-    name: barely-secrets
-  dataFrom:
-    - extract:
-        key: barely/production`,
-                        'HashiCorp Vault'
-                      )}
-                      className="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 flex items-center gap-1.5 transition-colors cursor-pointer text-[11px]"
-                    >
-                      {copiedSnippet === 'HashiCorp Vault' ? <CheckCheck className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
-                      <span>{copiedSnippet === 'HashiCorp Vault' ? 'Copied!' : 'Copy YAML'}</span>
-                    </button>
-                  </div>
-                  <pre className="p-3.5 rounded-lg bg-[#070b14] border border-slate-800 text-[11px] font-mono text-slate-300 overflow-x-auto leading-relaxed">
-{`# 1. ClusterSecretStore using HashiCorp Vault Kubernetes Service Account Auth
-apiVersion: external-secrets.io/v1beta1
-kind: ClusterSecretStore
-metadata:
-  name: hashicorp-vault
-spec:
-  provider:
-    vault:
-      server: "https://vault.internal:8200"
-      path: "secret"
-      version: "v2"
-      auth:
-        kubernetes:
-          mountPath: "kubernetes"
-          role: "barely-role"
-          serviceAccountRef:
-            name: barely-eso-sa
-            namespace: default
----
-# 2. ExternalSecret generating 'barely-secrets' in Kubernetes
-apiVersion: external-secrets.io/v1beta1
-kind: ExternalSecret
-metadata:
-  name: barely-cloud-secrets
-spec:
-  refreshInterval: 1h
-  secretStoreRef:
-    name: hashicorp-vault
-    kind: ClusterSecretStore
-  target:
-    name: barely-secrets
-  dataFrom:
-    - extract:
-        key: barely/production`}
-                  </pre>
-                </div>
-              )}
-
-              {/* Tab 4: GCP Secret Manager */}
-              {activeEsoTab === 'gcp' && (
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <span className="font-bold text-white text-xs">Google Cloud Secret Manager Manifest (Workload Identity):</span>
-                    <button
-                      type="button"
-                      onClick={() => copyToClipboard(
-`apiVersion: external-secrets.io/v1beta1
-kind: ClusterSecretStore
-metadata:
-  name: gcp-secret-manager
-spec:
-  provider:
-    gcpsm:
-      projectID: my-gcp-project
-      auth:
-        workloadIdentity:
-          clusterLocation: us-central1
-          clusterName: barely-cluster
-          serviceAccountRef:
-            name: barely-eso-sa
-            namespace: default
----
-apiVersion: external-secrets.io/v1beta1
-kind: ExternalSecret
-metadata:
-  name: barely-cloud-secrets
-spec:
-  refreshInterval: 1h
-  secretStoreRef:
-    name: gcp-secret-manager
-    kind: ClusterSecretStore
-  target:
-    name: barely-secrets
-  data:
-    - secretKey: ANTHROPIC_API_KEY
-      remoteRef:
-        key: barely_anthropic_api_key`,
-                        'GCP Secret Manager'
-                      )}
-                      className="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 flex items-center gap-1.5 transition-colors cursor-pointer text-[11px]"
-                    >
-                      {copiedSnippet === 'GCP Secret Manager' ? <CheckCheck className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
-                      <span>{copiedSnippet === 'GCP Secret Manager' ? 'Copied!' : 'Copy YAML'}</span>
-                    </button>
-                  </div>
-                  <pre className="p-3.5 rounded-lg bg-[#070b14] border border-slate-800 text-[11px] font-mono text-slate-300 overflow-x-auto leading-relaxed">
-{`# 1. ClusterSecretStore using Google Cloud Workload Identity
-apiVersion: external-secrets.io/v1beta1
-kind: ClusterSecretStore
-metadata:
-  name: gcp-secret-manager
-spec:
-  provider:
-    gcpsm:
-      projectID: my-gcp-project
-      auth:
-        workloadIdentity:
-          clusterLocation: us-central1
-          clusterName: barely-cluster
-          serviceAccountRef:
-            name: barely-eso-sa
-            namespace: default
----
-# 2. ExternalSecret generating 'barely-secrets' in Kubernetes
-apiVersion: external-secrets.io/v1beta1
-kind: ExternalSecret
-metadata:
-  name: barely-cloud-secrets
-spec:
-  refreshInterval: 1h
-  secretStoreRef:
-    name: gcp-secret-manager
-    kind: ClusterSecretStore
-  target:
-    name: barely-secrets
-  data:
-    - secretKey: ANTHROPIC_API_KEY
-      remoteRef:
-        key: barely_anthropic_api_key`}
-                  </pre>
-                </div>
-              )}
-
-              {/* Helm Consumption values.yaml */}
-              <div className="pt-2 border-t border-slate-800 space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="font-bold text-white text-xs">Helm values.yaml Integration:</span>
-                  <button
-                    type="button"
-                    onClick={() => copyToClipboard(
-`# Barely Helm values.yaml
-secrets:
-  # Reference the Kubernetes secret generated by ESO
-  existingSecret: "barely-secrets"
-  # Mount secret files for hot-reloading without pod restarts
-  mountPath: "/etc/secrets/barely"`,
-                      'Helm values.yaml'
-                    )}
-                    className="px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 flex items-center gap-1.5 transition-colors cursor-pointer text-[11px]"
-                  >
-                    {copiedSnippet === 'Helm values.yaml' ? <CheckCheck className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
-                    <span>{copiedSnippet === 'Helm values.yaml' ? 'Copied!' : 'Copy YAML'}</span>
-                  </button>
-                </div>
-                <pre className="p-3.5 rounded-lg bg-[#070b14] border border-slate-800 text-[11px] font-mono text-slate-300 overflow-x-auto leading-relaxed">
-{`# Configure Barely Helm chart to consume the ESO-generated secret:
-secrets:
-  existingSecret: "barely-secrets"
-  mountPath: "/etc/secrets/barely"`}
-                </pre>
-              </div>
-
-            </div>
-
-            {/* Modal Footer */}
-            <div className="px-6 py-3 border-t border-slate-800 bg-slate-900/40 flex items-center justify-between shrink-0">
-              <span className="text-[11px] text-slate-500">
-                Follows CNCF and enterprise GitOps security guidelines
-              </span>
-              <button
-                type="button"
-                onClick={() => setIsEsoGuideModalOpen(false)}
-                className="px-4 py-1.5 rounded-lg text-xs font-semibold bg-[#0278ff] hover:bg-[#0062d6] text-white shadow-md cursor-pointer transition-all"
-              >
-                Close Guide
-              </button>
-            </div>
-
-          </div>
-        </div>
-      )}
 
     </div>
   );
