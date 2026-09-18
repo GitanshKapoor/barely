@@ -32,6 +32,8 @@ class RunRecord(Base):
     tags = Column(String, nullable=True)
     jira_issue_key = Column(String, nullable=True)
     jira_issue_url = Column(String, nullable=True)
+    isolated_env = Column(Boolean, default=False)
+    runner_pod = Column(String, nullable=True)
     
     steps = relationship("RunStep", back_populates="run", cascade="all, delete-orphan")
 
@@ -67,6 +69,8 @@ def init_db():
             conn.execute(text("ALTER TABLE runs ADD COLUMN IF NOT EXISTS model VARCHAR(255);"))
             conn.execute(text("ALTER TABLE runs ADD COLUMN IF NOT EXISTS jira_issue_key VARCHAR(255);"))
             conn.execute(text("ALTER TABLE runs ADD COLUMN IF NOT EXISTS jira_issue_url TEXT;"))
+            conn.execute(text("ALTER TABLE runs ADD COLUMN IF NOT EXISTS isolated_env BOOLEAN DEFAULT FALSE;"))
+            conn.execute(text("ALTER TABLE runs ADD COLUMN IF NOT EXISTS runner_pod VARCHAR(255);"))
             conn.commit()
     except Exception:
         pass

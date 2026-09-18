@@ -381,6 +381,11 @@ export default function ExecutionsPage() {
                       )}
                       {run.status === "pending" && <Clock className="w-4 h-4 text-amber-400 flex-shrink-0" />}
                       <span className="truncate max-w-xs">{run.name || run.id}</span>
+                      {run.isolated_env && (
+                        <span className="inline-flex items-center gap-1 text-[9px] font-mono font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/25 px-1.5 py-0.2 rounded" title="Isolated Ephemeral Non-Root Pod">
+                          🛡️ Isolated Pod
+                        </span>
+                      )}
                     </div>
                     {run.tags && run.tags.length > 0 && (
                       <div className="flex items-center gap-1 mt-1.5 pl-6 flex-wrap">
@@ -445,6 +450,7 @@ export default function ExecutionsPage() {
                           device: run.device || 'desktop',
                           strictMode: Boolean(run.strict_mode),
                           useCache: false,
+                          isolatedEnv: Boolean(run.isolated_env),
                           tags: run.tags || []
                         }}
                         onRunCreated={() => fetchRuns()}

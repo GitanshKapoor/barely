@@ -29,7 +29,10 @@ KNOWN_SETTINGS = [
     {"key": "SLACK_NOTIFY_ON", "is_secret": False, "label": "Slack Notification Trigger", "category": "slack", "placeholder": "failure_only"},
     # Microsoft Teams Incident Alerts
     {"key": "TEAMS_WEBHOOK_URL", "is_secret": True, "label": "Microsoft Teams Webhook URL", "category": "teams", "placeholder": "https://company.webhook.office.com/..."},
-    {"key": "TEAMS_NOTIFY_ON", "is_secret": False, "label": "Microsoft Teams Notification Trigger", "category": "teams", "placeholder": "failure_only"}
+    {"key": "TEAMS_NOTIFY_ON", "is_secret": False, "label": "Microsoft Teams Notification Trigger", "category": "teams", "placeholder": "failure_only"},
+    # Execution Engine & Pod Isolation
+    {"key": "EXECUTION_MODE", "is_secret": False, "label": "Execution Engine Mode", "category": "execution", "placeholder": "worker_pool"},
+    {"key": "MAX_PARALLEL_PODS", "is_secret": False, "label": "Max Parallel Pods", "category": "execution", "placeholder": "5"}
 ]
 
 SECRETS_DIR = os.getenv("BARELY_SECRETS_DIR", "/etc/secrets/barely")

@@ -53,6 +53,43 @@ def process_job(run_id: str, test_name: str, goal_text: str, start_url: str, dev
         except Exception as ne:
             logger.error(f"Failed to dispatch post-crash notifications for {run_id}: {ne}")
 
+def run_single_job(run_id: str):
+    """
+    Executes a single, isolated test run and exits.
+    Designed for ephemeral, non-root Kubernetes Pods (1 test run = 1 isolated Pod).
+    """
+    import sys
+    init_db()
+    logger.info(f"Barely Ephemeral Runner started for isolated job: {run_id}")
+
+    db = SessionLocal()
+    try:
+        job = db.query(RunRecord).filter(RunRecord.id == run_id).first()
+        if not job:
+            logger.error(f"Isolated job {run_id} not found in database.")
+            sys.exit(1)
+
+        job.status = "running"
+        db.commit()
+
+        test_name = job.name or "Automated E2E Test"
+        goal_text = job.goal
+        start_url = job.start_url
+        device = job.device or "desktop"
+        strict_mode = bool(getattr(job, "strict_mode", False))
+        use_cache = bool(getattr(job, "use_cache", False))
+        model = getattr(job, "model", None)
+    finally:
+        db.close()
+
+    try:
+        process_job(run_id, test_name, goal_text, start_url, device, strict_mode, use_cache, model)
+        logger.info(f"Isolated execution finished for {run_id}. Terminating ephemeral runner pod.")
+        sys.exit(0)
+    except Exception as e:
+        logger.error(f"Isolated execution error for {run_id}: {e}")
+        sys.exit(1)
+
 def start_worker():
     init_db()
     logger.info("Barely Worker Node started. Polling DB for jobs...")
@@ -63,6 +100,7 @@ def start_worker():
             job = (
                 db.query(RunRecord)
                 .filter(RunRecord.status == "pending")
+                .filter((RunRecord.isolated_env == False) | (RunRecord.isolated_env.is_(None)))
                 .order_by(RunRecord.created_at.asc())
                 .with_for_update(skip_locked=True)
                 .first()
@@ -91,4 +129,13 @@ def start_worker():
             time.sleep(5)
 
 if __name__ == "__main__":
-    start_worker()
+    import argparse
+    parser = argparse.ArgumentParser(description="Barely Autonomous Test Runner")
+    parser.add_argument("--single-run", dest="single_run_id", help="Execute an isolated single run and exit")
+    args, _ = parser.parse_known_args()
+
+    single_run = args.single_run_id or os.getenv("BARELY_SINGLE_RUN_ID")
+    if single_run:
+        run_single_job(single_run.strip())
+    else:
+        start_worker()

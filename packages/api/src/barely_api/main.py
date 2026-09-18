@@ -32,6 +32,7 @@ class RunRequest(BaseModel):
     use_cache: bool = False
     model: Optional[str] = None
     tags: Optional[List[str]] = []
+    isolated_env: Optional[bool] = None
 
 @app.on_event("startup")
 def startup_event():
@@ -59,6 +60,8 @@ def list_runs():
                 "tags": [t for t in r.tags.split(",") if t] if r.tags else [],
                 "jira_issue_key": getattr(r, "jira_issue_key", None),
                 "jira_issue_url": getattr(r, "jira_issue_url", None),
+                "isolated_env": bool(getattr(r, "isolated_env", False)),
+                "runner_pod": getattr(r, "runner_pod", None),
                 "created_at": r.created_at.isoformat() if r.created_at else None
             })
         return {"runs": runs}
@@ -146,6 +149,8 @@ def get_run(run_id: str):
             "logs": r.logs or "",
             "jira_issue_key": getattr(r, "jira_issue_key", None),
             "jira_issue_url": getattr(r, "jira_issue_url", None),
+            "isolated_env": bool(getattr(r, "isolated_env", False)),
+            "runner_pod": getattr(r, "runner_pod", None),
             "steps": [{"description": s.description, "thought": s.thought, "screenshot": s.screenshot_base64} for s in steps]
         }
     finally:
@@ -177,9 +182,40 @@ def cancel_run(run_id: str):
 
 @app.post("/api/runs")
 def trigger_run(req: RunRequest):
+    from barely_core.settings import get_setting
+    from barely_core.k8s.spawner import K8sJobSpawner
+
     job_id = f"job_{uuid.uuid4().hex[:8]}"
     tag_str = ",".join([t.strip().lstrip("#") for t in (req.tags or []) if t.strip()]) if req.tags else None
     
+    # Determine execution mode: request-level override or platform global default
+    global_mode = (get_setting("EXECUTION_MODE") or "worker_pool").strip().lower()
+    if req.isolated_env is not None:
+        should_isolate = bool(req.isolated_env)
+    else:
+        should_isolate = (global_mode == "k8s_job")
+
+    now_str = datetime.datetime.now().strftime("%H:%M:%S")
+    initial_logs = ""
+    runner_pod_name = None
+
+    if should_isolate:
+        spawner = K8sJobSpawner()
+        if spawner.is_available:
+            ok, job_name, err = spawner.spawn_job(job_id)
+            if ok:
+                runner_pod_name = job_name
+                initial_logs = (
+                    f"[{now_str}] 🛡️ Ephemeral Pod Dispatched: Kubernetes Job '{job_name}' spawned in namespace '{spawner._namespace}'.\n"
+                    f"[{now_str}] 🔒 Security Hardening: Non-Root UID 10001, GID 10001, allowPrivilegeEscalation: false, capabilities: drop: ['ALL'], /dev/shm 1Gi.\n"
+                )
+            else:
+                initial_logs = f"[{now_str}] ⚠️ Kubernetes Job Spawner notice: {err}. Falling back to persistent worker pool.\n"
+                should_isolate = False
+        else:
+            initial_logs = f"[{now_str}] ℹ️ Running outside Kubernetes cluster. Executing run on persistent worker pool.\n"
+            should_isolate = False
+
     db = SessionLocal()
     try:
         new_run = RunRecord(
@@ -192,14 +228,22 @@ def trigger_run(req: RunRequest):
             use_cache=req.use_cache,
             model=req.model.strip() if req.model and req.model.strip() else None,
             tags=tag_str,
-            status="pending"
+            status="pending",
+            isolated_env=should_isolate,
+            runner_pod=runner_pod_name,
+            logs=initial_logs or None
         )
         db.add(new_run)
         db.commit()
     finally:
         db.close()
         
-    return {"message": "Job queued successfully", "job_id": job_id}
+    return {
+        "message": "Job queued successfully",
+        "job_id": job_id,
+        "isolated_env": should_isolate,
+        "runner_pod": runner_pod_name
+    }
 
 @app.post("/api/cache/clear")
 def clear_cache():
@@ -288,6 +332,7 @@ def get_storage_target_info():
 @app.get("/api/settings")
 def get_settings():
     from barely_core.settings import list_settings_status, get_deployment_mode
+    from barely_core.k8s.spawner import get_execution_engine_status
     from barely_core.db import engine
     from sqlalchemy import text
 
@@ -311,7 +356,8 @@ def get_settings():
             "is_connected": is_connected,
             **storage_info
         },
-        "deployment": deployment_info
+        "deployment": deployment_info,
+        "execution_engine": get_execution_engine_status()
     }
 
 class SetSecretsModeRequest(BaseModel):
@@ -329,6 +375,37 @@ def update_secrets_mode(req: SetSecretsModeRequest):
         }
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+class SetExecutionEngineRequest(BaseModel):
+    mode: str
+    max_parallel_pods: Optional[int] = 5
+
+@app.get("/api/execution-engine")
+def get_execution_engine():
+    from barely_core.k8s.spawner import get_execution_engine_status
+    return get_execution_engine_status()
+
+@app.post("/api/execution-engine/mode")
+def update_execution_engine(req: SetExecutionEngineRequest):
+    from barely_core.settings import set_setting
+    from barely_core.k8s.spawner import get_execution_engine_status
+    
+    mode_clean = req.mode.strip().lower()
+    if mode_clean not in ("worker_pool", "k8s_job"):
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid execution mode '{req.mode}'. Must be 'worker_pool' or 'k8s_job'."
+        )
+    
+    set_setting("EXECUTION_MODE", mode_clean)
+    if req.max_parallel_pods is not None and req.max_parallel_pods > 0:
+        set_setting("MAX_PARALLEL_PODS", str(req.max_parallel_pods))
+        
+    return {
+        "success": True,
+        "message": f"Execution engine updated to '{mode_clean}'",
+        "engine": get_execution_engine_status()
+    }
 
 @app.post("/api/settings")
 def save_setting(req: SaveSettingRequest):

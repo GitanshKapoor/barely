@@ -72,6 +72,13 @@ interface SettingsResponse {
   settings: SettingItem[];
   database: DatabaseStatus;
   deployment?: DeploymentInfo;
+  execution_engine?: {
+    mode: 'worker_pool' | 'k8s_job';
+    max_parallel_pods: number;
+    cluster: any;
+    is_k8s_available: boolean;
+    mode_description?: string;
+  };
 }
 
 const PROVIDER_INFO: Record<string, { provider: string; model: string; desc: string }> = {
@@ -158,6 +165,13 @@ export default function SettingsPage() {
   const [testingTeams, setTestingTeams] = useState(false);
   const [savingTeams, setSavingTeams] = useState(false);
   const [teamsTestResult, setTeamsTestResult] = useState<{ success: boolean; message: string } | null>(null);
+
+  // Execution Engine & Pod Isolation States
+  const [executionMode, setExecutionMode] = useState<'worker_pool' | 'k8s_job'>('worker_pool');
+  const [maxParallelPods, setMaxParallelPods] = useState<number>(5);
+  const [savingEngine, setSavingEngine] = useState(false);
+  const [engineClusterStatus, setEngineClusterStatus] = useState<any>(null);
+  const [isK8sAvailable, setIsK8sAvailable] = useState(false);
 
   // Toast notification
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
@@ -254,6 +268,15 @@ export default function SettingsPage() {
       } catch (ie) {
         console.error('Failed to load integrations:', ie);
       }
+
+      if (data.execution_engine) {
+        setExecutionMode(data.execution_engine.mode || 'worker_pool');
+        if (data.execution_engine.max_parallel_pods) {
+          setMaxParallelPods(Number(data.execution_engine.max_parallel_pods));
+        }
+        setEngineClusterStatus(data.execution_engine.cluster || null);
+        setIsK8sAvailable(Boolean(data.execution_engine.is_k8s_available));
+      }
     } catch (err: any) {
       showToast(`Failed to load settings: ${err.message}`, 'error');
     } finally {
@@ -261,6 +284,38 @@ export default function SettingsPage() {
       setRefreshing(false);
     }
   }, [apiUrl]);
+
+  const handleSaveEngine = async (modeToSave?: 'worker_pool' | 'k8s_job', podsToSave?: number) => {
+    const targetMode = modeToSave || executionMode;
+    const targetPods = podsToSave !== undefined ? podsToSave : maxParallelPods;
+    setSavingEngine(true);
+    try {
+      const res = await fetch(`${apiUrl}/api/execution-engine/mode`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          mode: targetMode,
+          max_parallel_pods: targetPods
+        })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.detail || 'Failed to update execution engine');
+      setExecutionMode(data.engine.mode);
+      setMaxParallelPods(data.engine.max_parallel_pods);
+      setEngineClusterStatus(data.engine.cluster);
+      setIsK8sAvailable(data.engine.is_k8s_available);
+      showToast(
+        targetMode === 'k8s_job'
+          ? 'Switched to Kubernetes Ephemeral Pods (1 Test per Non-Root Pod)!'
+          : 'Switched to Persistent Worker Pool (Shared Daemon Workers)!',
+        'success'
+      );
+    } catch (err: any) {
+      showToast(err.message || 'Failed to update execution settings', 'error');
+    } finally {
+      setSavingEngine(false);
+    }
+  };
 
   const handleTestModel = async () => {
     const target = modelNameInput.trim();
@@ -1757,6 +1812,241 @@ export default function SettingsPage() {
                 </div>
               </div>
 
+            </div>
+          </div>
+
+          {/* Section 6: Execution Engine & Pod Isolation */}
+          <div className="rounded-xl border border-slate-800 bg-[#0a0f1d] shadow-xl overflow-hidden">
+            <div className="px-6 py-4 border-b border-slate-800 flex items-center justify-between flex-wrap gap-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-7 h-7 rounded-lg bg-emerald-500/10 text-emerald-400 flex items-center justify-center border border-emerald-500/20">
+                  <ShieldCheck className="w-4 h-4" />
+                </div>
+                <div>
+                  <h2 className="text-sm font-bold text-white flex items-center gap-2">
+                    Execution Engine &amp; Ephemeral Pod Isolation
+                    <span className="px-2 py-0.2 rounded-full text-[10px] font-mono bg-emerald-500/10 text-emerald-300 border border-emerald-500/20 font-semibold">
+                      CNCF Restricted PSS
+                    </span>
+                  </h2>
+                  <p className="text-xs text-slate-400">
+                    Configure test execution boundaries: persistent shared daemon pool vs. single-use non-root Kubernetes pods
+                  </p>
+                </div>
+              </div>
+
+              {/* Cluster Status Chip */}
+              <div className="flex items-center gap-2">
+                {isK8sAvailable ? (
+                  <span className="px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                    Kubernetes In-Cluster API Ready
+                  </span>
+                ) : (
+                  <span className="px-3 py-1 rounded-full text-xs font-semibold bg-amber-500/15 text-amber-300 border border-amber-500/30 flex items-center gap-1.5" title="Runs outside Kubernetes will automatically fall back to persistent daemon worker pool.">
+                    <span className="w-2 h-2 rounded-full bg-amber-400" />
+                    Docker / Local (Fallback Active)
+                  </span>
+                )}
+              </div>
+            </div>
+
+            <div className="p-6 space-y-6">
+              {/* Mode Selection Cards */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* 1. Shared Worker Pool Option */}
+                <div
+                  onClick={() => {
+                    setExecutionMode('worker_pool');
+                    handleSaveEngine('worker_pool');
+                  }}
+                  className={`p-5 rounded-xl border transition-all cursor-pointer relative ${
+                    executionMode === 'worker_pool'
+                      ? 'bg-blue-950/20 border-[#0278ff] shadow-lg shadow-blue-500/10'
+                      : 'bg-[#070b14] border-slate-800 hover:border-slate-700'
+                  }`}
+                >
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-center gap-2.5">
+                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm ${
+                        executionMode === 'worker_pool' ? 'bg-[#0278ff]/20 text-[#0278ff]' : 'bg-slate-800 text-slate-400'
+                      }`}>
+                        ⚙️
+                      </div>
+                      <div>
+                        <h4 className="text-sm font-bold text-white flex items-center gap-1.5">
+                          Persistent Worker Pool
+                          {executionMode === 'worker_pool' && (
+                            <span className="w-1.5 h-1.5 rounded-full bg-[#0278ff]"></span>
+                          )}
+                        </h4>
+                        <p className="text-[11px] text-slate-400">Shared Daemon Workers</p>
+                      </div>
+                    </div>
+                    <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold border ${
+                      executionMode === 'worker_pool'
+                        ? 'bg-blue-500/15 text-blue-300 border-blue-500/30'
+                        : 'bg-slate-800/80 text-slate-500 border-slate-800'
+                    }`}>
+                      {executionMode === 'worker_pool' ? 'ACTIVE' : 'SELECT'}
+                    </span>
+                  </div>
+
+                  <p className="text-xs text-slate-300 mt-3 leading-relaxed">
+                    Long-running worker pods polling the PostgreSQL database queue. Reuses browser instances for fastest test startup (&lt;100ms) and minimal cluster resource overhead.
+                  </p>
+
+                  <div className="mt-4 pt-3 border-t border-slate-800/60 flex flex-wrap gap-2 text-[10px] font-mono text-slate-400">
+                    <span className="px-2 py-0.5 rounded bg-slate-900 border border-slate-800">⚡ Sub-second Startup</span>
+                    <span className="px-2 py-0.5 rounded bg-slate-900 border border-slate-800">📦 Low CPU/RAM Overhead</span>
+                    <span className="px-2 py-0.5 rounded bg-slate-900 border border-slate-800">🔄 Shared Process Tree</span>
+                  </div>
+                </div>
+
+                {/* 2. Kubernetes Ephemeral Pods Option */}
+                <div
+                  onClick={() => {
+                    setExecutionMode('k8s_job');
+                    handleSaveEngine('k8s_job');
+                  }}
+                  className={`p-5 rounded-xl border transition-all cursor-pointer relative ${
+                    executionMode === 'k8s_job'
+                      ? 'bg-emerald-950/20 border-emerald-500 shadow-lg shadow-emerald-500/10'
+                      : 'bg-[#070b14] border-slate-800 hover:border-slate-700'
+                  }`}
+                >
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-center gap-2.5">
+                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm ${
+                        executionMode === 'k8s_job' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-slate-800 text-slate-400'
+                      }`}>
+                        🛡️
+                      </div>
+                      <div>
+                        <h4 className="text-sm font-bold text-white flex items-center gap-1.5">
+                          Kubernetes Isolated Pods
+                          {executionMode === 'k8s_job' && (
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                          )}
+                        </h4>
+                        <p className="text-[11px] text-slate-400">1 Ephemeral Pod per Test Run</p>
+                      </div>
+                    </div>
+                    <span className={`px-2 py-0.5 rounded text-[10px] font-mono font-bold border ${
+                      executionMode === 'k8s_job'
+                        ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
+                        : 'bg-slate-800/80 text-slate-500 border-slate-800'
+                    }`}>
+                      {executionMode === 'k8s_job' ? 'ACTIVE' : 'SELECT'}
+                    </span>
+                  </div>
+
+                  <p className="text-xs text-slate-300 mt-3 leading-relaxed">
+                    Spawns a dedicated, single-use Kubernetes <code className="text-emerald-300 font-mono">batch/v1 Job</code> Pod per test execution. Guarantees complete Linux namespace, process tree, and memory isolation.
+                  </p>
+
+                  <div className="mt-4 pt-3 border-t border-slate-800/60 flex flex-wrap gap-2 text-[10px] font-mono text-emerald-300">
+                    <span className="px-2 py-0.5 rounded bg-emerald-950/40 border border-emerald-500/30">🔒 Non-Root (UID 10001)</span>
+                    <span className="px-2 py-0.5 rounded bg-emerald-950/40 border border-emerald-500/30">🚫 drop: ALL</span>
+                    <span className="px-2 py-0.5 rounded bg-emerald-950/40 border border-emerald-500/30">⚡ /dev/shm 1Gi</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Parallel Pod Concurrency Slider */}
+              <div className="p-4 rounded-xl bg-[#070b14] border border-slate-800/80 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <label className="text-xs font-bold text-slate-200 flex items-center gap-2">
+                      Max Parallel Isolated Pods
+                      <span className="px-2 py-0.2 rounded-full text-[10px] font-mono bg-blue-500/10 text-blue-300 border border-blue-500/20">
+                        {maxParallelPods} Concurrent Pods
+                      </span>
+                    </label>
+                    <p className="text-[11px] text-slate-400">
+                      Maximum number of isolated runner pods scheduled concurrently before queueing in PostgreSQL
+                    </p>
+                  </div>
+                  <span className="text-base font-bold font-mono text-white px-3 py-1 rounded-lg bg-slate-900 border border-slate-800">
+                    {maxParallelPods}
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-4">
+                  <input
+                    type="range"
+                    min={1}
+                    max={20}
+                    step={1}
+                    value={maxParallelPods}
+                    onChange={(e) => setMaxParallelPods(parseInt(e.target.value))}
+                    className="w-full h-2 bg-slate-800 rounded-lg appearance-none cursor-pointer accent-[#0278ff]"
+                  />
+                  <div className="flex items-center gap-1.5 text-[10px] font-mono text-slate-500 shrink-0">
+                    <span>1</span>
+                    <span>...</span>
+                    <span>20 pods</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Enterprise Security Hardening & Pod Sandbox Specifications */}
+              <div className="p-4 rounded-xl bg-slate-950/60 border border-slate-800 space-y-3">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
+                    <span>🛡️</span>
+                    <span>Pod Security Standards &amp; Isolation Guarantees</span>
+                  </h4>
+                  <span className="text-[10px] font-mono text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/25">
+                    PSS: Restricted Level
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
+                  <div className="p-3 rounded-lg bg-[#070b14] border border-slate-800/80 space-y-1">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Process Context</span>
+                    <p className="font-mono text-emerald-300 font-semibold">runAsNonRoot: true</p>
+                    <p className="text-[10px] text-slate-500">UID: 10001 / GID: 10001 (barely user)</p>
+                  </div>
+
+                  <div className="p-3 rounded-lg bg-[#070b14] border border-slate-800/80 space-y-1">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Privilege Escalation</span>
+                    <p className="font-mono text-emerald-300 font-semibold">allowPrivilegeEscalation: false</p>
+                    <p className="text-[10px] text-slate-500">Zero root elevation or setuid vectors</p>
+                  </div>
+
+                  <div className="p-3 rounded-lg bg-[#070b14] border border-slate-800/80 space-y-1">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Linux Capabilities</span>
+                    <p className="font-mono text-emerald-300 font-semibold">drop: [&quot;ALL&quot;]</p>
+                    <p className="text-[10px] text-slate-500">All kernel capabilities dropped</p>
+                  </div>
+
+                  <div className="p-3 rounded-lg bg-[#070b14] border border-slate-800/80 space-y-1">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Chromium Memory IPC</span>
+                    <p className="font-mono text-emerald-300 font-semibold">/dev/shm (1Gi RAM Disk)</p>
+                    <p className="text-[10px] text-slate-500">Prevents headless browser bus error crashes</p>
+                  </div>
+                </div>
+
+                <div className="pt-2 text-[11px] text-slate-400 flex items-center justify-between flex-wrap gap-2 border-t border-slate-900">
+                  <div className="flex items-center gap-2">
+                    <span className="w-1.5 h-1.5 rounded-full bg-cyan-400"></span>
+                    <span>Target Namespace: <code className="text-cyan-300 font-mono">{engineClusterStatus?.namespace || 'barely'}</code></span>
+                    <span className="text-slate-600">·</span>
+                    <span>Automated GC: <code className="text-slate-300 font-mono">ttlSecondsAfterFinished: 180s</code></span>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => handleSaveEngine()}
+                    disabled={savingEngine}
+                    className="px-4 py-1.5 rounded-lg text-xs font-semibold bg-[#0278ff] hover:bg-[#0062d6] text-white shadow-md shadow-blue-500/20 flex items-center gap-1.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                  >
+                    {savingEngine ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                    <span>Save Execution Settings</span>
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
 

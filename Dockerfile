@@ -52,6 +52,12 @@ WORKDIR /workspace
 COPY --from=builder /opt/.venv /opt/.venv
 COPY --from=builder /workspace /workspace
 
+# Create unprivileged non-root user (UID 10001, GID 10001) to prevent privilege escalation
+RUN groupadd -g 10001 barely \
+    && useradd -u 10001 -g barely -s /bin/bash -m -d /home/barely barely \
+    && chown -R 10001:10001 /workspace /opt/.venv /home/barely
+
+USER 10001
 EXPOSE 8000
 CMD ["/opt/.venv/bin/uvicorn", "barely_api.main:app", "--host", "0.0.0.0", "--port", "8000", "--app-dir", "packages/api/src"]
 
@@ -73,11 +79,18 @@ COPY --from=builder /workspace /workspace
 
 # Install ONLY Chromium and its required minimal OS libraries
 # Explicitly purge apt lists, package caches, and temporary files to minimize image layers
+# Create unprivileged non-root user (UID 10001) for strict container sandbox isolation
 RUN apt-get update && apt-get install -y --no-install-recommends curl \
     && /opt/.venv/bin/python3 -m playwright install chromium --with-deps \
     && apt-get purge -y --auto-remove curl \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* /root/.cache \
-    && rm -rf /ms-playwright/firefox* /ms-playwright/webkit*
+    && rm -rf /ms-playwright/firefox* /ms-playwright/webkit* \
+    && groupadd -g 10001 barely \
+    && useradd -u 10001 -g barely -s /bin/bash -m -d /home/barely barely \
+    && mkdir -p /home/barely/.cache /tmp/barely \
+    && chown -R 10001:10001 /workspace /opt/.venv /ms-playwright /home/barely /tmp/barely \
+    && chmod -R 755 /ms-playwright
 
+USER 10001
 CMD ["/opt/.venv/bin/python3", "packages/worker/src/barely_worker/main.py"]

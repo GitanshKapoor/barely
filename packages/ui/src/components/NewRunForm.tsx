@@ -15,6 +15,7 @@ export interface RunConfigData {
   useCache?: boolean;
   model?: string;
   tags?: string[];
+  isolatedEnv?: boolean;
 }
 
 interface NewRunFormProps {
@@ -36,6 +37,7 @@ export default function NewRunForm({ initialData, triggerButton, onRunCreated }:
   const [device, setDevice] = useState(initialData?.device || 'desktop');
   const [strictMode, setStrictMode] = useState(Boolean(initialData?.strictMode));
   const [useCache, setUseCache] = useState(Boolean(initialData?.useCache));
+  const [isolatedEnv, setIsolatedEnv] = useState(Boolean(initialData?.isolatedEnv));
   const [model, setModel] = useState(initialData?.model || '');
   const [defaultModelName, setDefaultModelName] = useState<string>('anthropic/claude-sonnet-4-5');
   const [autoNavigate, setAutoNavigate] = useState(false);
@@ -103,6 +105,7 @@ export default function NewRunForm({ initialData, triggerButton, onRunCreated }:
       setDevice(initialData.device || 'desktop');
       setStrictMode(Boolean(initialData.strictMode));
       setUseCache(Boolean(initialData.useCache));
+      setIsolatedEnv(Boolean(initialData.isolatedEnv));
       setModel(initialData.model || '');
       setTags(initialData.tags || []);
       setTagInput('');
@@ -113,6 +116,7 @@ export default function NewRunForm({ initialData, triggerButton, onRunCreated }:
       setDevice('desktop');
       setStrictMode(false);
       setUseCache(false);
+      setIsolatedEnv(false);
       setModel('');
       setTags([]);
       setTagInput('');
@@ -136,7 +140,8 @@ export default function NewRunForm({ initialData, triggerButton, onRunCreated }:
           strict_mode: strictMode,
           use_cache: useCache,
           model: model.trim() || undefined,
-          tags
+          tags,
+          isolated_env: isolatedEnv
         })
       });
       if (res.ok) {
@@ -425,6 +430,51 @@ export default function NewRunForm({ initialData, triggerButton, onRunCreated }:
                   className="sr-only peer"
                 />
                 <div className="w-9 h-5 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#0278ff]"></div>
+              </label>
+            </div>
+          </div>
+
+          {/* Ephemeral Pod Isolation Toggle */}
+          <div className="text-left">
+            <div className="flex items-center justify-between p-3 rounded-lg border border-slate-800 bg-[#070b14]">
+              <div className="space-y-0.5 pr-3 text-left">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs font-bold text-slate-200">🛡️ Run in Isolated Pod</span>
+                  <div className="relative group cursor-help">
+                    <Info className="w-3.5 h-3.5 text-slate-400 hover:text-[#0278ff] transition-colors" />
+                    <div className="absolute left-0 bottom-full mb-2 hidden group-hover:block w-72 p-3 rounded-lg bg-[#0d1322] border border-slate-700 shadow-2xl text-[11px] text-slate-300 leading-relaxed z-50 pointer-events-none text-left whitespace-normal">
+                      <p className="font-bold text-white mb-1">Ephemeral Pod Isolation</p>
+                      <p>
+                        When <strong className="text-emerald-400">Enabled</strong>: Spawns an isolated, single-use Kubernetes Pod running strictly as an unprivileged non-root user (UID 10001, drop: ALL). Prevents container privilege escalation and isolates memory &amp; processes.
+                      </p>
+                      <p className="mt-1.5 text-slate-400">
+                        When <strong className="text-[#0278ff]">Disabled</strong>: Executes in the persistent daemon worker pool.
+                      </p>
+                    </div>
+                  </div>
+                  <span className={`text-[10px] font-mono font-bold px-1.5 py-0.2 rounded border ${
+                    isolatedEnv 
+                      ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30' 
+                      : 'bg-slate-800 text-slate-400 border-slate-700'
+                  }`}>
+                    {isolatedEnv ? 'Non-Root Pod' : 'Worker Pool'}
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-400 text-left">
+                  {isolatedEnv 
+                    ? 'Spawns dedicated ephemeral non-root Kubernetes pod (UID 10001, /dev/shm sandbox)' 
+                    : 'Runs on shared persistent worker pool (fast execution)'}
+                </p>
+              </div>
+
+              <label className="relative inline-flex items-center cursor-pointer flex-shrink-0">
+                <input
+                  type="checkbox"
+                  checked={isolatedEnv}
+                  onChange={(e) => setIsolatedEnv(e.target.checked)}
+                  className="sr-only peer"
+                />
+                <div className="w-9 h-5 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-500"></div>
               </label>
             </div>
           </div>

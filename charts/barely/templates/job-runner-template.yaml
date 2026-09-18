@@ -1,0 +1,79 @@
+# Reference specification for ephemeral, non-root runner pods
+# Dispatched dynamically by barely_core.k8s.spawner.K8sJobSpawner
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: barely-job-example
+  namespace: {{ .Release.Namespace | default "barely" }}
+  labels:
+    app.kubernetes.io/name: barely
+    app.kubernetes.io/component: isolated-runner
+spec:
+  # Automated garbage collection of completed pods after 180s
+  ttlSecondsAfterFinished: {{ .Values.execution.ttlSecondsAfterFinished | default 180 }}
+  # Do not retry failed test runs at the Kubernetes level (1 run = 1 execution)
+  backoffLimit: 0
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: barely
+        app.kubernetes.io/component: isolated-runner
+    spec:
+      restartPolicy: Never
+      # Strict Non-Root Pod Security Context (Restricted PSS)
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: {{ .Values.security.runAsUser | default 10001 }}
+        runAsGroup: {{ .Values.security.runAsGroup | default 10001 }}
+        fsGroup: {{ .Values.security.fsGroup | default 10001 }}
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: barely-isolated-runner
+          image: "{{ .Values.worker.image.repository | default "barely-worker" }}:{{ .Values.worker.image.tag | default "latest" }}"
+          imagePullPolicy: {{ .Values.worker.image.pullPolicy | default "IfNotPresent" }}
+          command:
+            - /opt/.venv/bin/python3
+            - packages/worker/src/barely_worker/main.py
+            - --single-run
+            - "RUN_ID_PLACEHOLDER"
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+            capabilities:
+              drop:
+                - ALL
+          resources:
+            requests:
+              cpu: {{ .Values.execution.resources.requests.cpu | default "500m" }}
+              memory: {{ .Values.execution.resources.requests.memory | default "1Gi" }}
+            limits:
+              cpu: {{ .Values.execution.resources.limits.cpu | default "2000m" }}
+              memory: {{ .Values.execution.resources.limits.memory | default "2.5Gi" }}
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.database.secretName | default "barely-db-secret" }}
+                  key: url
+                  optional: true
+            - name: HEADLESS
+              value: "true"
+            - name: BARELY_SECRETS_DIR
+              value: /etc/secrets/barely
+          volumeMounts:
+            # Chromium Shared Memory RAM disk (prevents bus errors without root/privilege)
+            - name: dshm
+              mountPath: /dev/shm
+            - name: secrets-volume
+              mountPath: /etc/secrets/barely
+              readOnly: true
+      volumes:
+        - name: dshm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 1Gi
+        - name: secrets-volume
+          secret:
+            secretName: {{ .Values.secrets.name | default "barely-secrets" }}
+            optional: true

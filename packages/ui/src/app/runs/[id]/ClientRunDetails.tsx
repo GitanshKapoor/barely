@@ -46,6 +46,8 @@ interface RunData {
   logs: string;
   jira_issue_key?: string | null;
   jira_issue_url?: string | null;
+  isolated_env?: boolean;
+  runner_pod?: string | null;
   steps: RunStep[];
 }
 
@@ -252,6 +254,15 @@ export default function ClientRunDetails({ id }: { id: string }) {
                   <ExternalLink className="w-2.5 h-2.5" />
                 </a>
               )}
+              {run.isolated_env && (
+                <span 
+                  className="text-[10px] font-mono font-bold px-2.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 flex items-center gap-1.5 shadow-sm"
+                  title={run.runner_pod ? `Kubernetes Ephemeral Pod: ${run.runner_pod} (Non-Root UID 10001)` : 'Isolated Ephemeral Pod (Non-Root UID 10001)'}
+                >
+                  <span>🛡️</span>
+                  <span>Pod: {run.runner_pod || 'isolated'}</span>
+                </span>
+              )}
             </div>
             <div className="flex items-center gap-3 text-xs text-slate-400 flex-wrap">
               <span className="font-mono text-slate-500">{run.id}</span>
@@ -272,21 +283,17 @@ export default function ClientRunDetails({ id }: { id: string }) {
               href={run.jira_issue_url || '#'}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center gap-1.5 px-3.5 py-2 bg-[#0052cc]/15 hover:bg-[#0052cc]/25 text-[#2684ff] hover:text-white border border-[#0052cc]/35 text-xs font-semibold rounded-lg transition-all shadow-sm cursor-pointer"
-              title={`View ${run.jira_issue_key} in Atlassian Jira`}
+              className="flex items-center gap-1.5 px-3.5 py-2 bg-[#0052cc]/15 hover:bg-[#0052cc]/25 text-[#2684ff] hover:text-white border border-[#0052cc]/30 text-xs font-semibold rounded-lg transition-all shadow-sm cursor-pointer"
             >
-              <svg className="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24">
-                <path d="M11.53 2c0 2.4 1.97 4.35 4.35 4.35h1.78v1.7c0 2.4 1.94 4.34 4.34 4.35V2.84A.84.84 0 0 0 21.16 2H11.53zM5.77 7.76c0 2.4 1.96 4.34 4.34 4.34h1.78v1.7c0 2.4 1.94 4.35 4.35 4.35V8.6a.84.84 0 0 0-.84-.84H5.77zm-5.77 5.76c0 2.4 1.95 4.34 4.34 4.34h1.79v1.7c0 2.4 1.94 4.35 4.34 4.35V14.36a.84.84 0 0 0-.84-.84H0z"/>
-              </svg>
-              <span>Jira: {run.jira_issue_key}</span>
-              <ExternalLink className="w-3 h-3" />
+              <ExternalLink className="w-3.5 h-3.5" />
+              <span>View Jira Ticket</span>
             </a>
-          ) : (run.status === 'completed' && !run.success) ? (
+          ) : run.status === 'completed' && !run.success ? (
             <button
               onClick={handleCreateJiraTicket}
               disabled={creatingJira}
-              className="flex items-center gap-1.5 px-3.5 py-2 bg-[#0052cc] hover:bg-[#0047b3] text-white text-xs font-semibold rounded-lg shadow-md shadow-blue-900/30 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-              title="File Jira bug ticket with reproduction steps sequence"
+              className="flex items-center gap-1.5 px-3.5 py-2 bg-[#0052cc] hover:bg-[#0047b3] text-white text-xs font-semibold rounded-lg transition-all shadow-md shadow-[#0052cc]/20 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+              title="File automated bug ticket in Jira Cloud"
             >
               {creatingJira ? (
                 <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -295,7 +302,7 @@ export default function ClientRunDetails({ id }: { id: string }) {
                   <path d="M11.53 2c0 2.4 1.97 4.35 4.35 4.35h1.78v1.7c0 2.4 1.94 4.34 4.34 4.35V2.84A.84.84 0 0 0 21.16 2H11.53zM5.77 7.76c0 2.4 1.96 4.34 4.34 4.34h1.78v1.7c0 2.4 1.94 4.35 4.35 4.35V8.6a.84.84 0 0 0-.84-.84H5.77zm-5.77 5.76c0 2.4 1.95 4.34 4.34 4.34h1.79v1.7c0 2.4 1.94 4.35 4.34 4.35V14.36a.84.84 0 0 0-.84-.84H0z"/>
                 </svg>
               )}
-              <span>{creatingJira ? "Creating Ticket..." : "Create Jira Ticket"}</span>
+              <span>{creatingJira ? 'Creating Jira Issue...' : 'File Jira Bug'}</span>
             </button>
           ) : null}
 
@@ -307,6 +314,7 @@ export default function ClientRunDetails({ id }: { id: string }) {
               device: run.device || 'desktop',
               strictMode: Boolean(run.strict_mode),
               useCache: false,
+              isolatedEnv: Boolean(run.isolated_env),
               model: run.model,
               tags: run.tags || []
             }}

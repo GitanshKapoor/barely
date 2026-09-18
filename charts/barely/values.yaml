@@ -1,0 +1,67 @@
+# Barely Helm Chart Configuration Values
+# Default settings for deployment, execution engine, and security hardening
+
+global:
+  environment: production
+
+# Security Context & CNCF Pod Security Standards (PSS) Compliance
+security:
+  runAsNonRoot: true
+  runAsUser: 10001
+  runAsGroup: 10001
+  fsGroup: 10001
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+  seccompProfile:
+    type: RuntimeDefault
+
+# Execution Engine Configuration
+execution:
+  # Mode: 'worker_pool' (shared daemon pods) or 'k8s_job' (1 ephemeral pod per test run)
+  mode: k8s_job
+  # Concurrency limit for parallel isolated runner pods
+  maxParallelPods: 10
+  # Automated garbage collection duration for completed runner pods (in seconds)
+  ttlSecondsAfterFinished: 180
+  # ServiceAccount used by API to spawn batch/v1 jobs
+  serviceAccount:
+    create: true
+    name: barely-job-spawner
+  resources:
+    requests:
+      cpu: 500m
+      memory: 1Gi
+    limits:
+      cpu: 2000m
+      memory: 2.5Gi
+
+# API Service Configuration
+api:
+  replicaCount: 2
+  image:
+    repository: barely-api
+    tag: latest
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 8000
+
+# Worker Service Configuration (For persistent pool mode)
+worker:
+  replicaCount: 2
+  image:
+    repository: barely-worker
+    tag: latest
+    pullPolicy: IfNotPresent
+
+# Secrets & Cloud Vaults
+secrets:
+  # Mode: 'helm' (GitOps/ESO external secrets) or 'ui' (stored encrypted in PostgreSQL)
+  mode: helm
+  name: barely-secrets
+
+# Database
+database:
+  secretName: barely-db-secret
