@@ -172,10 +172,11 @@ export default function SettingsPage() {
 
   // Execution Engine & Pod Isolation States
   const [executionMode, setExecutionMode] = useState<'worker_pool' | 'k8s_job'>('worker_pool');
-  const [maxParallelPods, setMaxParallelPods] = useState<number>(5);
+  const [maxParallelPods, setMaxParallelPods] = useState<number>(10);
   const [savingEngine, setSavingEngine] = useState(false);
   const [engineClusterStatus, setEngineClusterStatus] = useState<any>(null);
   const [isK8sAvailable, setIsK8sAvailable] = useState(false);
+  const [showConcurrencyInfo, setShowConcurrencyInfo] = useState(false);
 
   // Section Collapse and Category Navigation States
   const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({
@@ -1601,8 +1602,8 @@ export default function SettingsPage() {
                     </div>
                   </div>
 
-                  {/* Concurrency Limit: Display-only card managed via Helm values.yaml */}
-                  <div className="p-4 rounded-xl bg-[#070b14] border border-slate-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                  {/* Concurrency Limit: Display-only card with clean QA/Dev view and (i) info popover */}
+                  <div className="p-4 rounded-xl bg-[#070b14] border border-slate-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-4 relative">
                     <div className="space-y-1">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="text-xs font-bold text-white flex items-center gap-1.5">
@@ -1612,12 +1613,57 @@ export default function SettingsPage() {
                         <span className="px-2 py-0.5 rounded-full text-[10px] font-mono bg-cyan-500/10 text-cyan-300 border border-cyan-500/25 font-semibold">
                           Helm Managed
                         </span>
+
+                        {/* Interactive (i) Info Tooltip / Popover Button */}
+                        <div className="relative inline-flex items-center group">
+                          <button
+                            type="button"
+                            onClick={() => setShowConcurrencyInfo(!showConcurrencyInfo)}
+                            className="w-4 h-4 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-cyan-300 flex items-center justify-center transition-colors focus:outline-none cursor-pointer"
+                            title="View Infrastructure & Capacity Details"
+                            aria-label="Infrastructure details"
+                          >
+                            <Info className="w-2.5 h-2.5" />
+                          </button>
+
+                          {/* Floating Popover on hover or click */}
+                          <div
+                            className={`absolute left-0 top-full mt-2 w-72 sm:w-80 p-3.5 rounded-xl bg-[#0a0f1d] border border-slate-700/90 shadow-2xl backdrop-blur-md z-40 text-xs text-slate-300 space-y-2.5 ${
+                              showConcurrencyInfo ? 'block' : 'hidden group-hover:block'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between border-b border-slate-800 pb-1.5">
+                              <span className="font-semibold text-white flex items-center gap-1.5 text-[11px]">
+                                <span className="w-1.5 h-1.5 rounded-full bg-cyan-400"></span>
+                                Infrastructure &amp; Concurrency Details
+                              </span>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setShowConcurrencyInfo(false);
+                                }}
+                                className="text-slate-400 hover:text-white p-0.5 cursor-pointer"
+                              >
+                                <X className="w-3 h-3" />
+                              </button>
+                            </div>
+                            <p className="text-[11px] text-slate-400 leading-relaxed">
+                              Configured in Helm <code className="text-cyan-300 font-mono text-[10px]">values.yaml</code> via <code className="text-cyan-300 font-mono text-[10px]">execution.maxParallelPods</code>.
+                            </p>
+                            <div className="p-2 rounded bg-slate-950/80 border border-slate-800 text-[10px] font-mono text-slate-400">
+                              Capacity limit: {maxParallelPods || 10} pods × 2.5GB RAM = {(maxParallelPods || 10) * 2.5}GB cluster memory required.
+                            </div>
+                            <p className="text-[11px] text-slate-400 leading-relaxed">
+                              When runs exceed this capacity, extra runs are placed in a managed FIFO queue and auto-start as soon as a running pod completes.
+                            </p>
+                          </div>
+                        </div>
                       </div>
+
+                      {/* Clean single-line description for Dev & QA */}
                       <p className="text-xs text-slate-400">
-                        Configured via Helm <code className="text-slate-300 font-mono text-[11px]">values.yaml</code> (<code className="text-cyan-400 font-mono text-[11px]">execution.maxParallelPods</code>)
-                      </p>
-                      <p className="text-[11px] text-slate-500">
-                        Cluster hardware capacity limit ({maxParallelPods || 10} pods × 2.5GB RAM = {(maxParallelPods || 10) * 2.5}GB required). If runs exceed this capacity, excess runs are placed into a managed FIFO queue and auto-start as pods finish.
+                        Maximum number of test runs that can execute simultaneously. Additional runs queue automatically.
                       </p>
                     </div>
 
@@ -1626,7 +1672,7 @@ export default function SettingsPage() {
                         <div className="text-lg font-black font-mono text-cyan-400 leading-tight">
                           {maxParallelPods || 10} Pods
                         </div>
-                        <div className="text-[10px] font-mono text-slate-500">Cluster Capacity Limit</div>
+                        <div className="text-[10px] font-mono text-slate-500">Capacity Limit</div>
                       </div>
                     </div>
                   </div>
