@@ -54,7 +54,7 @@ class RunResult:
     failure_reason: str = None
 
 class AgentLoop:
-    def __init__(self, engine: BrowserEngine, model: str = "anthropic/claude-sonnet-4-5", run_id: str = None, use_cache: bool = False):
+    def __init__(self, engine: BrowserEngine, model: str = "anthropic/claude-3-7-sonnet", run_id: str = None, use_cache: bool = False):
         self.engine = engine
         self.model = model
         self.cache = ActionCache()

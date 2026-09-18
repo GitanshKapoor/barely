@@ -117,7 +117,7 @@ def test_models_enabled_filtering():
     try:
         catalog = list_supported_models()
         gemini = next((m for m in catalog["models"] if m["id"] == "gemini/gemini-2.0-flash"), None)
-        claude = next((m for m in catalog["models"] if m["id"] == "anthropic/claude-sonnet-4-5"), None)
+        claude = next((m for m in catalog["models"] if m["id"] == "anthropic/claude-3-7-sonnet"), None)
         
         assert gemini is not None and gemini["enabled"] is True
         assert claude is not None and claude["enabled"] is False

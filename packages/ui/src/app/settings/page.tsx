@@ -39,9 +39,30 @@ import {
 } from 'lucide-react';
 import { formatModelName } from '../../utils/models';
 
+interface ModelOption {
+  id: string;
+  name: string;
+  provider: string;
+  supports_vision?: boolean;
+  recommended?: boolean;
+  context_window?: string;
+  description?: string;
+  dynamic?: boolean;
+  enabled?: boolean;
+  configured?: boolean;
+}
+
+interface ProviderSyncStatus {
+  configured: boolean;
+  dynamic: boolean;
+  count?: number;
+  error?: string;
+}
+
 // In-memory module cache to guarantee instantaneous 0ms page loads on repeat navigations
 let cachedSettingsData: SettingsResponse | null = null;
 let cachedIntegrationsData: any = null;
+let cachedModelsData: { models?: ModelOption[]; sync_status?: Record<string, ProviderSyncStatus>; default_model?: string } | null = null;
 
 // Hydrate from sessionStorage on browser initial load to prevent cold skeleton flashes
 if (typeof window !== 'undefined') {
@@ -50,6 +71,8 @@ if (typeof window !== 'undefined') {
     if (s && !cachedSettingsData) cachedSettingsData = JSON.parse(s);
     const i = sessionStorage.getItem('barely_integrations_cache');
     if (i && !cachedIntegrationsData) cachedIntegrationsData = JSON.parse(i);
+    const m = sessionStorage.getItem('barely_models_cache');
+    if (m && !cachedModelsData) cachedModelsData = JSON.parse(m);
   } catch {}
 }
 
@@ -109,7 +132,7 @@ interface SettingsResponse {
 const PROVIDER_INFO: Record<string, { provider: string; model: string; desc: string }> = {
   ANTHROPIC_API_KEY: {
     provider: 'anthropic',
-    model: 'anthropic/claude-sonnet-4-5',
+    model: 'anthropic/claude-3-7-sonnet',
     desc: 'Recommended for precise multi-modal vision & autonomous browser reasoning'
   },
   OPENAI_API_KEY: {
@@ -124,7 +147,7 @@ const PROVIDER_INFO: Record<string, { provider: string; model: string; desc: str
   },
   GEMINI_API_KEY: {
     provider: 'gemini',
-    model: 'gemini/gemini-1.5-pro',
+    model: 'gemini/gemini-2.0-flash',
     desc: 'Massive context window & rapid multimodal web inspection'
   }
 };
@@ -141,8 +164,12 @@ export default function SettingsPage() {
   // Model configuration states
   const [modelNameInput, setModelNameInput] = useState<string>(() => {
     const defaultModelSetting = cachedSettingsData?.settings?.find(s => s.key === 'DEFAULT_MODEL');
-    return defaultModelSetting?.masked_value || '';
+    return defaultModelSetting?.masked_value || 'anthropic/claude-3-7-sonnet';
   });
+  const [availableModels, setAvailableModels] = useState<ModelOption[]>(() => cachedModelsData?.models || []);
+  const [syncStatus, setSyncStatus] = useState<Record<string, ProviderSyncStatus>>(() => cachedModelsData?.sync_status || {});
+  const [selectedModelType, setSelectedModelType] = useState<string>('preset');
+  const [customModelSlug, setCustomModelSlug] = useState<string>('');
   const [testingModel, setTestingModel] = useState<boolean>(false);
   const [savingModel, setSavingModel] = useState<boolean>(false);
   const [modelTestResult, setModelTestResult] = useState<{ success: boolean; message: string } | null>(null);
@@ -271,10 +298,14 @@ export default function SettingsPage() {
   const fetchSettings = React.useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
     try {
-      const [res, intgRes] = await Promise.all([
+      const [res, intgRes, modelsRes] = await Promise.all([
         fetch(`${apiUrl}/api/settings`),
         fetch(`${apiUrl}/api/integrations`).catch(ie => {
           console.error('Failed to load integrations:', ie);
+          return null;
+        }),
+        fetch(`${apiUrl}/api/models`).catch(me => {
+          console.error('Failed to load models:', me);
           return null;
         })
       ]);
@@ -294,6 +325,22 @@ export default function SettingsPage() {
       const defaultModelSetting = data.settings.find(s => s.key === 'DEFAULT_MODEL');
       if (defaultModelSetting && defaultModelSetting.masked_value) {
         setModelNameInput(prev => prev ? prev : defaultModelSetting.masked_value);
+      }
+
+      if (modelsRes && modelsRes.ok) {
+        const modelsData = await modelsRes.json();
+        cachedModelsData = modelsData;
+        if (typeof window !== 'undefined') {
+          try {
+            sessionStorage.setItem('barely_models_cache', JSON.stringify(modelsData));
+          } catch {}
+        }
+        if (modelsData.models && Array.isArray(modelsData.models)) {
+          setAvailableModels(modelsData.models);
+        }
+        if (modelsData.sync_status) {
+          setSyncStatus(modelsData.sync_status);
+        }
       }
 
       // Process enterprise integrations configuration
@@ -442,6 +489,22 @@ export default function SettingsPage() {
     } finally {
       setSavingModel(false);
     }
+  };
+
+  const openEditModelModal = () => {
+    const current = activeModel;
+    setModelNameInput(current);
+    const existsInPresets = availableModels.some(m => m.id === current);
+    if (existsInPresets) {
+      setSelectedModelType(current);
+      setCustomModelSlug('');
+    } else {
+      setSelectedModelType('custom');
+      setCustomModelSlug(current);
+    }
+    setModelTestResult(null);
+    setModelSaveError(null);
+    setIsEditModelModalOpen(true);
   };
 
   const handleTestJira = async () => {
@@ -788,7 +851,8 @@ export default function SettingsPage() {
 
   const apiKeys = settings.filter(s => s.category === 'api_keys');
   const defaultSettings = settings.filter(s => s.category === 'defaults');
-  const activeModel = settings.find(s => s.key === 'DEFAULT_MODEL')?.masked_value || 'anthropic/claude-sonnet-4-5';
+  const activeModel = settings.find(s => s.key === 'DEFAULT_MODEL')?.masked_value || 'anthropic/claude-3-7-sonnet';
+  const activeModelObj = availableModels.find(m => m.id === activeModel);
 
   return (
     <div className="max-w-4xl mx-auto space-y-6 pb-12">
@@ -1700,10 +1764,7 @@ secrets:
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation();
-                        setModelNameInput(activeModel);
-                        setModelTestResult(null);
-                        setModelSaveError(null);
-                        setIsEditModelModalOpen(true);
+                        openEditModelModal();
                       }}
                       className="p-1 rounded hover:bg-slate-800 text-slate-400 hover:text-purple-300 transition-colors ml-0.5 cursor-pointer"
                       title="Edit Default Model"
@@ -1727,10 +1788,11 @@ secrets:
               </div>
 
               {!collapsedSections.model && (
-                <div className="p-6">
+                <div className="p-6 space-y-6">
+                  {/* Active Default Model Card */}
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-xl bg-[#070b14] border border-slate-800/80">
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2.5">
+                    <div className="space-y-1.5">
+                      <div className="flex items-center gap-2.5 flex-wrap">
                         <span className="text-base font-bold text-white tracking-tight">
                           {formatModelName(activeModel)}
                         </span>
@@ -1738,9 +1800,20 @@ secrets:
                           <span className="w-1.5 h-1.5 rounded-full bg-purple-400"></span>
                           Default Model
                         </span>
+                        {activeModelObj?.dynamic && (
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-semibold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 flex items-center gap-1">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                            Live Dynamic
+                          </span>
+                        )}
+                        {activeModelObj?.context_window && (
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-medium bg-slate-800 text-slate-300 border border-slate-700">
+                            {activeModelObj.context_window} Context
+                          </span>
+                        )}
                       </div>
                       <p className="text-xs text-slate-400">
-                        Default multi-modal foundation model used across all test executions.
+                        {activeModelObj?.description || "Default multi-modal foundation model used across all test executions."}
                       </p>
                       <p className="text-[11px] font-mono text-slate-500 pt-0.5">
                         API Slug: <span className="text-slate-400">{activeModel}</span>
@@ -1749,18 +1822,90 @@ secrets:
 
                     <button
                       type="button"
-                      onClick={() => {
-                        setModelNameInput(activeModel);
-                        setModelTestResult(null);
-                        setModelSaveError(null);
-                        setIsEditModelModalOpen(true);
-                      }}
+                      onClick={openEditModelModal}
                       className="px-3.5 py-2 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 hover:border-purple-500/40 flex items-center gap-2 transition-all shadow-sm shrink-0 self-start sm:self-auto cursor-pointer"
                       title="Edit Default AI Model"
                     >
                       <Pencil className="w-3.5 h-3.5 text-purple-400" />
                       <span>Edit Model</span>
                     </button>
+                  </div>
+
+                  {/* Provider Discovery & Live Sync Status Cards */}
+                  <div className="space-y-3">
+                    <div>
+                      <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider">
+                        Provider Discovery &amp; Live Sync
+                      </h3>
+                      <p className="text-[11px] text-slate-500">
+                        Automatically discovers newly supported models and filters out non-chat / deprecated models in real time when API keys are configured.
+                      </p>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                      {[
+                        { id: 'anthropic', name: 'Anthropic Claude', keyName: 'ANTHROPIC_API_KEY' },
+                        { id: 'groq', name: 'Groq LPUs', keyName: 'GROQ_API_KEY' },
+                        { id: 'openai', name: 'OpenAI', keyName: 'OPENAI_API_KEY' },
+                        { id: 'gemini', name: 'Google Gemini', keyName: 'GEMINI_API_KEY' },
+                      ].map(p => {
+                        const status = syncStatus[p.id];
+                        const isDyn = Boolean(status?.dynamic);
+                        const isConfigured = Boolean(status?.configured);
+                        const count = status?.count || availableModels.filter(m => m.provider === p.id).length;
+
+                        return (
+                          <div key={p.id} className="p-3.5 rounded-xl bg-[#070b14] border border-slate-800/80 flex flex-col justify-between gap-3">
+                            <div className="space-y-1">
+                              <div className="flex items-center justify-between">
+                                <span className="text-xs font-bold text-slate-200">{p.name}</span>
+                                {isDyn ? (
+                                  <span className="flex items-center gap-1 text-[10px] font-mono font-semibold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-md border border-emerald-500/20">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                                    Live
+                                  </span>
+                                ) : isConfigured ? (
+                                  <span className="flex items-center gap-1 text-[10px] font-mono font-medium text-cyan-400 bg-cyan-500/10 px-2 py-0.5 rounded-md border border-cyan-500/20">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-cyan-400"></span>
+                                    Active
+                                  </span>
+                                ) : (
+                                  <span className="flex items-center gap-1 text-[10px] font-mono text-slate-500 bg-slate-800/60 px-2 py-0.5 rounded-md border border-slate-700/50">
+                                    Offline
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-[11px] text-slate-400">
+                                {isDyn 
+                                  ? `${count} active models discovered` 
+                                  : isConfigured 
+                                  ? `${count} models (catalog)` 
+                                  : 'API key not configured'}
+                              </p>
+                            </div>
+
+                            <div className="pt-2 border-t border-slate-800/60 flex items-center justify-between text-[10px]">
+                              <span className="text-slate-500 font-mono">
+                                {isConfigured ? 'Sync: Enabled' : 'Key missing'}
+                              </span>
+                              {!isConfigured && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setCollapsedSections(prev => ({ ...prev, secrets: false }));
+                                    const el = document.getElementById('section-secrets');
+                                    if (el) el.scrollIntoView({ behavior: 'smooth' });
+                                  }}
+                                  className="text-[#0278ff] hover:underline font-medium cursor-pointer flex items-center gap-0.5"
+                                >
+                                  Configure ↗
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                 </div>
               )}
@@ -1778,7 +1923,7 @@ secrets:
                 }
               }}
             >
-              <div className="bg-[#0a0f1d] border border-slate-800 rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden animate-in zoom-in-95 duration-150 text-left">
+              <div className="bg-[#0a0f1d] border border-slate-800 rounded-2xl w-full max-w-xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-150 text-left">
                 {/* Modal Header */}
                 <div className="px-6 py-4 border-b border-slate-800 flex items-center justify-between">
                   <div className="flex items-center gap-2.5">
@@ -1787,7 +1932,7 @@ secrets:
                     </div>
                     <div>
                       <h3 className="text-sm font-bold text-white">Configure AI Agent Model</h3>
-                      <p className="text-[11px] text-slate-400">Set the default model and verify connectivity with a 1-token test</p>
+                      <p className="text-[11px] text-slate-400">Select an active foundation model or specify a custom endpoint slug</p>
                     </div>
                   </div>
                   <button
@@ -1804,30 +1949,151 @@ secrets:
                 </div>
 
                 {/* Modal Body */}
-                <div className="p-6 space-y-4">
-                  {/* Display Name Live Preview */}
-                  <div className="p-3 rounded-lg bg-[#070b14] border border-slate-800 flex items-center justify-between">
-                    <span className="text-xs text-slate-400 font-medium">Display Name:</span>
-                    <span className="text-xs font-bold text-purple-300 flex items-center gap-1.5">
-                      <span className="w-1.5 h-1.5 rounded-full bg-purple-400"></span>
-                      {formatModelName(modelNameInput.trim() || activeModel)}
-                    </span>
-                  </div>
-
-                  {/* Model Identifier input */}
+                <div className="p-6 space-y-4 max-h-[80vh] overflow-y-auto">
+                  {/* Model Selection Mode / Dropdown */}
                   <div className="space-y-1.5">
                     <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider">
-                      Model Identifier (API Slug)
+                      Select AI Model
                     </label>
-                    <input
-                      type="text"
-                      value={modelNameInput}
-                      onChange={(e) => setModelNameInput(e.target.value)}
-                      placeholder="e.g. anthropic/claude-sonnet-4-5 or groq/llama-3.3-70b-versatile"
-                      className="w-full bg-[#070b14] border border-slate-800 focus:border-[#0278ff] focus:ring-1 focus:ring-[#0278ff] rounded-lg px-3.5 py-2.5 text-xs font-mono text-white placeholder:text-slate-600 outline-none transition-all"
-                      autoFocus
-                    />
+                    <div className="relative">
+                      <select
+                        value={selectedModelType}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setSelectedModelType(val);
+                          if (val !== 'custom') {
+                            setModelNameInput(val);
+                          } else {
+                            setModelNameInput(customModelSlug || '');
+                          }
+                          setModelTestResult(null);
+                          setModelSaveError(null);
+                        }}
+                        className="w-full bg-[#070b14] border border-slate-800 focus:border-[#0278ff] focus:ring-1 focus:ring-[#0278ff] rounded-lg px-3.5 py-2.5 text-xs text-white outline-none transition-all appearance-none cursor-pointer"
+                      >
+                        {availableModels.filter(m => m.provider === 'anthropic' && m.enabled !== false).length > 0 && (
+                          <optgroup label="Anthropic (High Reasoning)">
+                            {availableModels
+                              .filter(m => m.provider === 'anthropic' && m.enabled !== false)
+                              .map(m => (
+                                <option key={m.id} value={m.id}>
+                                  {m.name} {m.recommended ? '★ (Recommended)' : ''}
+                                </option>
+                              ))}
+                          </optgroup>
+                        )}
+
+                        {availableModels.filter(m => m.provider === 'openai' && m.enabled !== false).length > 0 && (
+                          <optgroup label="OpenAI (Vision Grounding)">
+                            {availableModels
+                              .filter(m => m.provider === 'openai' && m.enabled !== false)
+                              .map(m => (
+                                <option key={m.id} value={m.id}>
+                                  {m.name} {m.recommended ? '★ (Recommended)' : ''}
+                                </option>
+                              ))}
+                          </optgroup>
+                        )}
+
+                        {availableModels.filter(m => m.provider === 'gemini' && m.enabled !== false).length > 0 && (
+                          <optgroup label="Google Gemini (Long Context & Vision)">
+                            {availableModels
+                              .filter(m => m.provider === 'gemini' && m.enabled !== false)
+                              .map(m => (
+                                <option key={m.id} value={m.id}>
+                                  {m.name} {m.recommended ? '★ (Recommended)' : ''}
+                                </option>
+                              ))}
+                          </optgroup>
+                        )}
+
+                        {availableModels.filter(m => m.provider === 'groq' && m.enabled !== false).length > 0 && (
+                          <optgroup label="Groq (High-Speed LPU)">
+                            {availableModels
+                              .filter(m => m.provider === 'groq' && m.enabled !== false)
+                              .map(m => (
+                                <option key={m.id} value={m.id}>
+                                  {m.name} {m.recommended ? '★ (Recommended)' : ''}
+                                </option>
+                              ))}
+                          </optgroup>
+                        )}
+
+                        <optgroup label="Custom / Self-Hosted">
+                          <option value="custom">✎ Custom Model Identifier...</option>
+                        </optgroup>
+                      </select>
+
+                      <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-slate-500">
+                        <ChevronDown className="w-4 h-4" />
+                      </div>
+                    </div>
                   </div>
+
+                  {/* Custom Model Input if custom is chosen */}
+                  {selectedModelType === 'custom' && (
+                    <div className="space-y-1.5 animate-in fade-in slide-in-from-top-1">
+                      <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider">
+                        Custom Model Identifier (API Slug)
+                      </label>
+                      <input
+                        type="text"
+                        value={customModelSlug}
+                        onChange={(e) => {
+                          setCustomModelSlug(e.target.value);
+                          setModelNameInput(e.target.value);
+                        }}
+                        placeholder="e.g. anthropic/claude-3-7-sonnet or groq/llama-3.3-70b-versatile"
+                        className="w-full bg-[#070b14] border border-slate-800 focus:border-[#0278ff] focus:ring-1 focus:ring-[#0278ff] rounded-lg px-3.5 py-2.5 text-xs font-mono text-white placeholder:text-slate-600 outline-none transition-all"
+                        autoFocus
+                      />
+                    </div>
+                  )}
+
+                  {/* Selected Model Details Preview */}
+                  {(() => {
+                    const selObj = availableModels.find(m => m.id === modelNameInput.trim());
+                    return (
+                      <div className="p-3.5 rounded-xl bg-[#070b14] border border-slate-800 space-y-2">
+                        <div className="flex items-center justify-between flex-wrap gap-2">
+                          <span className="text-xs text-slate-400 font-medium">Display Name:</span>
+                          <span className="text-xs font-bold text-purple-300 flex items-center gap-1.5">
+                            <span className="w-1.5 h-1.5 rounded-full bg-purple-400"></span>
+                            {formatModelName(modelNameInput.trim() || activeModel)}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between flex-wrap gap-2 text-[11px] font-mono text-slate-500 pt-1 border-t border-slate-800/60">
+                          <span>Target Slug:</span>
+                          <span className="text-slate-300 font-semibold">{modelNameInput.trim() || '—'}</span>
+                        </div>
+                        {selObj && (
+                          <div className="flex items-center gap-1.5 flex-wrap pt-1 text-[10px] font-mono">
+                            <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700">
+                              {selObj.provider.toUpperCase()}
+                            </span>
+                            {selObj.context_window && (
+                              <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700">
+                                {selObj.context_window} Context
+                              </span>
+                            )}
+                            <span className={`px-2 py-0.5 rounded border ${
+                              selObj.supports_vision 
+                                ? 'bg-purple-500/10 text-purple-300 border-purple-500/30' 
+                                : 'bg-blue-500/10 text-blue-300 border-blue-500/30'
+                            }`}>
+                              {selObj.supports_vision ? '👁 Multimodal Vision' : '⚡ Text Reasoning'}
+                            </span>
+                            {selObj.dynamic && (
+                              <span className="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 flex items-center gap-1">
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                                Live Dynamic
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
 
                   {/* 1-Token Test Action */}
                   <div className="flex items-center justify-between pt-1">
@@ -1886,21 +2152,21 @@ secrets:
                   <div className="pt-2 border-t border-slate-800/60 flex items-center gap-2 text-[11px] text-slate-400 flex-wrap">
                     <span className="font-semibold text-slate-500">Model docs:</span>
                     <a
-                      href="https://console.groq.com/docs/models"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-[#0278ff] hover:underline flex items-center gap-0.5"
-                    >
-                      Groq Models <ExternalLink className="w-2.5 h-2.5" />
-                    </a>
-                    <span className="text-slate-700">·</span>
-                    <a
                       href="https://docs.anthropic.com/en/docs/about-claude/models"
                       target="_blank"
                       rel="noopener noreferrer"
                       className="text-[#0278ff] hover:underline flex items-center gap-0.5"
                     >
-                      Claude Models <ExternalLink className="w-2.5 h-2.5" />
+                      Claude <ExternalLink className="w-2.5 h-2.5" />
+                    </a>
+                    <span className="text-slate-700">·</span>
+                    <a
+                      href="https://console.groq.com/docs/models"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-[#0278ff] hover:underline flex items-center gap-0.5"
+                    >
+                      Groq <ExternalLink className="w-2.5 h-2.5" />
                     </a>
                     <span className="text-slate-700">·</span>
                     <a
@@ -1909,7 +2175,7 @@ secrets:
                       rel="noopener noreferrer"
                       className="text-[#0278ff] hover:underline flex items-center gap-0.5"
                     >
-                      OpenAI Models <ExternalLink className="w-2.5 h-2.5" />
+                      OpenAI <ExternalLink className="w-2.5 h-2.5" />
                     </a>
                     <span className="text-slate-700">·</span>
                     <a
@@ -1918,7 +2184,7 @@ secrets:
                       rel="noopener noreferrer"
                       className="text-[#0278ff] hover:underline flex items-center gap-0.5"
                     >
-                      Gemini Models <ExternalLink className="w-2.5 h-2.5" />
+                      Gemini <ExternalLink className="w-2.5 h-2.5" />
                     </a>
                   </div>
                 </div>

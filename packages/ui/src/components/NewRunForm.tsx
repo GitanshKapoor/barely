@@ -57,7 +57,7 @@ export default function NewRunForm({ initialData, triggerButton, onRunCreated }:
   const [useCache, setUseCache] = useState(Boolean(initialData?.useCache));
   const [isolatedEnv, setIsolatedEnv] = useState(Boolean(initialData?.isolatedEnv));
   const [model, setModel] = useState(initialData?.model || '');
-  const [defaultModelName, setDefaultModelName] = useState<string>('anthropic/claude-sonnet-4-5');
+  const [defaultModelName, setDefaultModelName] = useState<string>('anthropic/claude-3-7-sonnet');
   const [availableModels, setAvailableModels] = useState<ModelOption[]>([]);
   const [selectedModelType, setSelectedModelType] = useState<string>('default');
   const [customModelSlug, setCustomModelSlug] = useState<string>('');

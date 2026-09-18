@@ -100,7 +100,7 @@ def list_runs():
                 "failure_reason": r.failure_reason,
                 "strict_mode": bool(r.strict_mode),
                 "use_cache": bool(getattr(r, "use_cache", False)),
-                "model": getattr(r, "model", None) or "anthropic/claude-sonnet-4-5",
+                "model": getattr(r, "model", None) or "anthropic/claude-3-7-sonnet",
                 "tags": [t for t in r.tags.split(",") if t] if r.tags else [],
                 "jira_issue_key": getattr(r, "jira_issue_key", None),
                 "jira_issue_url": getattr(r, "jira_issue_url", None),
@@ -194,7 +194,7 @@ def get_run(run_id: str):
             "failure_reason": r.failure_reason,
             "strict_mode": bool(r.strict_mode),
             "use_cache": bool(getattr(r, "use_cache", False)),
-            "model": getattr(r, "model", None) or "anthropic/claude-sonnet-4-5",
+            "model": getattr(r, "model", None) or "anthropic/claude-3-7-sonnet",
             "tags": [t for t in r.tags.split(",") if t] if r.tags else [],
             "created_at": r.created_at.isoformat() if r.created_at else None,
             "logs": r.logs or "",
@@ -297,7 +297,7 @@ def trigger_run(req: RunRequest):
             initial_logs = f"[{now_str}] ℹ️ Running outside Kubernetes cluster. Executing run on persistent worker pool.\n"
             should_isolate = False
 
-    active_model = req.model.strip() if req.model and req.model.strip() else (get_setting("DEFAULT_MODEL") or "anthropic/claude-sonnet-4-5")
+    active_model = req.model.strip() if req.model and req.model.strip() else (get_setting("DEFAULT_MODEL") or "anthropic/claude-3-7-sonnet")
     db = SessionLocal()
     try:
         new_run = RunRecord(
@@ -527,6 +527,18 @@ def save_setting(req: SaveSettingRequest):
         )
         
     set_setting(key_clean, req.value)
+    
+    # Invalidate model discovery cache if an LLM key changed
+    llm_key_map = {
+        "ANTHROPIC_API_KEY": "anthropic",
+        "GROQ_API_KEY": "groq",
+        "OPENAI_API_KEY": "openai",
+        "GEMINI_API_KEY": "gemini"
+    }
+    if key_clean in llm_key_map:
+        from barely_core.models_provider import invalidate_models_cache
+        invalidate_models_cache(llm_key_map[key_clean])
+
     return {"message": f"Setting '{key_clean}' updated successfully", "key": key_clean}
 
 @app.delete("/api/settings/{key}")
@@ -543,6 +555,17 @@ def remove_setting(key: str):
     deleted = delete_setting(key_clean)
     if not deleted:
         return {"message": f"No database override found for '{key_clean}'", "deleted": False}
+
+    llm_key_map = {
+        "ANTHROPIC_API_KEY": "anthropic",
+        "GROQ_API_KEY": "groq",
+        "OPENAI_API_KEY": "openai",
+        "GEMINI_API_KEY": "gemini"
+    }
+    if key_clean in llm_key_map:
+        from barely_core.models_provider import invalidate_models_cache
+        invalidate_models_cache(llm_key_map[key_clean])
+
     return {"message": f"Setting '{key_clean}' database override removed", "deleted": True}
 
 @app.post("/api/settings/test-key")
@@ -556,7 +579,6 @@ def test_key(req: TestKeyRequest):
     provider_map = {
         "anthropic": (
             [
-                "anthropic/claude-sonnet-4-5",
                 "anthropic/claude-3-7-sonnet",
                 "anthropic/claude-3-5-sonnet-20241022",
                 "anthropic/claude-3-5-haiku-20241022"

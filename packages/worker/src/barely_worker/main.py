@@ -18,7 +18,7 @@ logger = logging.getLogger("barely_worker")
 
 def process_job(run_id: str, test_name: str, goal_text: str, start_url: str, device: str, strict_mode: bool = False, use_cache: bool = False, model: Optional[str] = None, context: Optional[str] = None):
     try:
-        active_model = model or get_setting("DEFAULT_MODEL") or "anthropic/claude-sonnet-4-5"
+        active_model = model or get_setting("DEFAULT_MODEL") or "anthropic/claude-3-7-sonnet"
         logger.info(f"Picked up job: {run_id} ({test_name}) targeting {start_url} (model={active_model}, strict_mode={strict_mode}, use_cache={use_cache})")
         
         parsed_goal = Goal(

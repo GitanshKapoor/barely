@@ -13,7 +13,7 @@ KNOWN_SETTINGS = [
     {"key": "OPENAI_API_KEY", "is_secret": True, "label": "OpenAI API Key", "category": "api_keys", "placeholder": "sk-..."},
     {"key": "GROQ_API_KEY", "is_secret": True, "label": "Groq API Key", "category": "api_keys", "placeholder": "gsk_..."},
     {"key": "GEMINI_API_KEY", "is_secret": True, "label": "Google Gemini API Key", "category": "api_keys", "placeholder": "AIzaSy..."},
-    {"key": "DEFAULT_MODEL", "is_secret": False, "label": "Default AI Model", "category": "model", "placeholder": "anthropic/claude-sonnet-4-5"},
+    {"key": "DEFAULT_MODEL", "is_secret": False, "label": "Default AI Model", "category": "model", "placeholder": "anthropic/claude-3-7-sonnet"},
     {"key": "DEFAULT_DEVICE", "is_secret": False, "label": "Default Test Device", "category": "defaults", "placeholder": "desktop"},
     {"key": "MAX_STEPS", "is_secret": False, "label": "Max Steps Per Test", "category": "defaults", "placeholder": "20"},
     {"key": "STRICT_MODE_DEFAULT", "is_secret": False, "label": "Default Strict Mode", "category": "defaults", "placeholder": "false"},
@@ -332,9 +332,9 @@ def resolve_model_api_key(model: str) -> Optional[str]:
     m = (model or "").lower()
     if m.startswith("anthropic/") or "claude" in m:
         return get_setting("ANTHROPIC_API_KEY")
-    elif m.startswith("openai/") or "gpt" in m:
+    elif m.startswith("openai/") or "gpt" in m or m.startswith("o1") or m.startswith("o3") or "chatgpt" in m:
         return get_setting("OPENAI_API_KEY")
-    elif m.startswith("groq/") or "llama" in m or "mixtral" in m:
+    elif m.startswith("groq/") or "llama" in m or "mixtral" in m or "deepseek" in m or "gemma" in m or "qwen" in m:
         return get_setting("GROQ_API_KEY")
     elif m.startswith("gemini/") or "gemini" in m:
         return get_setting("GEMINI_API_KEY")
@@ -366,15 +366,6 @@ PROVIDER_DOCS = {
 KNOWN_MODELS = [
     # Anthropic Claude
     {
-        "id": "anthropic/claude-sonnet-4-5",
-        "name": "Claude 3.5 Sonnet",
-        "provider": "anthropic",
-        "supports_vision": True,
-        "recommended": True,
-        "context_window": "200k",
-        "description": "Recommended for end-to-end web QA. Superior spatial awareness, robust DOM locators, and resilient error recovery."
-    },
-    {
         "id": "anthropic/claude-3-7-sonnet",
         "name": "Claude 3.7 Sonnet",
         "provider": "anthropic",
@@ -382,6 +373,15 @@ KNOWN_MODELS = [
         "recommended": True,
         "context_window": "200k",
         "description": "Hybrid standard and extended thinking reasoning model for multi-step enterprise QA."
+    },
+    {
+        "id": "anthropic/claude-3-5-sonnet-20241022",
+        "name": "Claude 3.5 Sonnet",
+        "provider": "anthropic",
+        "supports_vision": True,
+        "recommended": True,
+        "context_window": "200k",
+        "description": "High-precision multimodal model with spatial DOM element awareness and resilient error recovery."
     },
     {
         "id": "anthropic/claude-3-5-haiku-20241022",
@@ -421,18 +421,27 @@ KNOWN_MODELS = [
         "description": "Ultra-fast ~800 tokens/sec for rapid navigation and high-frequency health pings."
     },
     {
-        "id": "groq/mixtral-8x7b-32768",
-        "name": "Mixtral 8x7B MoE",
+        "id": "groq/deepseek-r1-distill-llama-70b",
+        "name": "DeepSeek R1 Distill 70B",
         "provider": "groq",
         "supports_vision": False,
+        "recommended": True,
+        "context_window": "128k",
+        "description": "Open-weights reasoning model running on Groq LPUs for complex problem solving."
+    },
+    {
+        "id": "groq/llama-3.2-11b-vision-preview",
+        "name": "Meta Llama 3.2 11B Vision",
+        "provider": "groq",
+        "supports_vision": True,
         "recommended": False,
-        "context_window": "32k",
-        "description": "Mixture of Experts architecture on Groq for efficient natural language instruction parsing."
+        "context_window": "128k",
+        "description": "Multimodal vision reasoning on Groq LPUs for visual screenshot inspection."
     },
     # OpenAI
     {
         "id": "openai/gpt-4o",
-        "name": "GPT-4o (Omni)",
+        "name": "GPT-4o",
         "provider": "openai",
         "supports_vision": True,
         "recommended": True,
@@ -447,6 +456,15 @@ KNOWN_MODELS = [
         "recommended": False,
         "context_window": "128k",
         "description": "Cost-effective multimodal model for high-volume automated testing pipelines."
+    },
+    {
+        "id": "openai/o3-mini",
+        "name": "OpenAI o3-mini",
+        "provider": "openai",
+        "supports_vision": False,
+        "recommended": True,
+        "context_window": "200k",
+        "description": "High-efficiency reasoning model with deep chain-of-thought analysis for complex workflows."
     },
     # Google Gemini
     {
@@ -479,8 +497,53 @@ KNOWN_MODELS = [
 ]
 
 def list_supported_models() -> Dict[str, Any]:
-    """Returns the model catalog, provider documentation links, and current active default model."""
-    default_model = get_setting("DEFAULT_MODEL") or "anthropic/claude-sonnet-4-5"
+    """
+    Returns the model catalog, provider documentation links, and current active default model.
+    Dynamically queries provider APIs when API keys are configured, falling back to curated active models.
+    """
+    from barely_core.models_provider import get_dynamic_models_for_provider
+
+    default_model = get_setting("DEFAULT_MODEL") or "anthropic/claude-3-7-sonnet"
+
+    # Check which provider keys are configured
+    provider_keys = {
+        "anthropic": get_setting("ANTHROPIC_API_KEY"),
+        "groq": get_setting("GROQ_API_KEY"),
+        "openai": get_setting("OPENAI_API_KEY"),
+        "gemini": get_setting("GEMINI_API_KEY"),
+    }
+
+    # Fetch dynamic models for each configured provider
+    dynamic_models_by_provider: Dict[str, List[Dict[str, Any]]] = {}
+    provider_sync_status: Dict[str, Dict[str, Any]] = {}
+
+    for provider, key in provider_keys.items():
+        if key and key.strip():
+            try:
+                dyn = get_dynamic_models_for_provider(provider, key.strip())
+                if dyn:
+                    dynamic_models_by_provider[provider] = dyn
+                    provider_sync_status[provider] = {"configured": True, "dynamic": True, "count": len(dyn)}
+                else:
+                    provider_sync_status[provider] = {"configured": True, "dynamic": False, "count": 0}
+            except Exception as ex:
+                logger.debug(f"Dynamic fetch error for {provider}: {ex}")
+                provider_sync_status[provider] = {"configured": True, "dynamic": False, "error": str(ex)}
+        else:
+            provider_sync_status[provider] = {"configured": False, "dynamic": False, "count": 0}
+
+    # Assemble complete model catalog: use dynamic models if available, otherwise curated fallback
+    combined_models: List[Dict[str, Any]] = []
+
+    for provider in ("anthropic", "groq", "openai", "gemini"):
+        if provider in dynamic_models_by_provider and dynamic_models_by_provider[provider]:
+            combined_models.extend(dynamic_models_by_provider[provider])
+        else:
+            provider_defaults = [m for m in KNOWN_MODELS if m["provider"] == provider]
+            for m in provider_defaults:
+                m_copy = dict(m)
+                m_copy["dynamic"] = False
+                combined_models.append(m_copy)
 
     # Check if Helm or environment specified a list of enabled models
     raw_enabled = os.getenv("MODELS_ENABLED") or os.getenv("BARELY_MODELS_ENABLED")
@@ -495,16 +558,18 @@ def list_supported_models() -> Dict[str, Any]:
             enabled_set = {m.strip() for m in raw_enabled.split(",") if m.strip()}
 
     models_list = []
-    for m in KNOWN_MODELS:
+    for m in combined_models:
         m_copy = dict(m)
         m_copy["is_default"] = (m["id"] == default_model)
         m_copy["enabled"] = (m["id"] in enabled_set) if enabled_set else True
+        m_copy["configured"] = provider_sync_status.get(m["provider"], {}).get("configured", False)
         models_list.append(m_copy)
 
     return {
         "models": models_list,
         "providers": PROVIDER_DOCS,
-        "default_model": default_model
+        "default_model": default_model,
+        "sync_status": provider_sync_status
     }
 
 def get_integrations_summary() -> Dict[str, Any]:
