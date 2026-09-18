@@ -954,26 +954,26 @@ export default function SettingsPage() {
               {/* Collapsible Card Header */}
               <div 
                 onClick={() => toggleSection('secrets')}
-                className="px-6 py-4 border-b border-slate-800 flex items-center justify-between cursor-pointer hover:bg-slate-800/30 transition-colors select-none"
+                className="px-6 py-4 border-b border-slate-800 flex items-center justify-between gap-4 cursor-pointer hover:bg-slate-800/30 transition-colors select-none"
               >
-                <div className="flex items-center gap-2.5">
-                  <div className="w-7 h-7 rounded-lg bg-blue-500/10 text-blue-400 flex items-center justify-center border border-blue-500/20">
+                <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                  <div className="w-7 h-7 rounded-lg bg-blue-500/10 text-blue-400 flex items-center justify-center border border-blue-500/20 shrink-0">
                     <Key className="w-4 h-4" />
                   </div>
-                  <div>
+                  <div className="min-w-0">
                     <div className="flex items-center gap-2">
-                      <h2 className="text-sm font-bold text-white">Secrets &amp; API Keys Management</h2>
-                      <span className="px-2 py-0.5 rounded-full font-mono text-[10px] font-semibold bg-blue-500/10 text-blue-300 border border-blue-500/25">
+                      <h2 className="text-sm font-bold text-white whitespace-nowrap">Secrets &amp; API Keys Management</h2>
+                      <span className="px-2 py-0.5 rounded-full font-mono text-[10px] font-semibold bg-blue-500/10 text-blue-300 border border-blue-500/25 shrink-0">
                         Zero-Config Auto-Detect
                       </span>
                     </div>
-                    <p className="text-xs text-slate-400">Configure runtime credentials, cloud secrets sync, and LLM provider keys</p>
+                    <p className="text-xs text-slate-400 truncate sm:whitespace-normal">Configure runtime credentials, cloud secrets sync, and LLM provider keys</p>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2.5 shrink-0 ml-auto">
                   {collapsedSections.secrets && (
-                    <span className="text-[11px] font-mono text-slate-400 bg-slate-900 px-2.5 py-1 rounded-full border border-slate-800 hidden sm:inline-flex items-center gap-1.5">
+                    <span className="text-[11px] font-mono text-slate-400 bg-slate-900 px-2.5 py-1 rounded-full border border-slate-800 hidden sm:inline-flex items-center gap-1.5 shrink-0">
                       <span className={`w-1.5 h-1.5 rounded-full ${apiKeys.some(k => k.is_configured) ? 'bg-emerald-400' : 'bg-slate-500'}`} />
                       {apiKeys.filter(k => k.is_configured).length} / {apiKeys.length} Configured
                     </span>
@@ -1671,24 +1671,24 @@ secrets:
               {/* Collapsible Card Header */}
               <div 
                 onClick={() => toggleSection('model')}
-                className="px-6 py-4 border-b border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 cursor-pointer hover:bg-slate-800/30 transition-colors select-none"
+                className="px-6 py-4 border-b border-slate-800 flex items-center justify-between gap-4 cursor-pointer hover:bg-slate-800/30 transition-colors select-none"
               >
-                <div className="flex items-center gap-2.5">
-                  <div className="w-7 h-7 rounded-lg bg-purple-500/10 text-purple-400 flex items-center justify-center border border-purple-500/20">
+                <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                  <div className="w-7 h-7 rounded-lg bg-purple-500/10 text-purple-400 flex items-center justify-center border border-purple-500/20 shrink-0">
                     <Cpu className="w-4 h-4" />
                   </div>
-                  <div>
+                  <div className="min-w-0">
                     <div className="flex items-center gap-2">
-                      <h2 className="text-sm font-bold text-white">AI Agent Model</h2>
-                      <span className="px-2 py-0.2 rounded-full text-[10px] font-mono font-bold bg-purple-500/15 text-purple-300 border border-purple-500/30">
+                      <h2 className="text-sm font-bold text-white whitespace-nowrap">AI Agent Model</h2>
+                      <span className="px-2 py-0.2 rounded-full text-[10px] font-mono font-bold bg-purple-500/15 text-purple-300 border border-purple-500/30 shrink-0">
                         Multi-Modal LLM
                       </span>
                     </div>
-                    <p className="text-xs text-slate-400">Foundation LLM used for test planning and DOM interaction</p>
+                    <p className="text-xs text-slate-400 truncate sm:whitespace-normal">Foundation LLM used for test planning and DOM interaction</p>
                   </div>
                 </div>
                 
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2.5 shrink-0 ml-auto">
                   {/* Current Default Badge with Pencil Edit Icon */}
                   <div className="flex items-center gap-2 bg-[#070b14] border border-purple-500/30 px-3 py-1.5 rounded-lg shadow-sm">
                     <span className="text-[11px] text-slate-400 font-medium hidden sm:inline">Active Default:</span>
@@ -1960,43 +1960,36 @@ secrets:
               {/* Collapsible Card Header */}
               <div 
                 onClick={() => toggleSection('execution')}
-                className="px-6 py-4 border-b border-slate-800 flex items-center justify-between cursor-pointer hover:bg-slate-800/30 transition-colors select-none flex-wrap gap-2"
+                className="px-6 py-4 border-b border-slate-800 flex items-center justify-between gap-4 cursor-pointer hover:bg-slate-800/30 transition-colors select-none"
               >
-                <div className="flex items-center gap-2.5">
+                <div className="flex items-center gap-2.5 min-w-0 flex-1">
                   <div className="w-7 h-7 rounded-lg bg-emerald-500/10 text-emerald-400 flex items-center justify-center border border-emerald-500/20 shrink-0">
                     <ShieldCheck className="w-4 h-4" />
                   </div>
-                  <div>
+                  <div className="min-w-0">
                     <div className="flex items-center gap-2">
-                      <h2 className="text-sm font-bold text-white">Execution Engine &amp; Ephemeral Pod Isolation</h2>
-                      <span className="px-2 py-0.2 rounded-full text-[10px] font-mono bg-emerald-500/10 text-emerald-300 border border-emerald-500/20 font-semibold">
+                      <h2 className="text-sm font-bold text-white whitespace-nowrap">Execution Engine &amp; Ephemeral Pod Isolation</h2>
+                      <span className="px-2 py-0.2 rounded-full text-[10px] font-mono bg-emerald-500/10 text-emerald-300 border border-emerald-500/20 font-semibold shrink-0">
                         CNCF Restricted PSS
                       </span>
                     </div>
-                    <p className="text-xs text-slate-400">
+                    <p className="text-xs text-slate-400 truncate sm:whitespace-normal">
                       Configure test execution boundaries: persistent shared daemon pool vs. single-use non-root Kubernetes pods
                     </p>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-3">
-                  {/* Cluster Status Chip */}
+                <div className="flex items-center gap-2.5 shrink-0 ml-auto">
+                  {/* Unified Active Status Pill */}
                   {isK8sAvailable ? (
-                    <span className="px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 hidden sm:flex items-center gap-1.5">
-                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                      K8s Ready
+                    <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 flex items-center gap-1.5">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                      <span>{executionMode === 'k8s_job' ? `K8s Pods (Max: ${maxParallelPods || 10})` : 'Worker Pool (K8s Ready)'}</span>
                     </span>
                   ) : (
-                    <span className="px-3 py-1 rounded-full text-xs font-semibold bg-amber-500/15 text-amber-300 border border-amber-500/30 hidden sm:flex items-center gap-1.5" title="Runs outside Kubernetes will automatically fall back to persistent daemon worker pool.">
-                      <span className="w-2 h-2 rounded-full bg-amber-400" />
-                      Docker Fallback
-                    </span>
-                  )}
-
-                  {collapsedSections.execution && (
-                    <span className="text-[11px] font-mono text-slate-400 bg-slate-900 px-2.5 py-1 rounded-full border border-slate-800 hidden sm:inline-flex items-center gap-1.5">
-                      <span className={`w-1.5 h-1.5 rounded-full ${executionMode === 'k8s_job' ? 'bg-cyan-400' : 'bg-slate-400'}`} />
-                      {executionMode === 'k8s_job' ? `K8s Pods (Max: ${maxParallelPods})` : 'Worker Pool'}
+                    <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-500/15 text-amber-300 border border-amber-500/30 flex items-center gap-1.5" title="Running in Docker Compose mode. Tests execute in persistent daemon worker pool.">
+                      <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+                      <span>Docker Fallback · Worker Pool</span>
                     </span>
                   )}
 
@@ -2288,28 +2281,28 @@ secrets:
               {/* Collapsible Card Header */}
               <div 
                 onClick={() => toggleSection('jira')}
-                className="px-6 py-4 border-b border-slate-800 flex items-center justify-between cursor-pointer hover:bg-slate-800/30 transition-colors select-none flex-wrap gap-2"
+                className="px-6 py-4 border-b border-slate-800 flex items-center justify-between gap-4 cursor-pointer hover:bg-slate-800/30 transition-colors select-none"
               >
-                <div className="flex items-center gap-2.5">
+                <div className="flex items-center gap-2.5 min-w-0 flex-1">
                   <div className="w-7 h-7 rounded-lg bg-[#0052cc]/15 text-[#2684ff] flex items-center justify-center border border-[#0052cc]/30 shrink-0">
                     <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
                       <path d="M11.53 2c0 2.4 1.97 4.35 4.35 4.35h1.78v1.7c0 2.4 1.94 4.34 4.34 4.35V2.84A.84.84 0 0 0 21.16 2H11.53zM5.77 7.76c0 2.4 1.96 4.34 4.34 4.34h1.78v1.7c0 2.4 1.94 4.35 4.35 4.35V8.6a.84.84 0 0 0-.84-.84H5.77zm-5.77 5.76c0 2.4 1.95 4.34 4.34 4.34h1.79v1.7c0 2.4 1.94 4.35 4.34 4.35V14.36a.84.84 0 0 0-.84-.84H0z"/>
                     </svg>
                   </div>
-                  <div>
+                  <div className="min-w-0">
                     <div className="flex items-center gap-2">
-                      <h2 className="text-sm font-bold text-white">Issue Tracking &amp; Defect Management</h2>
-                      <span className="px-2 py-0.2 rounded-full text-[10px] font-mono bg-[#0052cc]/15 text-blue-300 border border-[#0052cc]/30 font-semibold">
+                      <h2 className="text-sm font-bold text-white whitespace-nowrap">Issue Tracking &amp; Defect Management</h2>
+                      <span className="px-2 py-0.2 rounded-full text-[10px] font-mono bg-[#0052cc]/15 text-blue-300 border border-[#0052cc]/30 font-semibold shrink-0">
                         Atlassian Jira Cloud
                       </span>
                     </div>
-                    <p className="text-xs text-slate-400">Automate bug ticket creation in Atlassian Jira Cloud upon test failures with full reproduction steps</p>
+                    <p className="text-xs text-slate-400 truncate sm:whitespace-normal">Automate bug ticket creation in Atlassian Jira Cloud upon test failures with full reproduction steps</p>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2.5 shrink-0 ml-auto">
                   {jiraConfigured ? (
-                    <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 flex items-center gap-1.5">
+                    <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 flex items-center gap-1.5 shrink-0">
                       <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
                       Connected ({jiraProjectKey}) · Auto: {jiraAutoCreate ? 'ON' : 'OFF'}
                     </span>
@@ -2526,24 +2519,24 @@ secrets:
               {/* Collapsible Card Header */}
               <div 
                 onClick={() => toggleSection('notifications')}
-                className="px-6 py-4 border-b border-slate-800 flex items-center justify-between cursor-pointer hover:bg-slate-800/30 transition-colors select-none flex-wrap gap-2"
+                className="px-6 py-4 border-b border-slate-800 flex items-center justify-between gap-4 cursor-pointer hover:bg-slate-800/30 transition-colors select-none"
               >
-                <div className="flex items-center gap-2.5">
+                <div className="flex items-center gap-2.5 min-w-0 flex-1">
                   <div className="w-7 h-7 rounded-lg bg-amber-500/10 text-amber-400 flex items-center justify-center border border-amber-500/20 shrink-0">
                     <Bell className="w-4 h-4" />
                   </div>
-                  <div>
+                  <div className="min-w-0">
                     <div className="flex items-center gap-2">
-                      <h2 className="text-sm font-bold text-white">Incident Alerts &amp; Webhook Notifications</h2>
-                      <span className="px-2 py-0.2 rounded-full text-[10px] font-mono bg-amber-500/10 text-amber-300 border border-amber-500/20 font-semibold">
+                      <h2 className="text-sm font-bold text-white whitespace-nowrap">Incident Alerts &amp; Webhook Notifications</h2>
+                      <span className="px-2 py-0.2 rounded-full text-[10px] font-mono bg-amber-500/10 text-amber-300 border border-amber-500/20 font-semibold shrink-0">
                         Slack · Microsoft Teams
                       </span>
                     </div>
-                    <p className="text-xs text-slate-400">Stream real-time test failure alerts, Block Kit cards, and Adaptive Cards to team channels</p>
+                    <p className="text-xs text-slate-400 truncate sm:whitespace-normal">Stream real-time test failure alerts, Block Kit cards, and Adaptive Cards to team channels</p>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2.5 shrink-0 ml-auto">
                   <div className="hidden sm:flex items-center gap-2 text-xs font-mono">
                     <span className={`px-2 py-0.5 rounded-full border ${slackConfigured ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30' : 'bg-slate-900 text-slate-500 border-slate-800'}`}>
                       Slack: {slackConfigured ? 'Active' : 'Off'}
@@ -2979,26 +2972,26 @@ secrets:
               {/* Collapsible Card Header */}
               <div 
                 onClick={() => toggleSection('defaults')}
-                className="px-6 py-4 border-b border-slate-800 flex items-center justify-between cursor-pointer hover:bg-slate-800/30 transition-colors select-none flex-wrap gap-2"
+                className="px-6 py-4 border-b border-slate-800 flex items-center justify-between gap-4 cursor-pointer hover:bg-slate-800/30 transition-colors select-none"
               >
-                <div className="flex items-center gap-2.5">
-                  <div className="w-7 h-7 rounded-lg bg-blue-500/10 text-blue-400 flex items-center justify-center border border-blue-500/20">
+                <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                  <div className="w-7 h-7 rounded-lg bg-blue-500/10 text-blue-400 flex items-center justify-center border border-blue-500/20 shrink-0">
                     <Globe className="w-4 h-4" />
                   </div>
-                  <div>
+                  <div className="min-w-0">
                     <div className="flex items-center gap-2">
-                      <h2 className="text-sm font-bold text-white">Agent Defaults &amp; Execution Guardrails</h2>
-                      <span className="px-2 py-0.2 rounded-full text-[10px] font-mono bg-blue-500/10 text-blue-300 border border-blue-500/20 font-semibold">
+                      <h2 className="text-sm font-bold text-white whitespace-nowrap">Agent Defaults &amp; Execution Guardrails</h2>
+                      <span className="px-2 py-0.2 rounded-full text-[10px] font-mono bg-blue-500/10 text-blue-300 border border-blue-500/20 font-semibold shrink-0">
                         Global Policy
                       </span>
                     </div>
-                    <p className="text-xs text-slate-400">Default runtime parameters and timeouts applied to new test executions</p>
+                    <p className="text-xs text-slate-400 truncate sm:whitespace-normal">Default runtime parameters and timeouts applied to new test executions</p>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2.5 shrink-0 ml-auto">
                   {collapsedSections.defaults && (
-                    <span className="text-[11px] font-mono text-slate-400 bg-slate-900 px-2.5 py-1 rounded-full border border-slate-800 hidden sm:inline-flex items-center gap-1.5">
+                    <span className="text-[11px] font-mono text-slate-400 bg-slate-900 px-2.5 py-1 rounded-full border border-slate-800 hidden sm:inline-flex items-center gap-1.5 shrink-0">
                       {defaultSettings.length} Parameters Configured
                     </span>
                   )}
@@ -3060,29 +3053,29 @@ secrets:
               {/* Collapsible Card Header */}
               <div 
                 onClick={() => toggleSection('database')}
-                className="px-6 py-4 border-b border-slate-800 flex items-center justify-between cursor-pointer hover:bg-slate-800/30 transition-colors select-none flex-wrap gap-2"
+                className="px-6 py-4 border-b border-slate-800 flex items-center justify-between gap-4 cursor-pointer hover:bg-slate-800/30 transition-colors select-none"
               >
-                <div className="flex items-center gap-2.5">
+                <div className="flex items-center gap-2.5 min-w-0 flex-1">
                   <div className="w-7 h-7 rounded-lg bg-emerald-500/10 text-emerald-400 flex items-center justify-center border border-emerald-500/20 shrink-0">
                     <Database className="w-4 h-4" />
                   </div>
-                  <div>
+                  <div className="min-w-0">
                     <div className="flex items-center gap-2">
-                      <h2 className="text-sm font-bold text-white">Database Connection &amp; Telemetry</h2>
-                      <span className="text-[10px] font-mono text-slate-500 hidden sm:inline">
+                      <h2 className="text-sm font-bold text-white whitespace-nowrap">Database Connection &amp; Telemetry</h2>
+                      <span className="text-[10px] font-mono text-slate-500 hidden sm:inline shrink-0">
                         {dbStatus?.chip || 'PostgreSQL 15 (TLS)'}
                       </span>
                     </div>
-                    <p className="text-xs text-slate-400">
+                    <p className="text-xs text-slate-400 truncate sm:whitespace-normal">
                       {dbStatus?.subtext || 'PostgreSQL state storage & telemetry'}
                     </p>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-3">
-                  <div className="flex items-center gap-2 self-start sm:self-auto">
+                <div className="flex items-center gap-2.5 shrink-0 ml-auto">
+                  <div className="flex items-center gap-2 shrink-0">
                     {/* Dynamic Provider Badge */}
-                    <span className={`px-2.5 py-1 rounded-full text-xs font-semibold font-mono border flex items-center gap-1.5 transition-all ${
+                    <span className={`px-2.5 py-1 rounded-full text-xs font-semibold font-mono border flex items-center gap-1.5 transition-all shrink-0 ${
                       dbStatus?.storage_type === 'gcp'
                         ? 'bg-sky-500/15 text-sky-300 border-sky-500/30'
                         : dbStatus?.storage_type === 'aws'
@@ -3104,12 +3097,12 @@ secrets:
 
                     {/* Live Connection Status Badge */}
                     {dbStatus?.is_connected ? (
-                      <span className="px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 flex items-center gap-1.5 shrink-0">
+                      <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 flex items-center gap-1.5 shrink-0">
                         <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
                         Connected
                       </span>
                     ) : (
-                      <span className="px-3 py-1 rounded-full text-xs font-semibold bg-rose-500/15 text-rose-400 border border-rose-500/30 flex items-center gap-1.5 shrink-0">
+                      <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-rose-500/15 text-rose-400 border border-rose-500/30 flex items-center gap-1.5 shrink-0">
                         <span className="w-2 h-2 rounded-full bg-rose-400" />
                         Disconnected
                       </span>
