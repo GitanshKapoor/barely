@@ -1,0 +1,17 @@
+{{- if .Values.database.inCluster.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "barely.fullname" . }}-db
+  labels:
+    {{- include "barely.db.selectorLabels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  ports:
+    - port: 5432
+      targetPort: postgresql
+      protocol: TCP
+      name: postgresql
+  selector:
+    {{- include "barely.db.selectorLabels" . | nindent 4 }}
+{{- end }}

@@ -1,0 +1,46 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ .Values.execution.serviceAccount.name | default "barely-job-spawner" }}
+  namespace: {{ .Release.Namespace | default "barely" }}
+  labels:
+    app.kubernetes.io/name: barely
+    app.kubernetes.io/component: rbac-job-spawner
+    app.kubernetes.io/instance: {{ .Release.Name | default "barely" }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ .Values.execution.serviceAccount.name | default "barely-job-spawner" }}-role
+  namespace: {{ .Release.Namespace | default "barely" }}
+  labels:
+    app.kubernetes.io/name: barely
+    app.kubernetes.io/component: rbac-job-spawner
+    app.kubernetes.io/instance: {{ .Release.Name | default "barely" }}
+rules:
+  # Permission to spawn, inspect, and delete ephemeral batch/v1 Jobs
+  - apiGroups: ["batch"]
+    resources: ["jobs", "jobs/status"]
+    verbs: ["get", "list", "watch", "create", "delete"]
+  # Permission to inspect and garbage-collect test execution pods
+  - apiGroups: [""]
+    resources: ["pods", "pods/log", "pods/status"]
+    verbs: ["get", "list", "watch", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ .Values.execution.serviceAccount.name | default "barely-job-spawner" }}-binding
+  namespace: {{ .Release.Namespace | default "barely" }}
+  labels:
+    app.kubernetes.io/name: barely
+    app.kubernetes.io/component: rbac-job-spawner
+    app.kubernetes.io/instance: {{ .Release.Name | default "barely" }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ .Values.execution.serviceAccount.name | default "barely-job-spawner" }}
+    namespace: {{ .Release.Namespace | default "barely" }}
+roleRef:
+  kind: Role
+  name: {{ .Values.execution.serviceAccount.name | default "barely-job-spawner" }}-role
+  apiGroup: rbac.authorization.k8s.io

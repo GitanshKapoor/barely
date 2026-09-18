@@ -16,9 +16,14 @@ import {
   ExternalLink,
   RotateCw,
   RotateCcw,
-  Tag
+  Tag,
+  Cpu,
+  Loader2,
+  AlertCircle,
+  Bell
 } from 'lucide-react';
 import NewRunForm from '../../../components/NewRunForm';
+import { formatModelName } from '../../../utils/models';
 
 interface RunStep {
   description: string;
@@ -30,15 +35,23 @@ interface RunData {
   id: string;
   name: string;
   goal: string;
+  context?: string | null;
   start_url: string;
   device: string;
   status: string;
   success: boolean | null;
   failure_reason: string | null;
   strict_mode?: boolean;
+  model?: string;
   tags?: string[];
   created_at: string | null;
   logs: string;
+  jira_issue_key?: string | null;
+  jira_issue_url?: string | null;
+  isolated_env?: boolean;
+  runner_pod?: string | null;
+  create_jira_ticket?: boolean | null;
+  notification_channel?: string | null;
   steps: RunStep[];
 }
 
@@ -85,6 +98,8 @@ export default function ClientRunDetails({ id }: { id: string }) {
   const [activeTab, setActiveTab] = useState<'steps' | 'logs'>('steps');
   const [selectedStepIdx, setSelectedStepIdx] = useState<number>(0);
   const [cancelling, setCancelling] = useState(false);
+  const [creatingJira, setCreatingJira] = useState(false);
+  const [jiraMessage, setJiraMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const terminalBottomRef = useRef<HTMLDivElement>(null);
 
   const fetchRun = async () => {
@@ -107,12 +122,36 @@ export default function ClientRunDetails({ id }: { id: string }) {
     }
   };
 
+  const handleCreateJiraTicket = async () => {
+    setCreatingJira(true);
+    setJiraMessage(null);
+    try {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+      const res = await fetch(`${apiUrl}/api/runs/${id}/jira`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({})
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setJiraMessage({ type: 'success', text: `Created Jira issue ${data.issue_key} successfully!` });
+        await fetchRun();
+      } else {
+        setJiraMessage({ type: 'error', text: data.detail || data.error || 'Failed to create Jira ticket.' });
+      }
+    } catch (e: any) {
+      setJiraMessage({ type: 'error', text: e.message || 'Error communicating with Barely API.' });
+    } finally {
+      setCreatingJira(false);
+    }
+  };
+
   useEffect(() => {
     fetchRun();
   }, [id]);
 
   useEffect(() => {
-    if (!run || run.status === 'running' || run.status === 'pending') {
+    if (!run || run.status === 'running' || run.status === 'pending' || run.status === 'queued') {
       const timer = setInterval(fetchRun, 2000);
       return () => clearInterval(timer);
     }
@@ -162,7 +201,7 @@ export default function ClientRunDetails({ id }: { id: string }) {
     );
   }
 
-  const isRunning = run.status === 'running' || run.status === 'pending';
+  const isRunning = run.status === 'running' || run.status === 'pending' || run.status === 'queued';
   const activeStep = run.steps && run.steps[selectedStepIdx] ? run.steps[selectedStepIdx] : run.steps[run.steps.length - 1];
 
   return (
@@ -181,23 +220,69 @@ export default function ClientRunDetails({ id }: { id: string }) {
                 run.status === 'completed' && !run.success ? 'bg-rose-500/10 text-rose-400 border-rose-500/25' :
                 run.status === 'running' ? 'bg-[#0278ff]/10 text-[#0278ff] border-[#0278ff]/30 animate-pulse' :
                 run.status === 'cancelled' ? 'bg-orange-500/10 text-orange-400 border-orange-500/25' :
+                run.status === 'queued' ? 'bg-purple-500/10 text-purple-400 border-purple-500/25 animate-pulse' :
                 'bg-amber-500/10 text-amber-400 border-amber-500/25'
               }`}>
                 {run.status === 'completed' && run.success && <CheckCircle2 className="w-3.5 h-3.5" />}
                 {run.status === 'completed' && !run.success && <XCircle className="w-3.5 h-3.5" />}
                 {run.status === 'cancelled' && <Ban className="w-3.5 h-3.5 text-orange-400" />}
                 {run.status === 'running' && <span className="w-2 h-2 rounded-full bg-[#0278ff] animate-ping" />}
+                {run.status === 'queued' && <Clock className="w-3.5 h-3.5 text-purple-400" />}
                 {run.status === 'pending' && <Clock className="w-3.5 h-3.5" />}
                 <span className="uppercase">{run.status}</span>
               </span>
               <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700 uppercase">
                 {run.device || 'desktop'}
               </span>
+              {run.model && (
+                <span className="text-[10px] font-semibold px-2.5 py-0.5 rounded-full bg-purple-500/15 text-purple-300 border border-purple-500/30 flex items-center gap-1.5 shadow-sm" title={run.model}>
+                  <Cpu className="w-3 h-3 text-purple-400" />
+                  {formatModelName(run.model)}
+                </span>
+              )}
               {run.tags && run.tags.length > 0 && run.tags.map((tag: string) => (
                 <span key={tag} className="text-[11px] font-medium font-mono px-2 py-0.5 rounded-full bg-[#0278ff]/10 text-[#0278ff] border border-[#0278ff]/30 flex items-center gap-1">
                   <Tag className="w-3 h-3 text-[#0278ff]" /> #{tag}
                 </span>
               ))}
+              {run.jira_issue_key && (
+                <a
+                  href={run.jira_issue_url || '#'}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-[11px] font-bold font-mono px-2.5 py-0.5 rounded-full bg-[#0052cc]/15 text-[#2684ff] hover:text-white hover:bg-[#0052cc]/30 border border-[#0052cc]/40 flex items-center gap-1.5 transition-all shadow-sm"
+                  title={`Open ${run.jira_issue_key} in Atlassian Jira`}
+                >
+                  <svg className="w-3 h-3 fill-current" viewBox="0 0 24 24">
+                    <path d="M11.53 2c0 2.4 1.97 4.35 4.35 4.35h1.78v1.7c0 2.4 1.94 4.34 4.34 4.35V2.84A.84.84 0 0 0 21.16 2H11.53zM5.77 7.76c0 2.4 1.96 4.34 4.34 4.34h1.78v1.7c0 2.4 1.94 4.35 4.35 4.35V8.6a.84.84 0 0 0-.84-.84H5.77zm-5.77 5.76c0 2.4 1.95 4.34 4.34 4.34h1.79v1.7c0 2.4 1.94 4.35 4.34 4.35V14.36a.84.84 0 0 0-.84-.84H0z"/>
+                  </svg>
+                  <span>Jira: {run.jira_issue_key}</span>
+                  <ExternalLink className="w-2.5 h-2.5" />
+                </a>
+              )}
+              {run.isolated_env && (
+                <span 
+                  className="text-[10px] font-mono font-bold px-2.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 flex items-center gap-1.5 shadow-sm"
+                  title={run.runner_pod ? `Kubernetes Ephemeral Pod: ${run.runner_pod} (Non-Root UID 10001)` : 'Isolated Ephemeral Pod (Non-Root UID 10001)'}
+                >
+                  <span>🛡️</span>
+                  <span>Pod: {run.runner_pod || 'isolated'}</span>
+                </span>
+              )}
+              {run.create_jira_ticket && !run.jira_issue_key && (
+                <span className="text-[10px] font-semibold px-2.5 py-0.5 rounded-full bg-blue-500/10 text-[#2684ff] border border-blue-500/25 flex items-center gap-1 shadow-sm" title="Auto-creates Jira defect if test fails">
+                  <svg className="w-2.5 h-2.5 fill-current" viewBox="0 0 24 24">
+                    <path d="M11.53 2c0 2.4 1.97 4.35 4.35 4.35h1.78v1.7c0 2.4 1.94 4.34 4.34 4.35V2.84A.84.84 0 0 0 21.16 2H11.53zM5.77 7.76c0 2.4 1.96 4.34 4.34 4.34h1.78v1.7c0 2.4 1.94 4.35 4.35 4.35V8.6a.84.84 0 0 0-.84-.84H5.77zm-5.77 5.76c0 2.4 1.95 4.34 4.34 4.34h1.79v1.7c0 2.4 1.94 4.35 4.34 4.35V14.36a.84.84 0 0 0-.84-.84H0z"/>
+                  </svg>
+                  <span>Jira Auto-Filing</span>
+                </span>
+              )}
+              {run.notification_channel && run.notification_channel !== 'default' && (
+                <span className="text-[10px] font-mono px-2.5 py-0.5 rounded-full bg-amber-500/10 text-amber-300 border border-amber-500/20 flex items-center gap-1">
+                  <Bell className="w-3 h-3 text-amber-400" />
+                  <span>{run.notification_channel === 'none' ? 'Muted' : run.notification_channel === 'slack' ? 'Slack' : run.notification_channel === 'teams' ? 'Teams' : 'Slack & Teams'}</span>
+                </span>
+              )}
             </div>
             <div className="flex items-center gap-3 text-xs text-slate-400 flex-wrap">
               <span className="font-mono text-slate-500">{run.id}</span>
@@ -212,15 +297,49 @@ export default function ClientRunDetails({ id }: { id: string }) {
 
         {/* Action Controls */}
         <div className="flex items-center gap-2.5 flex-wrap">
+          {/* Jira Integration Action: View Ticket or 1-Click Create */}
+          {run.jira_issue_key ? (
+            <a
+              href={run.jira_issue_url || '#'}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1.5 px-3.5 py-2 bg-[#0052cc]/15 hover:bg-[#0052cc]/25 text-[#2684ff] hover:text-white border border-[#0052cc]/30 text-xs font-semibold rounded-lg transition-all shadow-sm cursor-pointer"
+            >
+              <ExternalLink className="w-3.5 h-3.5" />
+              <span>View Jira Ticket</span>
+            </a>
+          ) : run.status === 'completed' && !run.success ? (
+            <button
+              onClick={handleCreateJiraTicket}
+              disabled={creatingJira}
+              className="flex items-center gap-1.5 px-3.5 py-2 bg-[#0052cc] hover:bg-[#0047b3] text-white text-xs font-semibold rounded-lg transition-all shadow-md shadow-[#0052cc]/20 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+              title="File automated bug ticket in Jira Cloud"
+            >
+              {creatingJira ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <svg className="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24">
+                  <path d="M11.53 2c0 2.4 1.97 4.35 4.35 4.35h1.78v1.7c0 2.4 1.94 4.34 4.34 4.35V2.84A.84.84 0 0 0 21.16 2H11.53zM5.77 7.76c0 2.4 1.96 4.34 4.34 4.34h1.78v1.7c0 2.4 1.94 4.35 4.35 4.35V8.6a.84.84 0 0 0-.84-.84H5.77zm-5.77 5.76c0 2.4 1.95 4.34 4.34 4.34h1.79v1.7c0 2.4 1.94 4.35 4.34 4.35V14.36a.84.84 0 0 0-.84-.84H0z"/>
+                </svg>
+              )}
+              <span>{creatingJira ? 'Creating Jira Issue...' : 'File Jira Bug'}</span>
+            </button>
+          ) : null}
+
           <NewRunForm
             initialData={{
               name: run.name || run.id,
               url: run.start_url || 'https://',
               goalText: run.goal,
+              context: run.context || undefined,
               device: run.device || 'desktop',
               strictMode: Boolean(run.strict_mode),
               useCache: false,
-              tags: run.tags || []
+              isolatedEnv: Boolean(run.isolated_env),
+              model: run.model,
+              tags: run.tags || [],
+              createJiraTicket: run.create_jira_ticket ?? undefined,
+              notificationChannel: run.notification_channel ?? undefined
             }}
             onRunCreated={() => fetchRun()}
             triggerButton={(openModal) => (
@@ -264,9 +383,47 @@ export default function ClientRunDetails({ id }: { id: string }) {
         </div>
       </div>
 
-      {/* Goal Instructions Card */}
+      {/* Jira Notification Feedback */}
+      {jiraMessage && (
+        <div className={`p-3 rounded-lg border text-xs flex items-center justify-between gap-2 ${
+          jiraMessage.type === 'success' 
+            ? 'bg-emerald-950/30 border-emerald-500/30 text-emerald-300' 
+            : 'bg-rose-950/30 border-rose-500/30 text-rose-300'
+        }`}>
+          <div className="flex items-center gap-2">
+            {jiraMessage.type === 'success' ? (
+              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+            ) : (
+              <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+            )}
+            <span>{jiraMessage.text}</span>
+          </div>
+          <button
+            onClick={() => setJiraMessage(null)}
+            className="text-slate-400 hover:text-white text-xs px-2 py-0.5 cursor-pointer"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
+      {/* Application Context Card (Given to Model Before Testing) */}
+      {run.context && (
+        <div className="rounded-xl border border-purple-900/40 bg-purple-950/20 p-4 text-xs font-mono space-y-1">
+          <div className="flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full bg-purple-400"></span>
+            <span className="text-[10px] uppercase font-bold text-purple-400 tracking-wider">Application Context (Model Persona &amp; Domain)</span>
+          </div>
+          <p className="text-purple-200/90 whitespace-pre-wrap leading-relaxed">{run.context}</p>
+        </div>
+      )}
+
+      {/* Goal & Test Instructions Card */}
       <div className="rounded-xl border border-slate-800 bg-[#0d1322] p-4 text-xs font-mono space-y-1">
-        <span className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Goal & Test Instructions</span>
+        <div className="flex items-center gap-1.5">
+          <span className="w-2 h-2 rounded-full bg-[#0278ff]"></span>
+          <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Test Goal &amp; Step-by-Step Instructions</span>
+        </div>
         <p className="text-slate-300 whitespace-pre-wrap leading-relaxed">{run.goal}</p>
       </div>
 

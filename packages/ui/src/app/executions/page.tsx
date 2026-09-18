@@ -14,8 +14,10 @@ import {
   Search, 
   X, 
   Tag, 
-  Monitor
+  Monitor,
+  Cpu
 } from 'lucide-react';
+import { formatModelName } from '../../utils/models';
 
 export default function ExecutionsPage() {
   const [runs, setRuns] = useState<any[]>([]);
@@ -77,7 +79,8 @@ export default function ExecutionsPage() {
         const matchesId = (run.id || '').toLowerCase().includes(q);
         const matchesUrl = (run.start_url || '').toLowerCase().includes(q);
         const matchesGoal = (run.goal || '').toLowerCase().includes(q);
-        if (!matchesName && !matchesId && !matchesUrl && !matchesGoal) return false;
+        const matchesContext = (run.context || '').toLowerCase().includes(q);
+        if (!matchesName && !matchesId && !matchesUrl && !matchesGoal && !matchesContext) return false;
       }
 
       // Device filter
@@ -329,7 +332,7 @@ export default function ExecutionsPage() {
           <thead className="bg-slate-900/60 border-b border-slate-800 text-[11px] uppercase tracking-wider text-slate-400 font-bold">
             <tr>
               <th className="px-6 py-4 font-semibold">Pipeline / Test Name</th>
-              <th className="px-6 py-4 font-semibold">Device</th>
+              <th className="px-6 py-4 font-semibold">Device &amp; Model</th>
               <th className="px-6 py-4 font-semibold">Run ID</th>
               <th className="px-6 py-4 font-semibold">Status</th>
               <th className="px-6 py-4 font-semibold text-right">Actions</th>
@@ -379,6 +382,11 @@ export default function ExecutionsPage() {
                       )}
                       {run.status === "pending" && <Clock className="w-4 h-4 text-amber-400 flex-shrink-0" />}
                       <span className="truncate max-w-xs">{run.name || run.id}</span>
+                      {run.isolated_env && (
+                        <span className="inline-flex items-center gap-1 text-[9px] font-mono font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/25 px-1.5 py-0.2 rounded" title="Isolated Ephemeral Non-Root Pod">
+                          🛡️ Isolated Pod
+                        </span>
+                      )}
                     </div>
                     {run.tags && run.tags.length > 0 && (
                       <div className="flex items-center gap-1 mt-1.5 pl-6 flex-wrap">
@@ -391,9 +399,20 @@ export default function ExecutionsPage() {
                     )}
                   </td>
                   <td className="px-6 py-4 align-middle">
-                    <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-slate-800 text-slate-300 border border-slate-700 uppercase">
-                      {run.device || 'desktop'}
-                    </span>
+                    <div className="flex flex-col gap-1.5 items-start">
+                      <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-mono font-bold bg-slate-800 text-slate-300 border border-slate-700 uppercase">
+                        {run.device || 'desktop'}
+                      </span>
+                      {run.model && (
+                        <span 
+                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold text-purple-300 bg-purple-500/15 border border-purple-500/30 whitespace-nowrap shadow-sm" 
+                          title={run.model}
+                        >
+                          <Cpu className="w-2.5 h-2.5 text-purple-400 shrink-0" />
+                          {formatModelName(run.model)}
+                        </span>
+                      )}
+                    </div>
                   </td>
                   <td className="px-6 py-4 font-mono text-xs text-slate-400 align-middle">{run.id}</td>
                   <td className="px-6 py-4 whitespace-nowrap align-middle">
@@ -429,10 +448,15 @@ export default function ExecutionsPage() {
                           name: run.name || run.id,
                           url: run.start_url || 'https://',
                           goalText: run.goal,
+                          context: run.context || undefined,
                           device: run.device || 'desktop',
                           strictMode: Boolean(run.strict_mode),
                           useCache: false,
-                          tags: run.tags || []
+                          isolatedEnv: Boolean(run.isolated_env),
+                          model: run.model,
+                          tags: run.tags || [],
+                          createJiraTicket: run.create_jira_ticket ?? undefined,
+                          notificationChannel: run.notification_channel ?? undefined
                         }}
                         onRunCreated={() => fetchRuns()}
                         triggerButton={(openModal) => (

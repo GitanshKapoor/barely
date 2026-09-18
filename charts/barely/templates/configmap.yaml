@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "barely.fullname" . }}-config
+  labels:
+    {{- include "barely.labels" . | nindent 4 }}
+data:
+  ENVIRONMENT: {{ .Values.global.environment | default "production" | quote }}
+  LOG_LEVEL: "info"
+  BARELY_SECRETS_MODE: {{ .Values.secrets.mode | default "helm" | quote }}
+  DEFAULT_MODEL: {{ .Values.models.default | quote }}
+  ENABLED_MODELS: {{ .Values.models.enabled | toJson | quote }}
+  EXECUTION_MODE: {{ .Values.execution.mode | default "k8s_job" | quote }}
+  MAX_PARALLEL_PODS: {{ .Values.execution.maxParallelPods | default 10 | quote }}
+  JOB_SPAWNER_SA: {{ .Values.execution.serviceAccount.name | default "barely-job-spawner" | quote }}
+  JOB_TTL_SECONDS: {{ .Values.execution.ttlSecondsAfterFinished | default 180 | quote }}

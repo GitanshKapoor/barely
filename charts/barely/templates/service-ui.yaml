@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "barely.fullname" . }}-ui
+  labels:
+    {{- include "barely.ui.selectorLabels" . | nindent 4 }}
+spec:
+  type: {{ .Values.ui.service.type | default "ClusterIP" }}
+  ports:
+    - port: {{ .Values.ui.service.port | default 3000 }}
+      targetPort: http
+      protocol: TCP
+      name: http
+  selector:
+    {{- include "barely.ui.selectorLabels" . | nindent 4 }}

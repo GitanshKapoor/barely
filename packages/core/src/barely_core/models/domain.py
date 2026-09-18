@@ -11,6 +11,7 @@ class Goal(BaseModel):
     name: str
     tags: List[str] = Field(default_factory=list)
     timeout: int = 120
+    context: Optional[str] = None
     steps: List[Step] = Field(default_factory=list)
     raw_content: str = ""
     metadata: Dict[str, Any] = Field(default_factory=dict)

@@ -1,0 +1,238 @@
+import os
+import base64
+import hashlib
+import hmac
+import secrets
+from pathlib import Path
+from typing import Optional
+
+# Version tag to allow future crypto migration if needed
+VERSION_TAG = "v1"
+
+_CACHED_MASTER_KEY: Optional[bytes] = None
+
+def get_master_key() -> bytes:
+    """
+    Retrieves the master encryption key.
+    Resolution priority:
+    1. Environment variable BARELY_SECRET_KEY (highest priority, 12-factor / Kubernetes)
+    2. Shared database record (_INTERNAL_MASTER_KEY) so multi-container services (API, Worker, Pods) share the same key
+    3. Persistent key file in working directory (.barely_master.key)
+    4. Deterministic fallback
+    """
+    global _CACHED_MASTER_KEY
+    if _CACHED_MASTER_KEY is not None:
+        return _CACHED_MASTER_KEY
+
+    # Priority 1: Environment variable
+    env_key = os.getenv("BARELY_SECRET_KEY")
+    if env_key and env_key.strip():
+        _CACHED_MASTER_KEY = hashlib.sha256(env_key.strip().encode("utf-8")).digest()
+        return _CACHED_MASTER_KEY
+
+    # Priority 2: Shared database store (PostgreSQL)
+    try:
+        from barely_core.db import SessionLocal, SettingRecord
+        db = SessionLocal()
+        try:
+            rec = db.query(SettingRecord).filter(SettingRecord.key == "_INTERNAL_MASTER_KEY").first()
+            if rec and rec.value and rec.value.strip():
+                _CACHED_MASTER_KEY = hashlib.sha256(rec.value.strip().encode("utf-8")).digest()
+                return _CACHED_MASTER_KEY
+            else:
+                # Check if local file exists to migrate/preserve existing keys
+                key_file = Path(os.getcwd()) / ".barely_master.key"
+                new_key = None
+                if key_file.exists():
+                    c = key_file.read_text(encoding="utf-8").strip()
+                    if c:
+                        new_key = c
+                if not new_key:
+                    new_key = secrets.token_hex(32)
+
+                try:
+                    master_rec = SettingRecord(
+                        key="_INTERNAL_MASTER_KEY",
+                        value=new_key,
+                        is_secret=False
+                    )
+                    db.add(master_rec)
+                    db.commit()
+                except Exception:
+                    db.rollback()
+                _CACHED_MASTER_KEY = hashlib.sha256(new_key.encode("utf-8")).digest()
+                return _CACHED_MASTER_KEY
+        finally:
+            db.close()
+    except Exception:
+        pass
+
+    # Priority 3: Local persistent file fallback (e.g. unit tests without DB)
+    key_file = Path(os.getcwd()) / ".barely_master.key"
+    try:
+        if key_file.exists():
+            content = key_file.read_text(encoding="utf-8").strip()
+            if content:
+                _CACHED_MASTER_KEY = hashlib.sha256(content.encode("utf-8")).digest()
+                return _CACHED_MASTER_KEY
+        
+        # Generate new 256-bit master key
+        new_key = secrets.token_hex(32)
+        key_file.write_text(new_key, encoding="utf-8")
+        try:
+            os.chmod(key_file, 0o600)
+        except Exception:
+            pass
+        _CACHED_MASTER_KEY = hashlib.sha256(new_key.encode("utf-8")).digest()
+        return _CACHED_MASTER_KEY
+    except Exception:
+        # Fallback to deterministic host/workspace key if file write is restricted
+        fallback = f"barely-master-{os.getenv('USER', 'default')}-static-seed"
+        _CACHED_MASTER_KEY = hashlib.sha256(fallback.encode("utf-8")).digest()
+        return _CACHED_MASTER_KEY
+
+def _derive_keys(master_key: bytes, salt: bytes):
+    """Derives separate encryption and HMAC keys from the master key using PBKDF2."""
+    derived = hashlib.pbkdf2_hmac('sha256', master_key, salt, 100000, dklen=64)
+    enc_key = derived[:32]
+    mac_key = derived[32:]
+    return enc_key, mac_key
+
+def _keystream(enc_key: bytes, nonce: bytes, length: int) -> bytes:
+    """Generates a pseudo-random keystream of specified length using HMAC-SHA256 counter mode."""
+    stream = bytearray()
+    counter = 0
+    while len(stream) < length:
+        block = hmac.new(enc_key, nonce + counter.to_bytes(4, byteorder="big"), hashlib.sha256).digest()
+        stream.extend(block)
+        counter += 1
+    return bytes(stream[:length])
+
+def encrypt_secret(plaintext: str, master_key: Optional[bytes] = None) -> str:
+    """
+    Encrypts a plaintext string using Authenticated Keystream Cipher (Encrypt-then-MAC).
+    Returns a URL-safe Base64 encoded ciphertext string prefixed with 'enc:v1:'.
+    """
+    if not plaintext:
+        return ""
+    
+    # Try Fernet if cryptography library is installed
+    try:
+        from cryptography.fernet import Fernet
+        key = master_key or get_master_key()
+        f_key = base64.urlsafe_b64encode(key)
+        f = Fernet(f_key)
+        return f"fernet:{f.encrypt(plaintext.encode('utf-8')).decode('utf-8')}"
+    except ImportError:
+        pass
+
+    # Built-in Authenticated Symmetric Encryption
+    key = master_key or get_master_key()
+    data = plaintext.encode("utf-8")
+    salt = secrets.token_bytes(16)
+    nonce = secrets.token_bytes(16)
+    
+    enc_key, mac_key = _derive_keys(key, salt)
+    stream = _keystream(enc_key, nonce, len(data))
+    
+    # XOR data with keystream
+    ciphertext = bytes(a ^ b for a, b in zip(data, stream))
+    
+    # Compute HMAC over salt + nonce + ciphertext
+    payload = salt + nonce + ciphertext
+    tag = hmac.new(mac_key, payload, hashlib.sha256).digest()
+    
+    final_blob = payload + tag
+    b64_cipher = base64.urlsafe_b64encode(final_blob).decode("utf-8")
+    return f"enc:{VERSION_TAG}:{b64_cipher}"
+
+def decrypt_secret(encrypted_text: str, master_key: Optional[bytes] = None) -> str:
+    """
+    Decrypts a ciphertext string generated by encrypt_secret.
+    Verifies authenticity and integrity before decrypting.
+    """
+    if not encrypted_text:
+        return ""
+    
+    if encrypted_text.startswith("fernet:"):
+        try:
+            from cryptography.fernet import Fernet
+            raw_cipher = encrypted_text[len("fernet:"):]
+            key = master_key or get_master_key()
+            f_key = base64.urlsafe_b64encode(key)
+            f = Fernet(f_key)
+            return f.decrypt(raw_cipher.encode("utf-8")).decode("utf-8")
+        except Exception as e:
+            raise ValueError(f"Failed to decrypt Fernet ciphertext: {e}")
+            
+    if not encrypted_text.startswith(f"enc:{VERSION_TAG}:"):
+        # Not encrypted or unknown version
+        return encrypted_text
+        
+    b64_cipher = encrypted_text[len(f"enc:{VERSION_TAG}:"):]
+    try:
+        raw_blob = base64.urlsafe_b64decode(b64_cipher.encode("utf-8"))
+    except Exception as e:
+        raise ValueError(f"Invalid base64 payload: {e}")
+        
+    if len(raw_blob) < 16 + 16 + 32: # Salt(16) + Nonce(16) + MAC(32)
+        raise ValueError("Ciphertext payload corrupted or truncated")
+        
+    salt = raw_blob[:16]
+    nonce = raw_blob[16:32]
+    tag = raw_blob[-32:]
+    ciphertext = raw_blob[32:-32]
+    
+    key = master_key or get_master_key()
+    enc_key, mac_key = _derive_keys(key, salt)
+    
+    # Verify HMAC integrity
+    payload = salt + nonce + ciphertext
+    expected_tag = hmac.new(mac_key, payload, hashlib.sha256).digest()
+    if not hmac.compare_digest(tag, expected_tag):
+        raise ValueError("Ciphertext integrity verification failed (tampered or wrong master key)")
+        
+    # Decrypt
+    stream = _keystream(enc_key, nonce, len(ciphertext))
+    plaintext_bytes = bytes(a ^ b for a, b in zip(ciphertext, stream))
+    return plaintext_bytes.decode("utf-8")
+
+def mask_secret(secret: Optional[str]) -> str:
+    """
+    Generates a secure, masked display string for UI and API responses.
+    Never reveals the complete secret.
+    Examples:
+      'sk-ant-api03-abcdef1234567890' -> 'sk-ant-••••••••••••7890'
+      'gsk_123456789abcdef' -> 'gsk_••••••••cdef'
+    """
+    if not secret:
+        return ""
+    
+    s = secret.strip()
+    if len(s) <= 8:
+        return "••••••••"
+    
+    # Check for known prefixes like sk-ant-, sk-, gsk_
+    for prefix in ["sk-ant-", "sk-", "gsk_", "AIza"]:
+        if s.startswith(prefix):
+            suffix = s[-4:]
+            return f"{prefix}••••••••••••{suffix}"
+            
+    # Default masking: show first 3 and last 4
+    return f"{s[:3]}••••••••{s[-4:]}"
+
+def mask_database_url(url: Optional[str]) -> str:
+    """
+    Masks the password in a database connection URL.
+    Handles passwords containing special characters (including @ or symbols).
+    Example:
+      'postgresql://barely:secretpass@barely-db:5432/barelydb'
+      -> 'postgresql://barely:••••••••@barely-db:5432/barelydb'
+    """
+    if not url:
+        return ""
+    import re
+    match = re.match(r'^(.*?://[^:]+:)(.*)(@[^/@]+(?:/.*)?)$', url)
+    if match:
+        return f"{match.group(1)}••••••••{match.group(3)}"
+    return url

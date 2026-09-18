@@ -4,7 +4,13 @@ from sqlalchemy.orm import declarative_base, sessionmaker, relationship
 from datetime import datetime
 
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://barely:barelypassword@barely-db:5432/barelydb")
-engine = create_engine(DATABASE_URL)
+engine = create_engine(
+    DATABASE_URL,
+    pool_pre_ping=True,
+    pool_recycle=300,
+    pool_size=10,
+    max_overflow=20
+)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
@@ -22,7 +28,15 @@ class RunRecord(Base):
     logs = Column(Text, nullable=True)
     strict_mode = Column(Boolean, default=False)
     use_cache = Column(Boolean, default=False)
+    model = Column(String, nullable=True)
     tags = Column(String, nullable=True)
+    jira_issue_key = Column(String, nullable=True)
+    jira_issue_url = Column(String, nullable=True)
+    isolated_env = Column(Boolean, default=False)
+    runner_pod = Column(String, nullable=True)
+    create_jira_ticket = Column(Boolean, nullable=True)
+    notification_channel = Column(String, nullable=True)
+    context = Column(Text, nullable=True)
     
     steps = relationship("RunStep", back_populates="run", cascade="all, delete-orphan")
 
@@ -42,12 +56,26 @@ class CacheRecord(Base):
     hash = Column(String, primary_key=True, index=True)
     payload = Column(Text) # JSON string of the action
 
+class SettingRecord(Base):
+    __tablename__ = "settings"
+    key = Column(String, primary_key=True, index=True)
+    value = Column(Text, nullable=False) # Encrypted ciphertext if is_secret is True
+    is_secret = Column(Boolean, default=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
 def init_db():
     Base.metadata.create_all(bind=engine)
     from sqlalchemy import text
     try:
         with engine.connect() as conn:
             conn.execute(text("ALTER TABLE runs ADD COLUMN IF NOT EXISTS use_cache BOOLEAN DEFAULT FALSE;"))
+            conn.execute(text("ALTER TABLE runs ADD COLUMN IF NOT EXISTS model VARCHAR(255);"))
+            conn.execute(text("ALTER TABLE runs ADD COLUMN IF NOT EXISTS jira_issue_key VARCHAR(255);"))
+            conn.execute(text("ALTER TABLE runs ADD COLUMN IF NOT EXISTS jira_issue_url TEXT;"))
+            conn.execute(text("ALTER TABLE runs ADD COLUMN IF NOT EXISTS isolated_env BOOLEAN DEFAULT FALSE;"))
+            conn.execute(text("ALTER TABLE runs ADD COLUMN IF NOT EXISTS runner_pod VARCHAR(255);"))
+            conn.execute(text("ALTER TABLE runs ADD COLUMN IF NOT EXISTS notification_channel VARCHAR(64);"))
+            conn.execute(text("ALTER TABLE runs ADD COLUMN IF NOT EXISTS create_jira_ticket BOOLEAN;"))
             conn.commit()
     except Exception:
         pass

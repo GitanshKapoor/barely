@@ -1,0 +1,78 @@
+{{- if .Values.database.inCluster.enabled }}
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "barely.fullname" . }}-db
+  labels:
+    {{- include "barely.db.selectorLabels" . | nindent 4 }}
+spec:
+  serviceName: {{ include "barely.fullname" . }}-db
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "barely.db.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "barely.db.selectorLabels" . | nindent 8 }}
+    spec:
+      securityContext:
+        fsGroup: 999
+      containers:
+        - name: postgresql
+          image: "{{ .Values.database.inCluster.image.repository }}:{{ .Values.database.inCluster.image.tag }}"
+          imagePullPolicy: {{ .Values.database.inCluster.image.pullPolicy }}
+          ports:
+            - name: postgresql
+              containerPort: 5432
+              protocol: TCP
+          env:
+            - name: POSTGRES_USER
+              value: {{ .Values.database.inCluster.user | quote }}
+            - name: POSTGRES_PASSWORD
+              value: {{ .Values.database.inCluster.password | quote }}
+            - name: POSTGRES_DB
+              value: {{ .Values.database.inCluster.database | quote }}
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+          livenessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - exec pg_isready -U {{ .Values.database.inCluster.user }} -d {{ .Values.database.inCluster.database }}
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 5
+          readinessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - exec pg_isready -U {{ .Values.database.inCluster.user }} -d {{ .Values.database.inCluster.database }}
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+          resources:
+            {{- toYaml .Values.database.inCluster.resources | nindent 12 }}
+  {{- if .Values.database.inCluster.persistence.enabled }}
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        {{- if .Values.database.inCluster.persistence.storageClass }}
+        storageClassName: {{ .Values.database.inCluster.persistence.storageClass | quote }}
+        {{- end }}
+        resources:
+          requests:
+            storage: {{ .Values.database.inCluster.persistence.size | default "10Gi" }}
+  {{- else }}
+      volumes:
+        - name: data
+          emptyDir: {}
+  {{- end }}
+{{- end }}

@@ -1,0 +1,225 @@
+# ==============================================================================
+# Barely Helm Chart Configuration Values
+# Enterprise Grade: NGINX Ingress, Zero-Trust NetworkPolicies, Cloud DB first,
+# Horizontal Pod Autoscalers, Pod Security Standards (Restricted UID 10001).
+# ==============================================================================
+
+global:
+  environment: production
+
+# --- Security Context (Restricted Pod Security Standard) ---
+security:
+  runAsNonRoot: true
+  runAsUser: 10001
+  runAsGroup: 10001
+  fsGroup: 10001
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: false
+  capabilities:
+    drop:
+      - ALL
+  seccompProfile:
+    type: RuntimeDefault
+
+# --- API Service (FastAPI Control Plane) ---
+api:
+  replicaCount: 2
+  image:
+    repository: barely-api
+    tag: latest
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 8000
+  resources:
+    requests:
+      cpu: 500m
+      memory: 1Gi
+    limits:
+      cpu: 1500m
+      memory: 2Gi
+  probes:
+    liveness:
+      path: /health
+      initialDelaySeconds: 15
+      periodSeconds: 10
+      timeoutSeconds: 5
+      failureThreshold: 3
+    readiness:
+      path: /health
+      initialDelaySeconds: 5
+      periodSeconds: 5
+      timeoutSeconds: 3
+      failureThreshold: 2
+    startup:
+      path: /health
+      initialDelaySeconds: 5
+      periodSeconds: 5
+      failureThreshold: 30
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 75
+    targetMemoryUtilizationPercentage: 80
+
+# --- UI Service (Next.js Standalone Console) ---
+ui:
+  replicaCount: 2
+  image:
+    repository: barely-ui
+    tag: latest
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 3000
+  resources:
+    requests:
+      cpu: 250m
+      memory: 512Mi
+    limits:
+      cpu: 500m
+      memory: 1Gi
+  probes:
+    liveness:
+      path: /
+      initialDelaySeconds: 15
+      periodSeconds: 10
+      timeoutSeconds: 5
+      failureThreshold: 3
+    readiness:
+      path: /
+      initialDelaySeconds: 5
+      periodSeconds: 5
+      timeoutSeconds: 3
+      failureThreshold: 2
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 8
+    targetCPUUtilizationPercentage: 70
+
+# --- Execution Engine (Test Runner Configuration) ---
+execution:
+  # Mode: 'k8s_job' (1 ephemeral isolated pod per test run) or 'worker_pool' (shared daemon pods)
+  mode: k8s_job
+  maxParallelPods: 10
+  ttlSecondsAfterFinished: 180
+  serviceAccount:
+    create: true
+    name: barely-job-spawner
+  resources:
+    requests:
+      cpu: 500m
+      memory: 1Gi
+    limits:
+      cpu: 2000m
+      memory: 2.5Gi
+
+# --- Worker Pool (Active only when execution.mode == 'worker_pool') ---
+worker:
+  replicaCount: 2
+  image:
+    repository: barely-worker
+    tag: latest
+    pullPolicy: IfNotPresent
+  resources:
+    requests:
+      cpu: 500m
+      memory: 1Gi
+    limits:
+      cpu: 2000m
+      memory: 2.5Gi
+
+# --- Database Configuration ---
+database:
+  # 'external': Cloud DB (AWS RDS, Supabase, Neon) - Recommended for Production.
+  # 'inCluster': Lightweight in-cluster PostgreSQL pod for offline testing / Minikube.
+  type: external
+  
+  # External Cloud Database Configuration
+  external:
+    url: ""
+    secretName: barely-db-secret
+    secretKey: url
+
+  # Optional In-Cluster Test Database (Disabled by default)
+  inCluster:
+    enabled: false
+    image:
+      repository: postgres
+      tag: 16-alpine
+      pullPolicy: IfNotPresent
+    user: barely
+    password: barelypassword
+    database: barelydb
+    resources:
+      requests:
+        cpu: 250m
+        memory: 512Mi
+      limits:
+        cpu: 1000m
+        memory: 1Gi
+    persistence:
+      enabled: true
+      size: 10Gi
+      storageClass: ""
+
+# --- Ingress Configuration (NGINX Ingress behind LoadBalancer Service) ---
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: "50m"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+  hosts:
+    - host: barely.example.com
+      paths:
+        - path: /api
+          pathType: Prefix
+          service: api
+        - path: /
+          pathType: Prefix
+          service: ui
+  tls:
+    - secretName: barely-tls
+      hosts:
+        - barely.example.com
+
+# --- Zero-Trust Network Policies ---
+networkPolicy:
+  enabled: true
+  ingressNamespace: ingress-nginx
+  allowInternetEgress: true
+
+# --- External Secrets Operator (CNCF ESO) ---
+externalSecrets:
+  enabled: false
+  secretStoreRef:
+    name: aws-secrets-manager
+    kind: ClusterSecretStore
+  targetSecretName: barely-secrets
+  remoteKey: prod/barely
+
+# --- Native Secrets (Used if ExternalSecrets is disabled) ---
+secrets:
+  mode: helm
+  name: barely-secrets
+  data:
+    anthropicApiKey: ""
+    openaiApiKey: ""
+    geminiApiKey: ""
+    jiraApiToken: ""
+    slackWebhookUrl: ""
+    barelySecretKey: ""
+
+# --- Global AI Models Configuration ---
+models:
+  default: "anthropic/claude-sonnet-4-5"
+  enabled:
+    - "anthropic/claude-sonnet-4-5"
+    - "anthropic/claude-3-7-sonnet"
+    - "openai/gpt-4o"
+    - "openai/gpt-4o-mini"
+    - "gemini/gemini-2.0-flash"
+    - "groq/llama-3.3-70b-versatile"

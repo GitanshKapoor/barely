@@ -1,68 +1,122 @@
-version: '3.8'
+# ==============================================================================
+# Barely - Production Docker Compose Deployment
+# Hardened: Isolated networks, Non-root execution, No exposed DB host ports,
+# Chromium 1GB /dev/shm, Standalone UI container, Built-in Healthchecks.
+# ==============================================================================
 
 services:
   barely-db:
-    image: postgres:15-alpine
+    image: postgres:16-alpine
+    restart: unless-stopped
     environment:
-      POSTGRES_USER: barely
-      POSTGRES_PASSWORD: barelypassword
-      POSTGRES_DB: barelydb
-    ports:
-      - "5432:5432"
+      POSTGRES_USER: ${POSTGRES_USER:-barely}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-barelypassword}
+      POSTGRES_DB: ${POSTGRES_DB:-barelydb}
+    # Security: Database is strictly internal; NO host ports published.
+    expose:
+      - "5432"
     volumes:
       - barely_pgdata:/var/lib/postgresql/data
+    networks:
+      - barely_backend
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U barely"]
-      interval: 5s
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-barely} -d ${POSTGRES_DB:-barelydb}"]
+      interval: 10s
       timeout: 5s
       retries: 5
+      start_period: 10s
 
   barely-api:
-    depends_on:
-      barely-db:
-        condition: service_healthy
-    environment:
-      - DATABASE_URL=postgresql://barely:barelypassword@barely-db:5432/barelydb
-      - PYTHONPATH=/workspace/packages/core/src:/workspace/packages/api/src:/workspace/packages/worker/src:/workspace/plugins/reporter-pdf/src
-    build: 
+    build:
       context: .
       dockerfile: Dockerfile
       target: api
-    command: ["/opt/.venv/bin/uvicorn", "barely_api.main:app", "--host", "0.0.0.0", "--port", "8000", "--app-dir", "packages/api/src"]
-    ports:
-      - "8000:8000"
-    volumes:
-      - ./:/workspace
-    env_file:
-      - .env
-
-  barely-worker:
+    restart: unless-stopped
     depends_on:
       barely-db:
         condition: service_healthy
     environment:
-      - DATABASE_URL=postgresql://barely:barelypassword@barely-db:5432/barelydb
-      - PYTHONPATH=/workspace/packages/core/src:/workspace/packages/api/src:/workspace/packages/worker/src:/workspace/plugins/reporter-pdf/src
-    build: 
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-barely}:${POSTGRES_PASSWORD:-barelypassword}@barely-db:5432/${POSTGRES_DB:-barelydb}
+      - ENVIRONMENT=production
+      - LOG_LEVEL=info
+      - BARELY_SECRET_KEY=${BARELY_SECRET_KEY:-}
+    ports:
+      - "8000:8000"
+    networks:
+      - barely_frontend
+      - barely_backend
+    env_file:
+      - path: .env
+        required: false
+    healthcheck:
+      test: ["CMD-SHELL", "python3 -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')\" || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  barely-worker:
+    build:
       context: .
       dockerfile: Dockerfile
       target: worker
-    working_dir: /workspace
-    command: ["/opt/.venv/bin/python3", "packages/worker/src/barely_worker/main.py"]
-    volumes:
-      - ./:/workspace
+    restart: unless-stopped
+    depends_on:
+      barely-db:
+        condition: service_healthy
+      barely-api:
+        condition: service_healthy
+    # Shared memory allocation required for Chromium stability in headless mode
+    shm_size: '1gb'
+    environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-barely}:${POSTGRES_PASSWORD:-barelypassword}@barely-db:5432/${POSTGRES_DB:-barelydb}
+      - API_URL=http://barely-api:8000
+      - ENVIRONMENT=production
+      - LOG_LEVEL=info
+      - BARELY_SECRET_KEY=${BARELY_SECRET_KEY:-}
+    # Security: Worker accepts zero inbound traffic from host
+    networks:
+      - barely_backend
+      - barely_runner
     env_file:
-      - .env
+      - path: .env
+        required: false
 
   barely-ui:
-    image: node:20-alpine
-    working_dir: /workspace/packages/ui
-    command: sh -c "npm install && npm run dev"
+    build:
+      context: .
+      dockerfile: Dockerfile.ui
+    restart: unless-stopped
+    depends_on:
+      barely-api:
+        condition: service_healthy
+    environment:
+      - NODE_ENV=production
+      - NEXT_PUBLIC_API_URL=http://localhost:8000
+      - INTERNAL_API_URL=http://barely-api:8000
     ports:
       - "3000:3000"
-    volumes:
-      - ./:/workspace
-      - /workspace/packages/ui/node_modules
+    networks:
+      - barely_frontend
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://127.0.0.1:3000/ || exit 1"]
+      interval: 20s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+networks:
+  # Public ingress tier connecting UI and API
+  barely_frontend:
+    driver: bridge
+  # Internal tier isolating Database and backend services (no UI access to DB)
+  barely_backend:
+    driver: bridge
+    internal: false
+  # Outbound tier for worker executing tests against target websites
+  barely_runner:
+    driver: bridge
 
 volumes:
   barely_pgdata:
+    driver: local

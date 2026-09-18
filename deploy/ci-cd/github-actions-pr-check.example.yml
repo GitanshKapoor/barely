@@ -1,0 +1,61 @@
+# ==============================================================================
+# Barely AI Testing - Example GitHub Actions Workflow
+# Copy this file to your repository at: .github/workflows/barely-e2e.yml
+# ==============================================================================
+
+name: Barely AI E2E Tests
+
+on:
+  pull_request:
+    branches: [ "main", "master" ]
+  workflow_dispatch:
+
+jobs:
+  autonomous-test:
+    name: Autonomous Visual AI Tests
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      # Replace this step with your web application start command
+      - name: Start Application (Preview / Local Server)
+        run: |
+          npm ci
+          npm run build
+          npm start &
+          # Wait up to 60s for the application to be ready
+          npx wait-on http://localhost:3000 --timeout 60000
+
+      - name: Run Barely AI Test Suite
+        uses: GitanshKapoor/barely@v1
+        with:
+          # Path to test goal file or folder
+          goal: '.barely/goals/checkout.md'
+          # Preview URL
+          url: 'http://localhost:3000'
+          # Optional domain context (test credentials, sandbox cards, domain notes)
+          context: 'Test Account: qa-bot@example.com / Pass: Secret123! Sandbox Visa: 4242-4242-4242-4242'
+          # AI Model Selection
+          model: 'anthropic/claude-sonnet-4-5'
+          # Secrets configured in GitHub Settings > Secrets and variables > Actions
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          openai_api_key: ${{ secrets.OPENAI_API_KEY }}
+          # Optional notification alert
+          slack_webhook_url: ${{ secrets.SLACK_WEBHOOK_URL }}
+
+      # Always upload the executive PDF report even if tests fail
+      - name: Upload PDF Audit Report & Artifacts
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: barely-test-report
+          path: |
+            .barely/reports/*.pdf
+            .barely/reports/report.html
+            .barely/screenshots/*.png
+          retention-days: 14
