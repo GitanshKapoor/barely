@@ -409,11 +409,10 @@ export default function NewRunForm({ initialData, triggerButton, onRunCreated }:
                   <span className="text-[10px] text-slate-500 font-mono">Injected into system prompt · Optional</span>
                 </div>
                 <textarea 
-                  rows={4} 
                   value={context} 
                   onChange={e => setContext(e.target.value)}
                   placeholder={"You are testing an e-commerce store ABC. Act as a customer browsing the catalog, adding items to cart, and proceeding through checkout.\nContext: Dismiss any promotional modal if shown. Sandbox card: 4242-4242-4242-4242."}
-                  className="w-full block bg-[#070b14] border border-purple-500/30 rounded-lg p-3 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-purple-400 focus:ring-1 focus:ring-purple-400 resize-none font-mono leading-relaxed" 
+                  className="w-full h-[145px] block bg-[#070b14] border border-purple-500/30 rounded-lg p-3 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-purple-400 focus:ring-1 focus:ring-purple-400 resize-none font-mono leading-relaxed" 
                 />
               </div>
 
@@ -428,11 +427,10 @@ export default function NewRunForm({ initialData, triggerButton, onRunCreated }:
                 </div>
                 <textarea 
                   required 
-                  rows={4} 
                   value={goalText} 
                   onChange={e => setGoalText(e.target.value)}
                   placeholder={"1. Type running shoes into search box\n2. Click search button\n3. Click on the first product\n4. Click Add to Cart\n5. Verify cart counter displays 1"}
-                  className="w-full block bg-[#070b14] border border-slate-800 rounded-lg p-3 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-[#0278ff] focus:ring-1 focus:ring-[#0278ff] resize-none font-mono leading-relaxed" 
+                  className="w-full h-[145px] block bg-[#070b14] border border-slate-800 rounded-lg p-3 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-[#0278ff] focus:ring-1 focus:ring-[#0278ff] resize-none font-mono leading-relaxed" 
                 />
               </div>
 
