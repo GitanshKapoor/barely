@@ -258,8 +258,6 @@ def list_settings_status() -> List[Dict[str, Any]]:
         db.close()
 
     in_k8s = is_k8s_environment()
-    secrets_mode = get_secrets_mode()
-    is_helm_mode = secrets_mode["mode"] == "helm"
 
     result = []
     for s in KNOWN_SETTINGS:
@@ -270,21 +268,29 @@ def list_settings_status() -> List[Dict[str, Any]]:
         k8s_file_val = read_k8s_secret_file(key)
         
         is_configured = False
+        is_infra_managed = False
         source = "none"
         masked_val = ""
         updated_at = None
-        is_read_only = is_helm_mode and is_secret
+        is_read_only = False
 
         if k8s_file_val:
             is_configured = True
+            is_infra_managed = True
             source = "kubernetes"
             is_read_only = True
             masked_val = mask_secret(k8s_file_val) if is_secret else k8s_file_val
+        elif env_val:
+            is_configured = True
+            is_infra_managed = True
+            source = "kubernetes" if in_k8s else "environment"
+            is_read_only = True
+            masked_val = mask_secret(env_val) if is_secret else env_val
         elif db_rec and db_rec.value:
             is_configured = True
+            is_infra_managed = False
             source = "database"
-            # If Helm mode is active, even database secrets cannot be edited in the UI
-            is_read_only = True if (is_helm_mode and is_secret) else False
+            is_read_only = False
             updated_at = db_rec.updated_at.isoformat() if db_rec.updated_at else None
             if is_secret:
                 try:
@@ -294,14 +300,11 @@ def list_settings_status() -> List[Dict[str, Any]]:
                     masked_val = "••••••••"
             else:
                 masked_val = db_rec.value
-        elif env_val:
-            is_configured = True
-            source = "kubernetes" if (in_k8s or is_helm_mode) else "environment"
-            is_read_only = True if (in_k8s or (is_helm_mode and is_secret)) else False
-            masked_val = mask_secret(env_val) if is_secret else env_val
-        elif is_helm_mode and is_secret:
-            # Not configured in Helm mode: marked read-only to prevent adding via UI
-            is_read_only = True
+        else:
+            is_configured = False
+            is_infra_managed = False
+            source = "none"
+            is_read_only = False
 
         result.append({
             "key": key,
@@ -310,6 +313,7 @@ def list_settings_status() -> List[Dict[str, Any]]:
             "placeholder": s["placeholder"],
             "is_secret": is_secret,
             "is_configured": is_configured,
+            "is_infra_managed": is_infra_managed,
             "source": source,
             "is_read_only": is_read_only,
             "masked_value": masked_val,
@@ -367,6 +371,15 @@ KNOWN_MODELS = [
         "recommended": True,
         "context_window": "200k",
         "description": "Recommended for end-to-end web QA. Superior spatial awareness, robust DOM locators, and resilient error recovery."
+    },
+    {
+        "id": "anthropic/claude-3-7-sonnet",
+        "name": "Claude 3.7 Sonnet",
+        "provider": "anthropic",
+        "supports_vision": True,
+        "recommended": True,
+        "context_window": "200k",
+        "description": "Hybrid standard and extended thinking reasoning model for multi-step enterprise QA."
     },
     {
         "id": "anthropic/claude-3-5-haiku-20241022",
@@ -435,6 +448,15 @@ KNOWN_MODELS = [
     },
     # Google Gemini
     {
+        "id": "gemini/gemini-2.0-flash",
+        "name": "Gemini 2.0 Flash",
+        "provider": "gemini",
+        "supports_vision": True,
+        "recommended": True,
+        "context_window": "1M",
+        "description": "Next-gen multimodal model with sub-second latency and real-time visual inspection capabilities."
+    },
+    {
         "id": "gemini/gemini-1.5-pro",
         "name": "Gemini 1.5 Pro",
         "provider": "gemini",
@@ -457,8 +479,28 @@ KNOWN_MODELS = [
 def list_supported_models() -> Dict[str, Any]:
     """Returns the model catalog, provider documentation links, and current active default model."""
     default_model = get_setting("DEFAULT_MODEL") or "anthropic/claude-sonnet-4-5"
+
+    # Check if Helm or environment specified a list of enabled models
+    raw_enabled = os.getenv("MODELS_ENABLED") or os.getenv("BARELY_MODELS_ENABLED")
+    enabled_set = set()
+    if raw_enabled:
+        try:
+            import json
+            parsed = json.loads(raw_enabled)
+            if isinstance(parsed, list):
+                enabled_set = {str(m).strip() for m in parsed}
+        except Exception:
+            enabled_set = {m.strip() for m in raw_enabled.split(",") if m.strip()}
+
+    models_list = []
+    for m in KNOWN_MODELS:
+        m_copy = dict(m)
+        m_copy["is_default"] = (m["id"] == default_model)
+        m_copy["enabled"] = (m["id"] in enabled_set) if enabled_set else True
+        models_list.append(m_copy)
+
     return {
-        "models": KNOWN_MODELS,
+        "models": models_list,
         "providers": PROVIDER_DOCS,
         "default_model": default_model
     }

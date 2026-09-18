@@ -244,6 +244,7 @@ def trigger_run(req: RunRequest):
             initial_logs = f"[{now_str}] ℹ️ Running outside Kubernetes cluster. Executing run on persistent worker pool.\n"
             should_isolate = False
 
+    active_model = req.model.strip() if req.model and req.model.strip() else (get_setting("DEFAULT_MODEL") or "anthropic/claude-sonnet-4-5")
     db = SessionLocal()
     try:
         new_run = RunRecord(
@@ -254,7 +255,7 @@ def trigger_run(req: RunRequest):
             device=req.device, 
             strict_mode=req.strict_mode,
             use_cache=req.use_cache,
-            model=req.model.strip() if req.model and req.model.strip() else None,
+            model=active_model,
             tags=tag_str,
             status=initial_status,
             isolated_env=should_isolate,
@@ -437,28 +438,17 @@ def update_execution_engine(req: SetExecutionEngineRequest):
 
 @app.post("/api/settings")
 def save_setting(req: SaveSettingRequest):
-    from barely_core.settings import set_setting, read_k8s_secret_file, get_secrets_mode, KNOWN_SETTINGS
+    from barely_core.settings import set_setting, read_k8s_secret_file
     if not req.key or not req.key.strip():
         raise HTTPException(status_code=400, detail="Key cannot be empty")
     
     key_clean = req.key.strip()
-    
-    # Check if Helm mode is active and this key is a secret
-    matching = next((s for s in KNOWN_SETTINGS if s["key"] == key_clean), None)
-    is_secret = matching["is_secret"] if matching else False
-    
-    mode_info = get_secrets_mode()
-    if mode_info["mode"] == "helm" and is_secret:
-        raise HTTPException(
-            status_code=403,
-            detail=f"Cannot edit secret '{key_clean}' via UI: Helm / GitOps Mode is active. Secrets must be configured in Helm values.yaml or Kubernetes Secrets."
-        )
 
-    # Check if actively managed by K8s volume mount
-    if read_k8s_secret_file(key_clean):
+    # Check if actively managed by K8s volume mount or container environment
+    if read_k8s_secret_file(key_clean) or os.getenv(key_clean):
         raise HTTPException(
             status_code=403, 
-            detail=f"Setting '{key_clean}' is managed externally via Helm / Kubernetes Secret (ESO) volume mount. Modifications should be made in your GitOps repository or Cloud Secret Manager."
+            detail=f"Setting '{key_clean}' is managed externally via Helm / Kubernetes Secret (ESO) or Environment. Modifications should be made in your GitOps repository or Cloud Secret Manager."
         )
         
     set_setting(key_clean, req.value)
@@ -466,17 +456,13 @@ def save_setting(req: SaveSettingRequest):
 
 @app.delete("/api/settings/{key}")
 def remove_setting(key: str):
-    from barely_core.settings import delete_setting, get_secrets_mode, KNOWN_SETTINGS
+    from barely_core.settings import delete_setting, read_k8s_secret_file
     
     key_clean = key.strip()
-    matching = next((s for s in KNOWN_SETTINGS if s["key"] == key_clean), None)
-    is_secret = matching["is_secret"] if matching else False
-    
-    mode_info = get_secrets_mode()
-    if mode_info["mode"] == "helm" and is_secret:
+    if read_k8s_secret_file(key_clean) or os.getenv(key_clean):
         raise HTTPException(
             status_code=403,
-            detail=f"Cannot delete secret '{key_clean}': Helm / GitOps Mode is active."
+            detail=f"Cannot delete setting '{key_clean}': managed externally via Infrastructure."
         )
 
     deleted = delete_setting(key_clean)

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
-import { Play, Globe, Smartphone, Monitor, Tablet, X, Info, Tag, ArrowRight, Loader2, Cpu } from 'lucide-react';
+import { Play, Globe, Smartphone, Monitor, Tablet, X, Info, Tag, ArrowRight, Loader2, Cpu, ChevronDown } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { formatModelName } from '../utils/models';
 
@@ -16,6 +16,18 @@ export interface RunConfigData {
   model?: string;
   tags?: string[];
   isolatedEnv?: boolean;
+}
+
+interface ModelOption {
+  id: string;
+  name: string;
+  provider: string;
+  supports_vision: boolean;
+  recommended: boolean;
+  context_window?: string;
+  description?: string;
+  is_default?: boolean;
+  enabled?: boolean;
 }
 
 interface NewRunFormProps {
@@ -40,6 +52,10 @@ export default function NewRunForm({ initialData, triggerButton, onRunCreated }:
   const [isolatedEnv, setIsolatedEnv] = useState(Boolean(initialData?.isolatedEnv));
   const [model, setModel] = useState(initialData?.model || '');
   const [defaultModelName, setDefaultModelName] = useState<string>('anthropic/claude-sonnet-4-5');
+  const [availableModels, setAvailableModels] = useState<ModelOption[]>([]);
+  const [selectedModelType, setSelectedModelType] = useState<string>('default');
+  const [customModelSlug, setCustomModelSlug] = useState<string>('');
+  const [isK8sAvailable, setIsK8sAvailable] = useState<boolean>(false);
   const [autoNavigate, setAutoNavigate] = useState(false);
   const [tags, setTags] = useState<string[]>(initialData?.tags || []);
   const [tagInput, setTagInput] = useState('');
@@ -48,20 +64,35 @@ export default function NewRunForm({ initialData, triggerButton, onRunCreated }:
   const router = useRouter();
 
   useEffect(() => {
-    const fetchDefaultModel = async () => {
+    const fetchConfiguration = async () => {
       try {
         const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+        
+        // Fetch supported models
         const res = await fetch(`${apiUrl}/api/models`);
         if (res.ok) {
           const data = await res.json();
           if (data.default_model) setDefaultModelName(data.default_model);
+          if (data.models && Array.isArray(data.models)) {
+            setAvailableModels(data.models);
+          }
+        }
+
+        // Fetch execution engine status
+        const engineRes = await fetch(`${apiUrl}/api/execution-engine`);
+        if (engineRes.ok) {
+          const engData = await engineRes.json();
+          setIsK8sAvailable(Boolean(engData.is_k8s_available));
+          if (engData.mode === 'k8s_job' && !initialData) {
+            setIsolatedEnv(true);
+          }
         }
       } catch {
         // silent fallback
       }
     };
-    fetchDefaultModel();
-  }, []);
+    fetchConfiguration();
+  }, [initialData]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -93,6 +124,23 @@ export default function NewRunForm({ initialData, triggerButton, onRunCreated }:
     }
   };
 
+  const handleModelSelectChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const val = e.target.value;
+    setSelectedModelType(val);
+    if (val === 'default') {
+      setModel('');
+    } else if (val === 'custom') {
+      setModel(customModelSlug.trim());
+    } else {
+      setModel(val);
+    }
+  };
+
+  const handleCustomModelChange = (val: string) => {
+    setCustomModelSlug(val);
+    setModel(val.trim());
+  };
+
   const openModal = (e?: React.MouseEvent) => {
     if (e) {
       e.preventDefault();
@@ -105,8 +153,21 @@ export default function NewRunForm({ initialData, triggerButton, onRunCreated }:
       setDevice(initialData.device || 'desktop');
       setStrictMode(Boolean(initialData.strictMode));
       setUseCache(Boolean(initialData.useCache));
-      setIsolatedEnv(Boolean(initialData.isolatedEnv));
+      setIsolatedEnv(isK8sAvailable ? Boolean(initialData.isolatedEnv) : false);
       setModel(initialData.model || '');
+      if (initialData.model) {
+        const found = availableModels.some(m => m.id === initialData.model);
+        if (found) {
+          setSelectedModelType(initialData.model);
+          setCustomModelSlug('');
+        } else {
+          setSelectedModelType('custom');
+          setCustomModelSlug(initialData.model);
+        }
+      } else {
+        setSelectedModelType('default');
+        setCustomModelSlug('');
+      }
       setTags(initialData.tags || []);
       setTagInput('');
     } else {
@@ -116,8 +177,10 @@ export default function NewRunForm({ initialData, triggerButton, onRunCreated }:
       setDevice('desktop');
       setStrictMode(false);
       setUseCache(false);
-      setIsolatedEnv(false);
+      setIsolatedEnv(isK8sAvailable);
       setModel('');
+      setSelectedModelType('default');
+      setCustomModelSlug('');
       setTags([]);
       setTagInput('');
     }
@@ -141,7 +204,7 @@ export default function NewRunForm({ initialData, triggerButton, onRunCreated }:
           use_cache: useCache,
           model: model.trim() || undefined,
           tags,
-          isolated_env: isolatedEnv
+          isolated_env: isK8sAvailable ? isolatedEnv : false
         })
       });
       if (res.ok) {
@@ -163,7 +226,7 @@ export default function NewRunForm({ initialData, triggerButton, onRunCreated }:
           setIsOpen(false);
           const currentTestName = name || 'Automated E2E Test';
           if (!initialData) {
-            setName(''); setUrl('https://'); setGoalText(''); setDevice('desktop'); setStrictMode(false); setUseCache(false); setModel(''); setTags([]); setTagInput('');
+            setName(''); setUrl('https://'); setGoalText(''); setDevice('desktop'); setStrictMode(false); setUseCache(false); setModel(''); setSelectedModelType('default'); setCustomModelSlug(''); setTags([]); setTagInput('');
           }
           if (createdJobId) {
             setToast({
@@ -341,23 +404,126 @@ export default function NewRunForm({ initialData, triggerButton, onRunCreated }:
             </div>
           </div>
 
-          {/* AI Model (Optional) */}
-          <div className="space-y-1.5 text-left pt-2 border-t border-slate-800/80">
+          {/* AI Model (Optional Dropdown & Presets) */}
+          <div className="space-y-2 text-left pt-2 border-t border-slate-800/80">
             <div className="flex items-center justify-between">
               <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5 text-left">
-                <Cpu className="w-3.5 h-3.5 text-purple-400" /> AI Model (Optional)
+                <Cpu className="w-3.5 h-3.5 text-purple-400" /> AI Model
               </label>
               <span className="text-[11px] text-slate-400 font-medium">
                 Default: <span className="text-purple-300 font-semibold">{formatModelName(defaultModelName)}</span>
               </span>
             </div>
-            <input
-              type="text"
-              value={model}
-              onChange={(e) => setModel(e.target.value)}
-              placeholder={`Leave blank for default (${formatModelName(defaultModelName)}) or enter e.g. groq/llama-3.3-70b-versatile`}
-              className="w-full block bg-[#070b14] border border-slate-800 rounded-lg px-4 py-2.5 text-xs font-mono text-slate-200 placeholder-slate-600 focus:outline-none focus:border-[#0278ff] focus:ring-1 focus:ring-[#0278ff]"
-            />
+
+            <div className="relative w-full">
+              <select
+                value={selectedModelType}
+                onChange={handleModelSelectChange}
+                className="w-full bg-[#070b14] border border-slate-800 rounded-lg px-3.5 py-2.5 text-xs font-mono text-slate-200 outline-none focus:border-[#0278ff] focus:ring-1 focus:ring-[#0278ff] transition-all cursor-pointer appearance-none pr-8"
+              >
+                <option value="default">
+                  ⚡ Default ({formatModelName(defaultModelName)})
+                </option>
+
+                {availableModels.filter(m => m.provider === 'anthropic' && m.enabled !== false).length > 0 && (
+                  <optgroup label="Anthropic (High Reasoning)">
+                    {availableModels
+                      .filter(m => m.provider === 'anthropic' && m.enabled !== false)
+                      .map(m => (
+                        <option key={m.id} value={m.id}>
+                          {m.name} {m.recommended ? '★ (Recommended)' : ''}
+                        </option>
+                      ))}
+                  </optgroup>
+                )}
+
+                {availableModels.filter(m => m.provider === 'openai' && m.enabled !== false).length > 0 && (
+                  <optgroup label="OpenAI (Vision Grounding)">
+                    {availableModels
+                      .filter(m => m.provider === 'openai' && m.enabled !== false)
+                      .map(m => (
+                        <option key={m.id} value={m.id}>
+                          {m.name} {m.recommended ? '★ (Recommended)' : ''}
+                        </option>
+                      ))}
+                  </optgroup>
+                )}
+
+                {availableModels.filter(m => m.provider === 'gemini' && m.enabled !== false).length > 0 && (
+                  <optgroup label="Google Gemini (Long Context & Vision)">
+                    {availableModels
+                      .filter(m => m.provider === 'gemini' && m.enabled !== false)
+                      .map(m => (
+                        <option key={m.id} value={m.id}>
+                          {m.name} {m.recommended ? '★ (Recommended)' : ''}
+                        </option>
+                      ))}
+                  </optgroup>
+                )}
+
+                {availableModels.filter(m => m.provider === 'groq' && m.enabled !== false).length > 0 && (
+                  <optgroup label="Groq (High-Speed LPU)">
+                    {availableModels
+                      .filter(m => m.provider === 'groq' && m.enabled !== false)
+                      .map(m => (
+                        <option key={m.id} value={m.id}>
+                          {m.name} {m.recommended ? '★ (Recommended)' : ''}
+                        </option>
+                      ))}
+                  </optgroup>
+                )}
+
+                <optgroup label="Custom / Open Source">
+                  <option value="custom">✎ Custom Model Identifier...</option>
+                </optgroup>
+              </select>
+
+              <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-slate-500">
+                <ChevronDown className="w-4 h-4" />
+              </div>
+            </div>
+
+            {selectedModelType === 'custom' && (
+              <div className="pt-1.5 space-y-1">
+                <input
+                  type="text"
+                  value={customModelSlug}
+                  onChange={(e) => handleCustomModelChange(e.target.value)}
+                  placeholder="e.g. ollama/llama3, deepseek/deepseek-r1, mistral/mistral-large"
+                  className="w-full bg-[#0a0f1d] border border-purple-500/40 rounded-lg px-3.5 py-2 text-xs font-mono text-purple-200 placeholder-slate-600 focus:outline-none focus:border-purple-400 focus:ring-1 focus:ring-purple-400 transition-all"
+                  autoFocus
+                />
+                <p className="text-[10px] text-slate-500">
+                  Enter provider prefix + model slug (e.g. <code className="text-purple-300">ollama/qwen2.5</code>).
+                </p>
+              </div>
+            )}
+
+            {selectedModelType !== 'default' && selectedModelType !== 'custom' && (
+              <div className="flex items-center gap-2 pt-0.5">
+                {(() => {
+                  const m = availableModels.find(x => x.id === selectedModelType);
+                  if (!m) return null;
+                  return (
+                    <div className="flex items-center gap-1.5 text-[10px] font-mono text-slate-400">
+                      <span className="px-2 py-0.5 rounded bg-purple-500/10 text-purple-300 border border-purple-500/20 uppercase font-semibold">
+                        {m.provider}
+                      </span>
+                      {m.supports_vision && (
+                        <span className="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                          👁 Vision Grounding
+                        </span>
+                      )}
+                      {m.context_window && (
+                        <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-400 border border-slate-700">
+                          {m.context_window} Context
+                        </span>
+                      )}
+                    </div>
+                  );
+                })()}
+              </div>
+            )}
           </div>
 
           {/* Strict Mode Configuration */}
@@ -453,25 +619,30 @@ export default function NewRunForm({ initialData, triggerButton, onRunCreated }:
                     </div>
                   </div>
                   <span className={`text-[10px] font-mono font-bold px-1.5 py-0.2 rounded border ${
-                    isolatedEnv 
+                    !isK8sAvailable
+                      ? 'bg-slate-800/80 text-slate-400 border-slate-700'
+                      : isolatedEnv 
                       ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30' 
                       : 'bg-slate-800 text-slate-400 border-slate-700'
                   }`}>
-                    {isolatedEnv ? 'Non-Root Pod' : 'Worker Pool'}
+                    {!isK8sAvailable ? 'Worker Pool (Docker)' : isolatedEnv ? 'Non-Root Pod' : 'Worker Pool'}
                   </span>
                 </div>
                 <p className="text-[11px] text-slate-400 text-left">
-                  {isolatedEnv 
+                  {!isK8sAvailable
+                    ? 'Running in Docker Compose mode. Tests execute in the persistent daemon worker pool.'
+                    : isolatedEnv 
                     ? 'Spawns dedicated ephemeral non-root Kubernetes pod (UID 10001, /dev/shm sandbox)' 
                     : 'Runs on shared persistent worker pool (fast execution)'}
                 </p>
               </div>
 
-              <label className="relative inline-flex items-center cursor-pointer flex-shrink-0">
+              <label className={`relative inline-flex items-center ${!isK8sAvailable ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'} flex-shrink-0`}>
                 <input
                   type="checkbox"
-                  checked={isolatedEnv}
-                  onChange={(e) => setIsolatedEnv(e.target.checked)}
+                  disabled={!isK8sAvailable}
+                  checked={isK8sAvailable && isolatedEnv}
+                  onChange={(e) => isK8sAvailable && setIsolatedEnv(e.target.checked)}
                   className="sr-only peer"
                 />
                 <div className="w-9 h-5 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-500"></div>

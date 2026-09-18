@@ -65,3 +65,16 @@ secrets:
 # Database
 database:
   secretName: barely-db-secret
+
+# AI Models Configuration
+models:
+  # Organization-wide default model for tests
+  default: "anthropic/claude-sonnet-4-5"
+  # Enabled models available to QA in the test run dropdown
+  enabled:
+    - "anthropic/claude-sonnet-4-5"
+    - "anthropic/claude-3-7-sonnet"
+    - "openai/gpt-4o"
+    - "openai/gpt-4o-mini"
+    - "gemini/gemini-2.0-flash"
+    - "groq/llama-3.3-70b-versatile"
