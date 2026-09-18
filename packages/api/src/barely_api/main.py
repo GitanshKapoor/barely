@@ -497,16 +497,24 @@ def test_key(req: TestKeyRequest):
     
     # Map provider to lightweight test model and environment key name
     provider_map = {
-        "anthropic": ("anthropic/claude-3-haiku-20240307", "ANTHROPIC_API_KEY"),
-        "openai": ("gpt-4o-mini", "OPENAI_API_KEY"),
-        "groq": ("groq/llama-3.1-8b-instant", "GROQ_API_KEY"),
-        "gemini": ("gemini/gemini-1.5-flash", "GEMINI_API_KEY")
+        "anthropic": (
+            [
+                "anthropic/claude-sonnet-4-5",
+                "anthropic/claude-3-7-sonnet",
+                "anthropic/claude-3-5-sonnet-20241022",
+                "anthropic/claude-3-5-haiku-20241022"
+            ],
+            "ANTHROPIC_API_KEY"
+        ),
+        "openai": (["gpt-4o-mini", "gpt-4o"], "OPENAI_API_KEY"),
+        "groq": (["groq/llama-3.1-8b-instant", "groq/llama-3.3-70b-versatile"], "GROQ_API_KEY"),
+        "gemini": (["gemini/gemini-1.5-flash", "gemini/gemini-2.0-flash"], "GEMINI_API_KEY")
     }
 
     if provider not in provider_map:
         raise HTTPException(status_code=400, detail=f"Unsupported provider: {provider}. Supported: anthropic, openai, groq, gemini")
 
-    model_name, key_name = provider_map[provider]
+    candidate_models, key_name = provider_map[provider]
     active_key = req.key.strip() if req.key and req.key.strip() else get_setting(key_name)
 
     if not active_key:
@@ -515,28 +523,39 @@ def test_key(req: TestKeyRequest):
             "error": f"No API key provided or configured for {provider.capitalize()}"
         }
 
-    try:
-        response = litellm.completion(
-            model=model_name,
-            messages=[{"role": "user", "content": "ping"}],
-            max_tokens=1,
-            drop_params=True,
-            api_key=active_key
-        )
-        return {
-            "success": True,
-            "message": f"{provider.capitalize()} API key verified successfully! Connected to {model_name}."
-        }
-    except Exception as e:
-        err_str = str(e)
-        # Redact any sensitive key fragments in the error message
-        for part in active_key.split("-"):
-            if len(part) > 6 and part in err_str:
-                err_str = err_str.replace(part, "••••")
-        return {
-            "success": False,
-            "error": f"Verification failed: {err_str[:250]}"
-        }
+    last_error_message = None
+    for model_name in candidate_models:
+        try:
+            response = litellm.completion(
+                model=model_name,
+                messages=[{"role": "user", "content": "ping"}],
+                max_tokens=1,
+                drop_params=True,
+                api_key=active_key
+            )
+            return {
+                "success": True,
+                "message": f"{provider.capitalize()} API key verified successfully! Connected to {model_name}."
+            }
+        except Exception as e:
+            err_str = str(e)
+            last_error_message = err_str
+            err_lower = err_str.lower()
+            # If model is not found on user's account/tier, try next candidate model
+            if "not_found" in err_lower or "not found" in err_lower or "invalid model" in err_lower or "does not exist" in err_lower:
+                continue
+            # If authentication failure or quota exceeded, stop trying
+            break
+
+    err_display = last_error_message or "Unknown verification failure"
+    for part in active_key.split("-"):
+        if len(part) > 6 and part in err_display:
+            err_display = err_display.replace(part, "••••")
+
+    return {
+        "success": False,
+        "error": f"Verification failed: {err_display[:250]}"
+    }
 
 class TestModelRequest(BaseModel):
     model: str
