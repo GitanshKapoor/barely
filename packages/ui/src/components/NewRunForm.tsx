@@ -368,11 +368,23 @@ export default function NewRunForm({ initialData, triggerButton, onRunCreated }:
           {/* Application Context (Given to Model Before Testing) */}
           <div className="space-y-1.5 text-left">
             <div className="flex items-center justify-between">
-              <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5 text-left">
-                <span className="w-2 h-2 rounded-full bg-purple-400 inline-block"></span>
-                Application Context <span className="text-[10px] text-slate-500 font-normal lowercase">(given to model before testing)</span>
-              </label>
-              <span className="text-[11px] text-purple-400/80 font-medium">App identity, persona &amp; domain knowledge</span>
+              <div className="flex items-center gap-1.5">
+                <label className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5 text-left">
+                  <span className="w-2 h-2 rounded-full bg-purple-400 inline-block"></span>
+                  <span>Application Context</span>
+                </label>
+                <div className="relative group cursor-help inline-flex items-center">
+                  <Info className="w-3.5 h-3.5 text-slate-400 hover:text-purple-400 transition-colors" />
+                  <div className="absolute left-0 bottom-full mb-2 hidden group-hover:block w-72 p-3 rounded-lg bg-[#0d1322] border border-slate-700 shadow-2xl text-[11px] text-slate-300 leading-relaxed z-50 pointer-events-none text-left whitespace-normal normal-case font-normal font-sans">
+                    <p className="font-bold text-white mb-1">Application Context</p>
+                    <p className="text-purple-300 mb-1 font-medium">App identity, persona &amp; domain knowledge</p>
+                    <p>
+                      Given to the model before testing. Injected into the AI agent&apos;s system prompt to ground it in your application&apos;s business logic, user roles, sandbox credentials, or custom rules.
+                    </p>
+                  </div>
+                </div>
+              </div>
+              <span className="text-[10px] text-slate-500 font-mono">Optional</span>
             </div>
             <textarea 
               rows={3} 
@@ -381,9 +393,6 @@ export default function NewRunForm({ initialData, triggerButton, onRunCreated }:
               placeholder={"You are testing an e-commerce store ABC. Act as a customer browsing the catalog, adding items to cart, and proceeding through checkout.\nContext: Dismiss any promotional modal if shown. Sandbox card: 4242-4242-4242-4242."}
               className="w-full block bg-[#070b14] border border-purple-500/30 rounded-lg p-3 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:border-purple-400 focus:ring-1 focus:ring-purple-400 resize-none font-mono leading-relaxed text-xs" 
             />
-            <p className="text-[11px] text-slate-500">
-              Injected into the AI agent's system prompt to ground it in your application's domain (e.g. e-commerce, banking, SaaS).
-            </p>
           </div>
 
           {/* Test Goal & Instructions (Separate Input Field) */}

@@ -20,7 +20,8 @@ import {
   Cpu,
   Loader2,
   AlertCircle,
-  Bell
+  Bell,
+  Info
 } from 'lucide-react';
 import NewRunForm from '../../../components/NewRunForm';
 import { formatModelName } from '../../../utils/models';
@@ -415,7 +416,14 @@ export default function ClientRunDetails({ id }: { id: string }) {
         <div className="rounded-xl border border-purple-900/40 bg-purple-950/20 p-4 text-xs font-mono space-y-1">
           <div className="flex items-center gap-1.5">
             <span className="w-2 h-2 rounded-full bg-purple-400"></span>
-            <span className="text-[10px] uppercase font-bold text-purple-400 tracking-wider">Application Context (Model Persona &amp; Domain)</span>
+            <span className="text-[10px] uppercase font-bold text-purple-400 tracking-wider">Application Context</span>
+            <div className="relative group cursor-help inline-flex items-center">
+              <Info className="w-3 h-3 text-purple-400/60 hover:text-purple-300 transition-colors" />
+              <div className="absolute left-0 bottom-full mb-2 hidden group-hover:block w-72 p-2.5 rounded-lg bg-[#0d1322] border border-slate-700 shadow-2xl text-[11px] text-slate-300 leading-relaxed z-50 pointer-events-none text-left whitespace-normal normal-case font-normal font-sans">
+                <p className="font-bold text-white mb-1">Application Context</p>
+                <p>App identity, persona &amp; domain knowledge injected into the agent before testing.</p>
+              </div>
+            </div>
           </div>
           <p className="text-purple-200/90 whitespace-pre-wrap leading-relaxed">{run.context}</p>
         </div>
