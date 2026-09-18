@@ -40,12 +40,14 @@ interface NewRunFormProps {
 }
 
 const emptySubscribe = () => () => {};
+const DRAFT_STORAGE_KEY = 'barely_active_new_run_draft';
 
 export default function NewRunForm({ initialData, triggerButton, onRunCreated }: NewRunFormProps) {
   const mounted = useSyncExternalStore(emptySubscribe, () => true, () => false);
   const [loading, setLoading] = useState(false);
   const [transitioning, setTransitioning] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
+  const [hasRestoredDraft, setHasRestoredDraft] = useState(false);
   const [name, setName] = useState(initialData?.name || '');
   const [url, setUrl] = useState(initialData?.url || 'https://');
   const [goalText, setGoalText] = useState(initialData?.goalText || '');
@@ -76,6 +78,21 @@ export default function NewRunForm({ initialData, triggerButton, onRunCreated }:
   const [notificationChannel, setNotificationChannel] = useState<string>(initialData?.notificationChannel || 'default');
 
   const router = useRouter();
+
+  const clearDraft = () => {
+    if (typeof window === 'undefined') return;
+    try {
+      sessionStorage.removeItem(DRAFT_STORAGE_KEY);
+    } catch {
+      // ignore
+    }
+    setHasRestoredDraft(false);
+  };
+
+  const handleClose = () => {
+    clearDraft();
+    setIsOpen(false);
+  };
 
   useEffect(() => {
     const fetchConfiguration = async () => {
@@ -133,10 +150,89 @@ export default function NewRunForm({ initialData, triggerButton, onRunCreated }:
     fetchConfiguration();
   }, [initialData]);
 
+  // Auto-restore draft on page reload if user was configuring a test
+  useEffect(() => {
+    if (typeof window === 'undefined' || initialData) return;
+    try {
+      const raw = sessionStorage.getItem(DRAFT_STORAGE_KEY);
+      if (!raw) return;
+      const draft = JSON.parse(raw);
+      if (draft && draft.isPrimary && draft.isOpen) {
+        if (typeof draft.name === 'string') setName(draft.name);
+        if (typeof draft.url === 'string') setUrl(draft.url);
+        if (typeof draft.goalText === 'string') setGoalText(draft.goalText);
+        if (typeof draft.context === 'string') setContext(draft.context);
+        if (typeof draft.device === 'string') setDevice(draft.device);
+        if (typeof draft.strictMode === 'boolean') setStrictMode(draft.strictMode);
+        if (typeof draft.useCache === 'boolean') setUseCache(draft.useCache);
+        if (typeof draft.isolatedEnv === 'boolean') setIsolatedEnv(draft.isolatedEnv);
+        if (typeof draft.model === 'string') setModel(draft.model);
+        if (typeof draft.selectedModelType === 'string') setSelectedModelType(draft.selectedModelType);
+        if (typeof draft.customModelSlug === 'string') setCustomModelSlug(draft.customModelSlug);
+        if (Array.isArray(draft.tags)) setTags(draft.tags);
+        if (typeof draft.autoNavigate === 'boolean') setAutoNavigate(draft.autoNavigate);
+        if (typeof draft.createJiraTicket === 'boolean') setCreateJiraTicket(draft.createJiraTicket);
+        if (typeof draft.notificationChannel === 'string') setNotificationChannel(draft.notificationChannel);
+        setIsOpen(true);
+        setHasRestoredDraft(true);
+      }
+    } catch {
+      // ignore parse errors
+    }
+  }, [initialData]);
+
+  // Auto-save draft whenever form fields change while modal is open
+  useEffect(() => {
+    if (typeof window === 'undefined' || initialData) return;
+    if (!isOpen) return;
+
+    const draftData = {
+      isPrimary: true,
+      isOpen: true,
+      name,
+      url,
+      goalText,
+      context,
+      device,
+      strictMode,
+      useCache,
+      isolatedEnv,
+      model,
+      selectedModelType,
+      customModelSlug,
+      tags,
+      autoNavigate,
+      createJiraTicket,
+      notificationChannel,
+    };
+    try {
+      sessionStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(draftData));
+    } catch {
+      // ignore storage errors
+    }
+  }, [
+    isOpen, name, url, goalText, context, device, strictMode, useCache,
+    isolatedEnv, model, selectedModelType, customModelSlug, tags,
+    autoNavigate, createJiraTicket, notificationChannel, initialData
+  ]);
+
+  // Prevent accidental reload when form has unsaved content
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (isOpen && (goalText.trim() || context.trim() || (name.trim() && name !== ''))) {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [isOpen, goalText, context, name]);
+
   useEffect(() => {
     if (!isOpen) return;
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setIsOpen(false);
+      if (e.key === 'Escape') handleClose();
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
@@ -217,21 +313,53 @@ export default function NewRunForm({ initialData, triggerButton, onRunCreated }:
         setNotificationChannel(initialData.notificationChannel);
       }
     } else {
-      setName('');
-      setUrl('https://');
-      setGoalText('');
-      setContext('');
-      setDevice('desktop');
-      setStrictMode(false);
-      setUseCache(false);
-      setIsolatedEnv(isK8sAvailable);
-      setModel('');
-      setSelectedModelType('default');
-      setCustomModelSlug('');
-      setTags([]);
-      setTagInput('');
-      setNotificationChannel('default');
-      setCreateJiraTicket(jiraAutoCreateDefault);
+      let restored = false;
+      try {
+        const raw = sessionStorage.getItem(DRAFT_STORAGE_KEY);
+        if (raw) {
+          const draft = JSON.parse(raw);
+          if (draft && draft.isPrimary && (draft.name || draft.goalText || draft.context)) {
+            restored = true;
+            if (typeof draft.name === 'string') setName(draft.name);
+            if (typeof draft.url === 'string') setUrl(draft.url);
+            if (typeof draft.goalText === 'string') setGoalText(draft.goalText);
+            if (typeof draft.context === 'string') setContext(draft.context);
+            if (typeof draft.device === 'string') setDevice(draft.device);
+            if (typeof draft.strictMode === 'boolean') setStrictMode(draft.strictMode);
+            if (typeof draft.useCache === 'boolean') setUseCache(draft.useCache);
+            if (typeof draft.isolatedEnv === 'boolean') setIsolatedEnv(draft.isolatedEnv);
+            if (typeof draft.model === 'string') setModel(draft.model);
+            if (typeof draft.selectedModelType === 'string') setSelectedModelType(draft.selectedModelType);
+            if (typeof draft.customModelSlug === 'string') setCustomModelSlug(draft.customModelSlug);
+            if (Array.isArray(draft.tags)) setTags(draft.tags);
+            if (typeof draft.autoNavigate === 'boolean') setAutoNavigate(draft.autoNavigate);
+            if (typeof draft.createJiraTicket === 'boolean') setCreateJiraTicket(draft.createJiraTicket);
+            if (typeof draft.notificationChannel === 'string') setNotificationChannel(draft.notificationChannel);
+            setHasRestoredDraft(true);
+          }
+        }
+      } catch {
+        // ignore
+      }
+
+      if (!restored) {
+        setName('');
+        setUrl('https://');
+        setGoalText('');
+        setContext('');
+        setDevice('desktop');
+        setStrictMode(false);
+        setUseCache(false);
+        setIsolatedEnv(isK8sAvailable);
+        setModel('');
+        setSelectedModelType('default');
+        setCustomModelSlug('');
+        setTags([]);
+        setTagInput('');
+        setNotificationChannel('default');
+        setCreateJiraTicket(jiraAutoCreateDefault);
+        setHasRestoredDraft(false);
+      }
     }
     setIsOpen(true);
   };
@@ -260,6 +388,7 @@ export default function NewRunForm({ initialData, triggerButton, onRunCreated }:
         })
       });
       if (res.ok) {
+        clearDraft();
         const data = await res.json();
         const createdJobId = data.job_id;
 
@@ -311,7 +440,7 @@ export default function NewRunForm({ initialData, triggerButton, onRunCreated }:
     <div 
       className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-3 sm:p-6 text-left whitespace-normal select-auto overflow-y-auto"
       onClick={(e) => {
-        if (e.target === e.currentTarget) setIsOpen(false);
+        if (e.target === e.currentTarget) handleClose();
       }}
     >
       <form 
@@ -325,14 +454,36 @@ export default function NewRunForm({ initialData, triggerButton, onRunCreated }:
               <Play className="w-4 h-4 fill-current" />
             </div>
             <div>
-              <h3 className="text-base font-bold text-slate-100 flex items-center gap-2">
-                {initialData ? 'Re-run & Reconfigure Test' : 'Configure Test Run'}
-                {initialData && (
-                  <span className="text-[10px] font-mono font-medium px-2 py-0.5 rounded bg-purple-500/15 text-purple-300 border border-purple-500/30">
-                    Re-run
-                  </span>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h3 className="text-base font-bold text-slate-100 flex items-center gap-2">
+                  {initialData ? 'Re-run & Reconfigure Test' : 'Configure Test Run'}
+                  {initialData && (
+                    <span className="text-[10px] font-mono font-medium px-2 py-0.5 rounded bg-purple-500/15 text-purple-300 border border-purple-500/30">
+                      Re-run
+                    </span>
+                  )}
+                </h3>
+                {hasRestoredDraft && (
+                  <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-amber-500/15 border border-amber-500/30 text-amber-300 text-[10px] font-mono">
+                    <span>⚡ Draft Restored</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        clearDraft();
+                        setName('');
+                        setUrl('https://');
+                        setGoalText('');
+                        setContext('');
+                        setTags([]);
+                      }}
+                      className="text-amber-400 hover:text-amber-200 underline ml-1 cursor-pointer"
+                      title="Discard draft and start fresh"
+                    >
+                      Clear
+                    </button>
+                  </div>
                 )}
-              </h3>
+              </div>
               <p className="text-xs text-slate-400 mt-0.5">
                 {initialData ? 'Tweak parameters or target environment and launch a new execution.' : 'The autonomous AI agent will navigate, evaluate assertions, and generate audit reports.'}
               </p>
@@ -340,7 +491,7 @@ export default function NewRunForm({ initialData, triggerButton, onRunCreated }:
           </div>
           <button 
             type="button" 
-            onClick={() => setIsOpen(false)} 
+            onClick={handleClose} 
             className="p-1.5 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-white transition-colors cursor-pointer flex-shrink-0"
           >
             <X className="w-4 h-4" />
@@ -943,7 +1094,7 @@ export default function NewRunForm({ initialData, triggerButton, onRunCreated }:
           <div className="flex items-center gap-3 ml-auto">
             <button 
               type="button" 
-              onClick={() => setIsOpen(false)} 
+              onClick={handleClose} 
               className="px-4 py-2 text-xs font-semibold text-slate-400 hover:text-white transition-colors cursor-pointer rounded-lg hover:bg-slate-800/60"
             >
               Cancel
