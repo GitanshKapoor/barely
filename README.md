@@ -105,9 +105,165 @@ timeout: 120
 barely run --url https://staging.myapp.com --goal .barely/goals/checkout.md
 ```
 
-## 📚 Documentation
+## 🏗️ Enterprise Deployment Architectures
 
-Documentation is currently a work in progress. Detailed guides on architecture, writing goals, and CI/CD integration will be published soon.
+Barely provides production-grade deployment manifests across three environments: **Hardened Docker Compose**, **Kubernetes (Helm Chart)**, and **AWS ECS Fargate (Terraform)**.
+
+### 🧭 Deployment Guide Navigation
+
+| Target Environment | Description | Dedicated Installation Runbook |
+| :--- | :--- | :--- |
+| 🐳 **Docker Compose** | Multi-bridge network isolation, non-root execution, 1GB `/dev/shm` for Chromium, zero DB host ports. | [📖 deploy/docker/README.md](deploy/docker/README.md) |
+| ⎈ **Kubernetes (Helm)** | NGINX Ingress Controller, LoadBalancer Service, zero-trust `NetworkPolicy`, HPA, Cloud DB, External Secrets (ESO). | [📖 charts/barely/README.md](charts/barely/README.md) |
+| ☁️ **AWS ECS (Terraform)** | 100% Private VPC subnets (`assign_public_ip = false`), ALB path routing, AWS Cloud Map DNS, Secrets Manager. | [📖 deploy/terraform/README.md](deploy/terraform/README.md) |
+
+---
+
+### 1. Kubernetes Architecture (Helm Deployment)
+
+```mermaid
+flowchart TD
+    subgraph Internet["Public Internet"]
+        Client["Browser Client / CI/CD"]
+    end
+
+    subgraph CloudInfra["Cloud Infrastructure"]
+        LBSvc["Cloud LoadBalancer Service (NLB / ALB / MetalLB)\nPorts: 80, 443"]
+    end
+
+    subgraph K8sCluster["Kubernetes Cluster (Namespace: barely)"]
+        subgraph IngressNs["Ingress Controller (namespace: ingress-nginx)"]
+            Nginx["NGINX Ingress Controller\n(ingressClassName: nginx)\nTLS Termination & Path Routing"]
+        end
+
+        subgraph CoreWorkloads["Workload Pods (Non-Root UID 10001)"]
+            UI["barely-ui (Next.js Standalone)\nPort: 3000\nReplicas: 2+ (HPA)"]
+            API["barely-api (FastAPI Control Plane)\nPort: 8000\nReplicas: 2+ (HPA)"]
+            Worker["barely-worker / Ephemeral Runner Jobs\n(Playwright + Chromium Browser Pods)\nshm: 1Gi | Capabilities: Drop ALL"]
+        end
+
+        subgraph ClusterServices["Cluster Core Services"]
+            CoreDNS["CoreDNS (kube-system)\nPort: 53 (UDP/TCP)"]
+            K8sAPI["Kubernetes API Server\nPort: 443 / 6443"]
+        end
+    end
+
+    subgraph CloudData["Managed Cloud Services (Stateless Cluster)"]
+        RDS[("Amazon RDS / Cloud SQL PostgreSQL\nPort: 5432 (SSL Encrypted)")]
+        Vault["AWS Secrets Manager / Vault\n(Synchronized via CNCF ESO)"]
+    end
+
+    subgraph ExternalTargets["External SaaS & Tested Domains"]
+        LLM["LLM APIs (OpenAI / Anthropic / Gemini)\nPort: 443"]
+        Integrations["Jira / Slack / Teams Webhooks\nPort: 443"]
+        TestSites["Target Websites Under Test\nPorts: 80, 443"]
+    end
+
+    Client -->|HTTPS :443| LBSvc
+    LBSvc --> Nginx
+    Nginx -->|Path: /*| UI
+    Nginx -->|Path: /api/*| API
+    UI -->|Internal API :8000| API
+    API -->|SQL :5432| RDS
+    API -->|Spawn Ephemeral Jobs| K8sAPI
+    API -->|Prompt Tokens :443| LLM
+    API -->|Issue Sync :443| Integrations
+    Worker -->|Sync Artifacts :5432| RDS
+    Worker -->|DOM Analysis :443| LLM
+    Worker -->|Playwright Actions :80, :443| TestSites
+    Vault -.->|ExternalSecret Sync| API
+    Vault -.->|ExternalSecret Sync| Worker
+    UI -.->|DNS :53| CoreDNS
+    API -.->|DNS :53| CoreDNS
+    Worker -.->|DNS :53| CoreDNS
+```
+
+---
+
+### 2. AWS ECS Fargate Architecture (Terraform)
+
+```mermaid
+flowchart TD
+    subgraph Internet["Public Internet"]
+        User["User / CI Pipeline"]
+    end
+
+    subgraph AWSVPC["AWS VPC (10.0.0.0/16)"]
+        subgraph PublicSubnets["Public Subnets (AZ-a, AZ-b)"]
+            ALB["Application Load Balancer (ALB)\nSecurity Group: sg-alb\nPorts: 80 (Redirect), 443 (HTTPS)"]
+            NAT["NAT Gateways (AZ-a, AZ-b)\nOutbound Internet Access"]
+        end
+
+        subgraph PrivateAppSubnets["Private Application Subnets (AZ-a, AZ-b)"]
+            subgraph CloudMap["AWS Cloud Map (Private DNS: barely.internal)"]
+                API_DNS["api.barely.internal:8000"]
+                UI_DNS["ui.barely.internal:3000"]
+            end
+
+            ECSUi["ECS Service: barely-ui\n(AWS Fargate)\nSecurity Group: sg-ecs-ui\nPort: 3000 | Non-Root UID 10001\nassign_public_ip: false"]
+            ECSApi["ECS Service: barely-api\n(AWS Fargate)\nSecurity Group: sg-ecs-api\nPort: 8000 | Non-Root UID 10001\nassign_public_ip: false"]
+            ECSWorker["ECS Service: barely-worker\n(AWS Fargate / Fargate Spot)\nSecurity Group: sg-ecs-worker\n0 Inbound Ports | Non-Root UID 10001\nassign_public_ip: false"]
+        end
+
+        subgraph PrivateDataSubnets["Private Database Subnets (AZ-a, AZ-b)"]
+            RDS[("Amazon RDS PostgreSQL 16\nSecurity Group: sg-rds\nPort: 5432 (SSL Required)")]
+        end
+
+        subgraph AWSServices["Managed AWS Services"]
+            SM["AWS Secrets Manager & KMS\n(API Keys & DB Credentials)"]
+            CW["CloudWatch Log Group\n(/ecs/barely-prod)"]
+        end
+    end
+
+    User -->|HTTPS :443| ALB
+    ALB -->|Route /* :3000| ECSUi
+    ALB -->|Route /api/* :8000| ECSApi
+    ECSUi -->|Internal :8000 (api.barely.internal)| ECSApi
+    ECSApi -->|SQL :5432| RDS
+    ECSWorker -->|SQL :5432| RDS
+    ECSApi -.->|Task Execution Role| SM
+    ECSWorker -.->|Task Execution Role| SM
+    ECSApi -.-> CW
+    ECSWorker -.-> CW
+    ECSUi -.-> CW
+    ECSApi -->|NAT Gateway :443| NAT
+    ECSWorker -->|NAT Gateway :80, :443| NAT
+    NAT -->|HTTPS :443| ExternalAPIs["OpenAI / Anthropic / Tested Domains"]
+```
+
+---
+
+## 🛡️ Enterprise Security Hardening Specification
+
+### 1. Zero-Trust Kubernetes Network Policies (`netpol`)
+- **Default-Deny**: All untracked ingress and egress traffic is dropped at the Linux kernel level (via iptables/eBPF).
+- **UI Pods**: Ingress allowed strictly from NGINX Ingress on port 3000; egress allowed strictly to API on port 8000 and CoreDNS on port 53. **UI is 100% physically blocked from database access.**
+- **API Pods**: Ingress from Ingress and UI on port 8000; egress to PostgreSQL (5432), Kubernetes API (443/6443), CoreDNS (53), and external HTTPS (443).
+- **Runner Pods**: **Zero inbound ports** (default-deny ingress). Lateral pod-to-pod communication is strictly denied.
+- **Database**: Port 5432 accessible strictly by API and Runner workloads.
+
+### 2. Tiered AWS Security Groups Matrix
+- **`sg-alb`**: Ingress `0.0.0.0/0` on 80/443; egress strictly to `sg-ecs-ui` (port 3000) and `sg-ecs-api` (port 8000).
+- **`sg-ecs-ui`**: Ingress allowed strictly from `sg-alb` on port 3000; egress to `sg-ecs-api` on port 8000.
+- **`sg-ecs-api`**: Ingress allowed strictly from `sg-alb` and `sg-ecs-ui` on port 8000; egress to `sg-rds` on 5432 and outbound 443 via NAT.
+- **`sg-ecs-worker`**: **0 Inbound rules**. Egress to `sg-rds` on 5432 and outbound 80/443 via NAT.
+- **`sg-rds`**: Ingress strictly from `sg-ecs-api` and `sg-ecs-worker` on 5432; 0 outbound rules.
+
+### 3. Container & Pod Security Standards (Restricted PSS)
+- **Non-Root Execution**: Every container runs as an unprivileged user (UID `10001:10001`).
+- **Capabilities Dropped**: `capabilities: { drop: ["ALL"] }` removes all privileged Linux capabilities.
+- **No Privilege Escalation**: `allowPrivilegeEscalation: false` prevents `setuid` binaries from gaining elevated privileges.
+- **Chromium Stability**: Dedicated 1GB `/dev/shm` shared memory allocation (`shm_size: 1gb` in Docker, `emptyDir: medium: Memory` in Kubernetes, `sharedMemorySize: 1024` in ECS).
+
+---
+
+## 📚 Dedicated Documentation & Runbooks
+
+For detailed setup, configuration parameters, and step-by-step installation runbooks, refer to:
+- 🐳 **[Docker Compose Deployment Guide](deploy/docker/README.md)**
+- ⎈ **[Kubernetes Helm Chart Guide](charts/barely/README.md)**
+- ☁️ **[AWS ECS Fargate Terraform Guide](deploy/terraform/README.md)**
+
 
 ## 💬 Community
 

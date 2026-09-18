@@ -1,0 +1,72 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "barely.fullname" . }}-ui
+  labels:
+    {{- include "barely.ui.selectorLabels" . | nindent 4 }}
+spec:
+  {{- if not .Values.ui.autoscaling.enabled }}
+  replicas: {{ .Values.ui.replicaCount | default 2 }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "barely.ui.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "barely.ui.selectorLabels" . | nindent 8 }}
+    spec:
+      serviceAccountName: {{ include "barely.fullname" . }}-ui
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: {{ .Values.security.runAsNonRoot | default true }}
+        runAsUser: {{ .Values.security.runAsUser | default 10001 }}
+        runAsGroup: {{ .Values.security.runAsGroup | default 10001 }}
+        fsGroup: {{ .Values.security.fsGroup | default 10001 }}
+        seccompProfile:
+          type: {{ .Values.security.seccompProfile.type | default "RuntimeDefault" }}
+      containers:
+        - name: ui
+          image: "{{ .Values.ui.image.repository }}:{{ .Values.ui.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.ui.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 3000
+              protocol: TCP
+          securityContext:
+            allowPrivilegeEscalation: {{ .Values.security.allowPrivilegeEscalation | default false }}
+            readOnlyRootFilesystem: {{ .Values.security.readOnlyRootFilesystem | default false }}
+            capabilities:
+              drop:
+                {{- toYaml .Values.security.capabilities.drop | nindent 16 }}
+          env:
+            - name: NODE_ENV
+              value: "production"
+            - name: INTERNAL_API_URL
+              value: "http://{{ include "barely.fullname" . }}-api:8000"
+            - name: NEXT_PUBLIC_API_URL
+              value: "/api"
+          {{- with .Values.ui.probes }}
+          {{- if .liveness }}
+          livenessProbe:
+            httpGet:
+              path: {{ .liveness.path | default "/" }}
+              port: http
+            initialDelaySeconds: {{ .liveness.initialDelaySeconds | default 15 }}
+            periodSeconds: {{ .liveness.periodSeconds | default 10 }}
+            timeoutSeconds: {{ .liveness.timeoutSeconds | default 5 }}
+            failureThreshold: {{ .liveness.failureThreshold | default 3 }}
+          {{- end }}
+          {{- if .readiness }}
+          readinessProbe:
+            httpGet:
+              path: {{ .readiness.path | default "/" }}
+              port: http
+            initialDelaySeconds: {{ .readiness.initialDelaySeconds | default 5 }}
+            periodSeconds: {{ .readiness.periodSeconds | default 5 }}
+            timeoutSeconds: {{ .readiness.timeoutSeconds | default 3 }}
+            failureThreshold: {{ .readiness.failureThreshold | default 2 }}
+          {{- end }}
+          {{- end }}
+          resources:
+            {{- toYaml .Values.ui.resources | nindent 12 }}

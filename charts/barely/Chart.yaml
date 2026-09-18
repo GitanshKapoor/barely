@@ -1,0 +1,18 @@
+apiVersion: v2
+name: barely
+description: Enterprise Helm Chart for Barely - Autonomous Visual AI Testing Platform
+type: application
+version: 1.0.0
+appVersion: "1.0.0"
+keywords:
+  - testing
+  - ai
+  - automation
+  - playwright
+  - enterprise
+home: https://github.com/GitanshKapoor/barely
+sources:
+  - https://github.com/GitanshKapoor/barely
+maintainers:
+  - name: Barely Engineering
+    email: engineering@barely.internal

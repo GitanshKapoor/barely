@@ -1,0 +1,54 @@
+# ==============================================================================
+# Barely Terraform Module - Example Variables
+# Copy to terraform.tfvars and populate with your AWS account details
+# ==============================================================================
+
+aws_region  = "us-east-1"
+environment = "prod"
+app_name    = "barely"
+
+# VPC & Subnets
+vpc_id = "vpc-0123456789abcdef0"
+
+# Public subnets across at least 2 Availability Zones for the internet-facing ALB
+public_subnet_ids = [
+  "subnet-01111111111111111",
+  "subnet-02222222222222222"
+]
+
+# Private subnets where ECS Fargate tasks execute (no public IPs assigned)
+private_app_subnet_ids = [
+  "subnet-03333333333333333",
+  "subnet-04444444444444444"
+]
+
+# Private subnets for RDS PostgreSQL database
+private_data_subnet_ids = [
+  "subnet-05555555555555555",
+  "subnet-06666666666666666"
+]
+
+# Optional SSL/TLS Certificate ARN from AWS ACM
+# If provided, ALB enables HTTPS on port 443 with HTTP-to-HTTPS redirect on port 80
+acm_certificate_arn = "arn:aws:acm:us-east-1:123456789012:certificate/abcdef01-2345-6789-abcd-ef0123456789"
+
+# Container Images (ECR URIs)
+api_image    = "123456789012.dkr.ecr.us-east-1.amazonaws.com/barely-api:1.0.0"
+ui_image     = "123456789012.dkr.ecr.us-east-1.amazonaws.com/barely-ui:1.0.0"
+worker_image = "123456789012.dkr.ecr.us-east-1.amazonaws.com/barely-worker:1.0.0"
+
+# Task Sizing
+api_cpu             = 1024
+api_memory          = 2048
+api_desired_count   = 2
+
+ui_cpu              = 512
+ui_memory           = 1024
+ui_desired_count    = 2
+
+worker_cpu          = 2048
+worker_memory       = 4096
+worker_desired_count = 2
+
+# Fargate Spot allocation for Worker pool (100 = 100% Spot for cost optimization)
+fargate_spot_weight = 100

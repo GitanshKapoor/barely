@@ -1,0 +1,78 @@
+{{- if eq .Values.execution.mode "worker_pool" }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "barely.fullname" . }}-worker
+  labels:
+    {{- include "barely.worker.selectorLabels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.worker.replicaCount | default 2 }}
+  selector:
+    matchLabels:
+      {{- include "barely.worker.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "barely.worker.selectorLabels" . | nindent 8 }}
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: {{ .Values.security.runAsNonRoot | default true }}
+        runAsUser: {{ .Values.security.runAsUser | default 10001 }}
+        runAsGroup: {{ .Values.security.runAsGroup | default 10001 }}
+        fsGroup: {{ .Values.security.fsGroup | default 10001 }}
+        seccompProfile:
+          type: {{ .Values.security.seccompProfile.type | default "RuntimeDefault" }}
+      containers:
+        - name: worker
+          image: "{{ .Values.worker.image.repository }}:{{ .Values.worker.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.worker.image.pullPolicy | default "IfNotPresent" }}
+          command:
+            - /opt/.venv/bin/python3
+            - packages/worker/src/barely_worker/main.py
+          securityContext:
+            allowPrivilegeEscalation: {{ .Values.security.allowPrivilegeEscalation | default false }}
+            capabilities:
+              drop:
+                {{- toYaml .Values.security.capabilities.drop | nindent 16 }}
+          envFrom:
+            - configMapRef:
+                name: {{ include "barely.fullname" . }}-config
+          env:
+            - name: DATABASE_URL
+              {{- if .Values.database.inCluster.enabled }}
+              value: "postgresql://{{ .Values.database.inCluster.user }}:{{ .Values.database.inCluster.password }}@{{ include "barely.fullname" . }}-db:5432/{{ .Values.database.inCluster.database }}"
+              {{- else }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.database.external.secretName | default "barely-db-secret" }}
+                  key: {{ .Values.database.external.secretKey | default "url" }}
+              {{- end }}
+            - name: API_URL
+              value: "http://{{ include "barely.fullname" . }}-api:8000"
+            - name: HEADLESS
+              value: "true"
+            - name: BARELY_SECRETS_DIR
+              value: "/etc/secrets/barely"
+          volumeMounts:
+            - name: dshm
+              mountPath: /dev/shm
+            - name: secrets-volume
+              mountPath: /etc/secrets/barely
+              readOnly: true
+            - name: tmp-dir
+              mountPath: /tmp
+          resources:
+            {{- toYaml .Values.worker.resources | nindent 12 }}
+      volumes:
+        - name: dshm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 1Gi
+        - name: secrets-volume
+          secret:
+            secretName: {{ .Values.secrets.name | default "barely-secrets" }}
+            optional: true
+        - name: tmp-dir
+          emptyDir: {}
+{{- end }}

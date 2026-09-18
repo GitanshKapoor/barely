@@ -1,0 +1,268 @@
+{{- if .Values.networkPolicy.enabled }}
+# ------------------------------------------------------------------------------
+# 1. Baseline Zero-Trust Default Deny
+# Drops all untracked Ingress and Egress traffic across all pods in the namespace
+# ------------------------------------------------------------------------------
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "barely.fullname" . }}-default-deny-all
+  labels:
+    {{- include "barely.labels" . | nindent 4 }}
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+---
+# ------------------------------------------------------------------------------
+# 2. UI Pods Network Policy
+# - Ingress: ONLY from NGINX Ingress Controller on port 3000
+# - Egress: ONLY to barely-api on port 8000 and CoreDNS on port 53
+# - Strictly BLOCKED: Direct DB access, direct internet access
+# ------------------------------------------------------------------------------
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "barely.fullname" . }}-ui-netpol
+  labels:
+    {{- include "barely.ui.selectorLabels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "barely.ui.selectorLabels" . | nindent 6 }}
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Allow inbound traffic strictly from NGINX Ingress Controller
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.networkPolicy.ingressNamespace | default "ingress-nginx" }}
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: ingress-nginx
+      ports:
+        - port: 3000
+          protocol: TCP
+  egress:
+    # Allow outbound traffic to barely-api on port 8000
+    - to:
+        - podSelector:
+            matchLabels:
+              {{- include "barely.api.selectorLabels" . | nindent 14 }}
+      ports:
+        - port: 8000
+          protocol: TCP
+    # Allow DNS resolution via CoreDNS
+    - to:
+        - namespaceSelector: {}
+          podSelector:
+            matchLabels:
+              k8s-app: kube-system-dns
+      ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+---
+# ------------------------------------------------------------------------------
+# 3. API Pods Network Policy
+# - Ingress: From Ingress Controller and barely-ui on port 8000
+# - Egress: To DB (5432), K8s API server (443/6443), CoreDNS (53), External APIs (443)
+# ------------------------------------------------------------------------------
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "barely.fullname" . }}-api-netpol
+  labels:
+    {{- include "barely.api.selectorLabels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "barely.api.selectorLabels" . | nindent 6 }}
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        # Ingress controller
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.networkPolicy.ingressNamespace | default "ingress-nginx" }}
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: ingress-nginx
+        # UI pods
+        - podSelector:
+            matchLabels:
+              {{- include "barely.ui.selectorLabels" . | nindent 14 }}
+      ports:
+        - port: 8000
+          protocol: TCP
+  egress:
+    # Allow connection to PostgreSQL database
+    {{- if .Values.database.inCluster.enabled }}
+    - to:
+        - podSelector:
+            matchLabels:
+              {{- include "barely.db.selectorLabels" . | nindent 14 }}
+      ports:
+        - port: 5432
+          protocol: TCP
+    {{- else }}
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+      ports:
+        - port: 5432
+          protocol: TCP
+    {{- end }}
+    # Allow connection to CoreDNS
+    - to:
+        - namespaceSelector: {}
+          podSelector:
+            matchLabels:
+              k8s-app: kube-system-dns
+      ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+    # Allow connection to Kubernetes API server for ephemeral job spawning
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+      ports:
+        - port: 443
+          protocol: TCP
+        - port: 6443
+          protocol: TCP
+    # Allow outbound HTTPS to external SaaS (LLMs, Jira, Slack, Teams)
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 10.0.0.0/8
+              - 172.16.0.0/12
+              - 192.168.0.0/16
+      ports:
+        - port: 443
+          protocol: TCP
+---
+# ------------------------------------------------------------------------------
+# 4. Runner & Worker Pods Network Policy
+# - Ingress: 100% BLOCKED (0 inbound ports)
+# - Egress: To DB (5432), CoreDNS (53), LLM APIs (443), Tested Web Apps (80/443)
+# - Lateral pod-to-pod movement is strictly blocked
+# ------------------------------------------------------------------------------
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "barely.fullname" . }}-worker-netpol
+  labels:
+    app.kubernetes.io/name: {{ include "barely.name" . }}
+    app.kubernetes.io/component: runner
+spec:
+  podSelector:
+    matchExpressions:
+      - key: app.kubernetes.io/name
+        operator: In
+        values:
+          - {{ include "barely.name" . }}-worker
+          - barely
+  policyTypes:
+    - Ingress
+    - Egress
+  # Ingress is omitted / empty array => ZERO inbound traffic allowed
+  ingress: []
+  egress:
+    # Allow connection to PostgreSQL database
+    {{- if .Values.database.inCluster.enabled }}
+    - to:
+        - podSelector:
+            matchLabels:
+              {{- include "barely.db.selectorLabels" . | nindent 14 }}
+      ports:
+        - port: 5432
+          protocol: TCP
+    {{- else }}
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+      ports:
+        - port: 5432
+          protocol: TCP
+    {{- end }}
+    # Allow connection to API (for result callbacks)
+    - to:
+        - podSelector:
+            matchLabels:
+              {{- include "barely.api.selectorLabels" . | nindent 14 }}
+      ports:
+        - port: 8000
+          protocol: TCP
+    # Allow CoreDNS
+    - to:
+        - namespaceSelector: {}
+          podSelector:
+            matchLabels:
+              k8s-app: kube-system-dns
+      ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+    # Allow outbound HTTP/HTTPS for target web testing and LLM visual reasoning
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 10.0.0.0/8
+              - 172.16.0.0/12
+              - 192.168.0.0/16
+      ports:
+        - port: 80
+          protocol: TCP
+        - port: 443
+          protocol: TCP
+---
+# ------------------------------------------------------------------------------
+# 5. In-Cluster Database Pods Network Policy (if enabled)
+# - Ingress: Allowed ONLY from barely-api and barely-worker pods on port 5432
+# - Ingress from barely-ui is strictly BLOCKED
+# - Egress: Isolated (none)
+# ------------------------------------------------------------------------------
+{{- if .Values.database.inCluster.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "barely.fullname" . }}-db-netpol
+  labels:
+    {{- include "barely.db.selectorLabels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "barely.db.selectorLabels" . | nindent 6 }}
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              {{- include "barely.api.selectorLabels" . | nindent 14 }}
+        - podSelector:
+            matchExpressions:
+              - key: app.kubernetes.io/name
+                operator: In
+                values:
+                  - {{ include "barely.name" . }}-worker
+                  - barely
+      ports:
+        - port: 5432
+          protocol: TCP
+  egress: []
+{{- end }}
+{{- end }}

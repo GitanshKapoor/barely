@@ -1,0 +1,41 @@
+# ==============================================================================
+# Barely - Development Docker Compose Override
+# Usage: docker compose -f docker-compose.yml -f docker-compose.dev.yml up
+# Enables live source code volume mounting, hot-reloading, and debug logging.
+# ==============================================================================
+
+services:
+  barely-db:
+    # Expose database port to host during local development for inspection with GUI clients
+    ports:
+      - "5432:5432"
+
+  barely-api:
+    volumes:
+      - ./:/workspace
+    command: ["/opt/.venv/bin/uvicorn", "barely_api.main:app", "--host", "0.0.0.0", "--port", "8000", "--app-dir", "packages/api/src", "--reload"]
+    environment:
+      - ENVIRONMENT=development
+      - LOG_LEVEL=debug
+      - PYTHONPATH=/workspace/packages/core/src:/workspace/packages/api/src:/workspace/packages/worker/src:/workspace/plugins/reporter-pdf/src
+
+  barely-worker:
+    volumes:
+      - ./:/workspace
+    working_dir: /workspace
+    command: ["/opt/.venv/bin/python3", "packages/worker/src/barely_worker/main.py"]
+    environment:
+      - ENVIRONMENT=development
+      - LOG_LEVEL=debug
+      - PYTHONPATH=/workspace/packages/core/src:/workspace/packages/api/src:/workspace/packages/worker/src:/workspace/plugins/reporter-pdf/src
+
+  barely-ui:
+    # Use standard Node container with hot-reloading in dev mode
+    image: node:20-alpine
+    working_dir: /workspace/packages/ui
+    command: sh -c "npm install && npm run dev -- -H 0.0.0.0"
+    volumes:
+      - ./:/workspace
+      - /workspace/packages/ui/node_modules
+    environment:
+      - NODE_ENV=development
