@@ -1,6 +1,10 @@
 import time
 import logging
 import os
+import litellm
+# Automatically drop unsupported parameters (e.g. temperature=0.0 on reasoning models) across worker runs
+litellm.drop_params = True
+
 from barely_core.browser.engine import BrowserEngine
 from barely_core.agent.loop import AgentLoop
 from barely_core.db import SessionLocal, RunRecord, init_db

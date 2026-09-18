@@ -459,6 +459,7 @@ def remove_setting(key: str):
 @app.post("/api/settings/test-key")
 def test_key(req: TestKeyRequest):
     import litellm
+    litellm.drop_params = True
     from barely_core.settings import get_setting
     provider = req.provider.lower()
     
@@ -487,6 +488,7 @@ def test_key(req: TestKeyRequest):
             model=model_name,
             messages=[{"role": "user", "content": "ping"}],
             max_tokens=1,
+            drop_params=True,
             api_key=active_key
         )
         return {
@@ -511,6 +513,7 @@ class TestModelRequest(BaseModel):
 @app.post("/api/settings/test-model")
 def test_model(req: TestModelRequest):
     import litellm
+    litellm.drop_params = True
     from barely_core.settings import resolve_model_api_key
     
     target_model = req.model.strip() if req.model else ""
@@ -523,7 +526,8 @@ def test_model(req: TestModelRequest):
         kwargs = {
             "model": target_model,
             "messages": [{"role": "user", "content": "ping"}],
-            "max_tokens": 1
+            "max_tokens": 1,
+            "drop_params": True
         }
         if active_key:
             kwargs["api_key"] = active_key

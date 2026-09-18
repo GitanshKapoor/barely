@@ -1,7 +1,8 @@
+from __future__ import annotations
 import yaml
 import re
 from pathlib import Path
-from typing import Dict, Any, Tuple
+from typing import Dict, Any, Tuple, Union
 from barely_core.models.domain import Goal, Step
 
 class GoalParser:
@@ -10,7 +11,7 @@ class GoalParser:
     FRONTMATTER_REGEX = re.compile(r'^-{3,}\s*$(.*?)^-{3,}\s*$', re.MULTILINE | re.DOTALL)
     
     @classmethod
-    def parse(cls, filepath: Path | str) -> Goal:
+    def parse(cls, filepath: Union[Path, str]) -> Goal:
         path = Path(filepath)
         if not path.exists():
             raise FileNotFoundError(f"Goal file not found: {path}")

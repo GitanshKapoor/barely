@@ -7,8 +7,11 @@ from barely_core.browser.engine import BrowserEngine
 from barely_core.parser.goal_parser import Goal
 from barely_core.agent.cache import ActionCache
 import litellm
+# Automatically drop unsupported parameters (e.g. temperature=0.0 on reasoning/thinking models like claude-sonnet-5, o1, o3-mini)
+litellm.drop_params = True
 import base64
 from barely_core.db import SessionLocal, RunRecord, RunStep as DBRunStep
+from barely_core.settings import resolve_model_api_key
 
 logger = logging.getLogger("barely_agent")
 
@@ -287,7 +290,6 @@ Review PAST ACTIONS ALREADY PERFORMED against USER TEST INSTRUCTIONS.
 
     def _call_llm(self, prompt: str) -> Dict[str, Any]:
         import re
-        from barely_core.settings import resolve_model_api_key
 
         messages = [
             {"role": "system", "content": SYSTEM_PROMPT},
@@ -300,7 +302,42 @@ Review PAST ACTIONS ALREADY PERFORMED against USER TEST INSTRUCTIONS.
         if api_key:
             call_kwargs["api_key"] = api_key
 
-        response = litellm.completion(model=self.model, messages=messages, temperature=0.0, **call_kwargs)
+        # Call LiteLLM with drop_params=True and resilient fallback for models rejecting custom temperature (e.g. claude-sonnet-5, o1, o3-mini)
+        try:
+            response = litellm.completion(
+                model=self.model,
+                messages=messages,
+                temperature=0.0,
+                drop_params=True,
+                **call_kwargs
+            )
+        except Exception as e:
+            err_str = str(e).lower()
+            if "unsupportedparamserror" in err_str or "temperature" in err_str or "unsupported params" in err_str:
+                logger.warning(
+                    f"Model '{self.model}' rejected temperature=0.0 ({e}). Retrying without temperature..."
+                )
+                try:
+                    response = litellm.completion(
+                        model=self.model,
+                        messages=messages,
+                        drop_params=True,
+                        **call_kwargs
+                    )
+                except Exception as e2:
+                    if "temperature=1" in str(e2).lower() or "only temperature=1" in err_str:
+                        logger.warning(f"Model '{self.model}' mandates temperature=1.0. Retrying with temperature=1.0...")
+                        response = litellm.completion(
+                            model=self.model,
+                            messages=messages,
+                            temperature=1.0,
+                            drop_params=True,
+                            **call_kwargs
+                        )
+                    else:
+                        raise e2
+            else:
+                raise
         raw_output = response.choices[0].message.content
         
         # More robust JSON extraction using regex to find the first { and last }
