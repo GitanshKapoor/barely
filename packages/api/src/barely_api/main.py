@@ -871,14 +871,14 @@ def delete_integration(provider: str):
         delete_setting("SLACK_WEBHOOK_URL")
         delete_setting("SLACK_NOTIFY_ON")
         curr_mech = (get_setting("DEFAULT_NOTIFICATION_MECHANISM") or "both").strip().lower()
-        if curr_mech == "slack":
+        if curr_mech in ("slack", "both"):
             teams_url = get_setting("TEAMS_WEBHOOK_URL")
             set_setting("DEFAULT_NOTIFICATION_MECHANISM", "teams" if teams_url else "none", is_secret=False)
     elif p in ("teams", "ms_teams"):
         delete_setting("TEAMS_WEBHOOK_URL")
         delete_setting("TEAMS_NOTIFY_ON")
         curr_mech = (get_setting("DEFAULT_NOTIFICATION_MECHANISM") or "both").strip().lower()
-        if curr_mech == "teams":
+        if curr_mech in ("teams", "both"):
             slack_url = get_setting("SLACK_WEBHOOK_URL")
             set_setting("DEFAULT_NOTIFICATION_MECHANISM", "slack" if slack_url else "none", is_secret=False)
     elif p == "jira":

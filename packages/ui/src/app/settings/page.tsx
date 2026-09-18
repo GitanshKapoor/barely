@@ -2564,12 +2564,12 @@ secrets:
                 <div className="p-6 space-y-6">
                   {/* Default Notification Mechanism Card */}
                   <div className="rounded-xl border border-slate-800/80 bg-[#070b14]/70 p-5 space-y-4 shadow-sm hover:border-slate-700/80 transition-colors">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                      <div className="flex items-center gap-2.5">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div className="flex items-center gap-2.5 min-w-0 flex-1">
                         <div className="w-8 h-8 rounded-lg bg-amber-500/15 text-amber-400 flex items-center justify-center border border-amber-500/30 shrink-0">
                           <Sliders className="w-4 h-4" />
                         </div>
-                        <div>
+                        <div className="min-w-0 flex-1">
                           <h3 className="text-sm font-bold text-white flex items-center gap-2">
                             Default Notification Channel
                             <span className="text-[10px] font-mono text-slate-500 font-normal">Platform Default</span>
@@ -2580,9 +2580,35 @@ secrets:
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-2">
-                        <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-500/10 text-amber-300 border border-amber-500/20 font-mono">
-                          Active: {defaultNotificationMechanism === 'both' ? 'Both (Slack & Teams)' : defaultNotificationMechanism === 'slack' ? 'Slack Only' : defaultNotificationMechanism === 'teams' ? 'Teams Only' : 'Muted'}
+                      <div className="flex items-center gap-2 shrink-0 ml-auto whitespace-nowrap">
+                        <span className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold whitespace-nowrap border shadow-sm transition-all ${
+                          defaultNotificationMechanism === 'teams'
+                            ? 'bg-[#505ac9]/15 text-[#8b95f6] border-[#505ac9]/40'
+                            : defaultNotificationMechanism === 'slack'
+                            ? 'bg-[#E01E5A]/15 text-[#f5567b] border-[#E01E5A]/40'
+                            : defaultNotificationMechanism === 'both'
+                            ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
+                            : 'bg-slate-800/80 text-slate-400 border-slate-700/80'
+                        }`}>
+                          <span className={`w-2 h-2 rounded-full shrink-0 ${
+                            defaultNotificationMechanism === 'teams'
+                              ? 'bg-[#7b83eb] shadow-[0_0_8px_rgba(123,131,235,0.7)]'
+                              : defaultNotificationMechanism === 'slack'
+                              ? 'bg-[#E01E5A] shadow-[0_0_8px_rgba(224,30,90,0.7)]'
+                              : defaultNotificationMechanism === 'both'
+                              ? 'bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.7)] animate-pulse'
+                              : 'bg-slate-500'
+                          }`} />
+                          <span className="text-[11px] font-medium text-slate-400">Active:</span>
+                          <span className="font-semibold text-white">
+                            {defaultNotificationMechanism === 'both' 
+                              ? 'Both (Slack & Teams)' 
+                              : defaultNotificationMechanism === 'slack' 
+                              ? 'Slack Only' 
+                              : defaultNotificationMechanism === 'teams' 
+                              ? 'Teams Only' 
+                              : 'Muted'}
+                          </span>
                         </span>
                       </div>
                     </div>
@@ -2593,22 +2619,30 @@ secrets:
                           id: 'both',
                           label: 'Both Slack & Teams',
                           desc: 'Broadcast incidents to both Slack & Teams channels',
-                          badge: 'Recommended'
+                          badge: 'Recommended',
+                          activeClass: 'bg-emerald-500/15 border-emerald-500/60 shadow-md shadow-emerald-950/20 text-white',
+                          activeText: 'text-emerald-400'
                         },
                         {
                           id: 'slack',
                           label: 'Slack Only',
-                          desc: 'Dispatch interactive Block Kit cards to Slack only'
+                          desc: 'Dispatch interactive Block Kit cards to Slack only',
+                          activeClass: 'bg-[#E01E5A]/15 border-[#E01E5A]/60 shadow-md shadow-rose-950/20 text-white',
+                          activeText: 'text-[#f5567b]'
                         },
                         {
                           id: 'teams',
                           label: 'Teams Only',
-                          desc: 'Post rich Adaptive Cards to Microsoft Teams only'
+                          desc: 'Post rich Adaptive Cards to Microsoft Teams only',
+                          activeClass: 'bg-[#505ac9]/15 border-[#505ac9]/60 shadow-md shadow-indigo-950/20 text-white',
+                          activeText: 'text-[#8b95f6]'
                         },
                         {
                           id: 'none',
                           label: 'Muted / None',
-                          desc: 'Suppress automated webhook channel alerts by default'
+                          desc: 'Suppress automated webhook channel alerts by default',
+                          activeClass: 'bg-slate-800/60 border-slate-700 shadow-md text-white',
+                          activeText: 'text-slate-300'
                         }
                       ].map((opt) => {
                         const isSelected = defaultNotificationMechanism === opt.id;
@@ -2620,18 +2654,18 @@ secrets:
                             disabled={savingDefaultMechanism}
                             className={`p-3 rounded-lg border text-left transition-all cursor-pointer flex flex-col justify-between ${
                               isSelected
-                                ? 'bg-amber-500/15 border-amber-500/60 shadow-md shadow-amber-950/20 text-white'
+                                ? opt.activeClass
                                 : 'bg-[#0a0f1d] border-slate-800 hover:border-slate-700 text-slate-400 hover:text-slate-200'
                             }`}
                           >
                             <div className="space-y-1">
                               <div className="flex items-center justify-between">
-                                <span className={`text-xs font-bold flex items-center gap-1.5 ${isSelected ? 'text-amber-300' : 'text-slate-200'}`}>
+                                <span className={`text-xs font-bold flex items-center gap-1.5 ${isSelected ? 'text-white' : 'text-slate-200'}`}>
                                   {opt.id === 'none' && <BellOff className="w-3.5 h-3.5 text-slate-500 shrink-0" />}
                                   {opt.label}
                                 </span>
                                 {opt.badge && (
-                                  <span className="px-1.5 py-0.2 rounded text-[9px] font-semibold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                                  <span className="px-1.5 py-0.2 rounded text-[9px] font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
                                     {opt.badge}
                                   </span>
                                 )}
@@ -2640,7 +2674,7 @@ secrets:
                             </div>
                             <div className="pt-2 flex items-center justify-end">
                               {isSelected ? (
-                                <span className="text-[10px] font-mono font-bold text-amber-400 flex items-center gap-1">
+                                <span className={`text-[10px] font-bold flex items-center gap-1 ${opt.activeText}`}>
                                   <Check className="w-3 h-3" /> Default Active
                                 </span>
                               ) : (
@@ -2675,10 +2709,20 @@ secrets:
 
                       <div className="flex items-center gap-2">
                         {slackConfigured ? (
-                          <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 flex items-center gap-1.5">
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                            Connected
-                          </span>
+                          <>
+                            <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 flex items-center gap-1.5">
+                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                              Connected
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => setConfirmDeleteSlack(true)}
+                              className="p-1 rounded text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 transition-colors cursor-pointer"
+                              title="Delete Slack integration"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </>
                         ) : (
                           <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-slate-800 text-slate-400 border border-slate-700">
                             Not Configured
@@ -2759,7 +2803,7 @@ secrets:
                                 className="px-2 py-0.5 rounded text-[11px] font-semibold bg-rose-600 hover:bg-rose-500 text-white flex items-center gap-1 transition-colors cursor-pointer"
                               >
                                 {deletingSlack ? <Loader2 className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3 h-3" />}
-                                Confirm
+                                Confirm Delete
                               </button>
                               <button
                                 type="button"
@@ -2776,10 +2820,10 @@ secrets:
                               onClick={() => setConfirmDeleteSlack(true)}
                               disabled={deletingSlack || savingSlack || testingSlack}
                               className="px-3 py-1.5 rounded-lg text-xs font-semibold text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 border border-rose-500/20 flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                              title="Disconnect and delete Slack webhook configuration"
+                              title="Delete Slack webhook configuration"
                             >
                               <Trash2 className="w-3.5 h-3.5" />
-                              <span>Disconnect Integration</span>
+                              <span>Delete Integration</span>
                             </button>
                           )
                         )}
@@ -2829,10 +2873,20 @@ secrets:
 
                       <div className="flex items-center gap-2">
                         {teamsConfigured ? (
-                          <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 flex items-center gap-1.5">
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                            Connected
-                          </span>
+                          <>
+                            <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 flex items-center gap-1.5">
+                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                              Connected
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => setConfirmDeleteTeams(true)}
+                              className="p-1 rounded text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 transition-colors cursor-pointer"
+                              title="Delete Teams integration"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </>
                         ) : (
                           <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-slate-800 text-slate-400 border border-slate-700">
                             Not Configured
@@ -2913,7 +2967,7 @@ secrets:
                                 className="px-2 py-0.5 rounded text-[11px] font-semibold bg-rose-600 hover:bg-rose-500 text-white flex items-center gap-1 transition-colors cursor-pointer"
                               >
                                 {deletingTeams ? <Loader2 className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3 h-3" />}
-                                Confirm
+                                Confirm Delete
                               </button>
                               <button
                                 type="button"
@@ -2930,10 +2984,10 @@ secrets:
                               onClick={() => setConfirmDeleteTeams(true)}
                               disabled={deletingTeams || savingTeams || testingTeams}
                               className="px-3 py-1.5 rounded-lg text-xs font-semibold text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 border border-rose-500/20 flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-                              title="Disconnect and delete Microsoft Teams webhook configuration"
+                              title="Delete Microsoft Teams webhook configuration"
                             >
                               <Trash2 className="w-3.5 h-3.5" />
-                              <span>Disconnect Integration</span>
+                              <span>Delete Integration</span>
                             </button>
                           )
                         )}
