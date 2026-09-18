@@ -21,7 +21,12 @@ import {
   Loader2,
   AlertCircle,
   Bell,
-  Info
+  Info,
+  Globe,
+  Monitor,
+  Smartphone,
+  Copy,
+  Check
 } from 'lucide-react';
 import NewRunForm from '../../../components/NewRunForm';
 import { formatModelName } from '../../../utils/models';
@@ -101,7 +106,16 @@ export default function ClientRunDetails({ id }: { id: string }) {
   const [cancelling, setCancelling] = useState(false);
   const [creatingJira, setCreatingJira] = useState(false);
   const [jiraMessage, setJiraMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [copiedRunId, setCopiedRunId] = useState(false);
   const terminalBottomRef = useRef<HTMLDivElement>(null);
+
+  const handleCopyRunId = () => {
+    if (run?.id) {
+      navigator.clipboard.writeText(run.id);
+      setCopiedRunId(true);
+      setTimeout(() => setCopiedRunId(false), 2000);
+    }
+  };
 
   const fetchRun = async () => {
     try {
@@ -211,125 +225,204 @@ export default function ClientRunDetails({ id }: { id: string }) {
   return (
     <div className="max-w-7xl mx-auto space-y-6 flex flex-col min-h-[calc(100vh-8rem)]">
       {/* Top Banner & Actions Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-slate-800/80">
-        <div className="flex items-start gap-4">
-          <Link href="/executions" className="p-2 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-white transition-colors border border-slate-800 bg-slate-900/50">
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 pb-4 border-b border-slate-800/80">
+        {/* Left Side: Back Navigation, Title, Status & Structured Metadata */}
+        <div className="flex items-start gap-3.5 min-w-0">
+          <Link
+            href="/executions"
+            className="p-2 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-white transition-colors border border-slate-800 bg-slate-900/50 shrink-0 mt-0.5"
+            title="Back to Executions"
+          >
             <ArrowLeft className="w-5 h-5" />
           </Link>
-          <div className="space-y-1">
-            <div className="flex items-center gap-2.5 flex-wrap">
-              <h2 className="text-xl font-bold text-slate-100 tracking-tight">{run.name || run.id}</h2>
-              <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full border flex items-center gap-1.5 ${
-                run.status === 'completed' && run.success ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/25' :
-                run.status === 'completed' && !run.success ? 'bg-rose-500/10 text-rose-400 border-rose-500/25' :
-                run.status === 'running' ? 'bg-[#0278ff]/10 text-[#0278ff] border-[#0278ff]/30 animate-pulse' :
-                run.status === 'cancelled' ? 'bg-orange-500/10 text-orange-400 border-orange-500/25' :
-                run.status === 'queued' ? 'bg-purple-500/10 text-purple-400 border-purple-500/25 animate-pulse' :
-                'bg-amber-500/10 text-amber-400 border-amber-500/25'
-              }`}>
-                {run.status === 'completed' && run.success && <CheckCircle2 className="w-3.5 h-3.5" />}
-                {run.status === 'completed' && !run.success && <XCircle className="w-3.5 h-3.5" />}
+
+          <div className="space-y-1.5 min-w-0">
+            {/* Row 1: Test Name & Status Badge */}
+            <div className="flex items-center gap-3 flex-wrap">
+              <h2 className="text-xl font-bold text-slate-100 tracking-tight truncate max-w-xl">
+                {run.name || run.id}
+              </h2>
+              <span
+                className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full border flex items-center gap-1.5 shrink-0 shadow-sm ${
+                  run.status === 'completed' && run.success
+                    ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
+                    : run.status === 'completed' && !run.success
+                    ? 'bg-rose-500/15 text-rose-400 border-rose-500/30'
+                    : run.status === 'running'
+                    ? 'bg-[#0278ff]/15 text-[#0278ff] border-[#0278ff]/30 animate-pulse'
+                    : run.status === 'cancelled'
+                    ? 'bg-orange-500/15 text-orange-400 border-orange-500/30'
+                    : run.status === 'queued'
+                    ? 'bg-purple-500/15 text-purple-400 border-purple-500/30 animate-pulse'
+                    : 'bg-amber-500/15 text-amber-400 border-amber-500/30'
+                }`}
+              >
+                {run.status === 'completed' && run.success && <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />}
+                {run.status === 'completed' && !run.success && <XCircle className="w-3.5 h-3.5 text-rose-400" />}
                 {run.status === 'cancelled' && <Ban className="w-3.5 h-3.5 text-orange-400" />}
                 {run.status === 'running' && <span className="w-2 h-2 rounded-full bg-[#0278ff] animate-ping" />}
                 {run.status === 'queued' && <Clock className="w-3.5 h-3.5 text-purple-400" />}
-                {run.status === 'pending' && <Clock className="w-3.5 h-3.5" />}
-                <span className="uppercase">{run.status}</span>
+                {run.status === 'pending' && <Clock className="w-3.5 h-3.5 text-amber-400" />}
+                <span className="uppercase tracking-wider">
+                  {run.status === 'completed'
+                    ? run.success
+                      ? 'PASSED'
+                      : 'FAILED'
+                    : run.status}
+                </span>
               </span>
-              <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700 uppercase">
+            </div>
+
+            {/* Row 2: Structured Context & Metadata Strip */}
+            <div className="flex items-center gap-2.5 text-xs text-slate-400 flex-wrap">
+              {/* Monospace Run ID with Quick Copy */}
+              <button
+                type="button"
+                onClick={handleCopyRunId}
+                className="font-mono text-[11px] text-slate-400 hover:text-slate-200 bg-slate-900/80 hover:bg-slate-800/80 px-2 py-0.5 rounded border border-slate-800 transition-colors flex items-center gap-1 cursor-pointer"
+                title="Click to copy Run ID"
+              >
+                <span>{run.id}</span>
+                {copiedRunId ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3 text-slate-500" />}
+              </button>
+
+              {/* Target URL */}
+              {run.start_url && (
+                <a
+                  href={run.start_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-1 text-slate-400 hover:text-[#0278ff] transition-colors font-mono text-[11px] max-w-[240px] sm:max-w-[320px] truncate"
+                  title={run.start_url}
+                >
+                  <Globe className="w-3 h-3 text-slate-500 shrink-0" />
+                  <span className="truncate">{run.start_url.replace(/^https?:\/\//, '')}</span>
+                  <ExternalLink className="w-2.5 h-2.5 shrink-0 text-slate-500" />
+                </a>
+              )}
+
+              <span className="text-slate-700 hidden sm:inline">•</span>
+
+              {/* Device / Platform */}
+              <span className="text-[10px] font-mono font-semibold px-2 py-0.5 rounded bg-slate-800/90 text-slate-300 border border-slate-700 uppercase flex items-center gap-1">
+                {run.device === 'mobile' ? <Smartphone className="w-2.5 h-2.5 text-slate-400" /> : <Monitor className="w-2.5 h-2.5 text-slate-400" />}
                 {run.device || 'desktop'}
               </span>
+
+              {/* AI Model */}
               {run.model && (
-                <span className="text-[10px] font-semibold px-2.5 py-0.5 rounded-full bg-purple-500/15 text-purple-300 border border-purple-500/30 flex items-center gap-1.5 shadow-sm" title={run.model}>
-                  <Cpu className="w-3 h-3 text-purple-400" />
+                <span
+                  className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-purple-500/10 text-purple-300 border border-purple-500/25 flex items-center gap-1 shadow-sm"
+                  title={run.model}
+                >
+                  <Cpu className="w-2.5 h-2.5 text-purple-400" />
                   {formatModelName(run.model)}
                 </span>
               )}
-              {run.tags && run.tags.length > 0 && run.tags.map((tag: string) => (
-                <span key={tag} className="text-[11px] font-medium font-mono px-2 py-0.5 rounded-full bg-[#0278ff]/10 text-[#0278ff] border border-[#0278ff]/30 flex items-center gap-1">
-                  <Tag className="w-3 h-3 text-[#0278ff]" /> #{tag}
-                </span>
-              ))}
-              {run.jira_issue_key && (
-                <a
-                  href={run.jira_issue_url || '#'}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-[11px] font-bold font-mono px-2.5 py-0.5 rounded-full bg-[#0052cc]/15 text-[#2684ff] hover:text-white hover:bg-[#0052cc]/30 border border-[#0052cc]/40 flex items-center gap-1.5 transition-all shadow-sm"
-                  title={`Open ${run.jira_issue_key} in Atlassian Jira`}
-                >
-                  <svg className="w-3 h-3 fill-current" viewBox="0 0 24 24">
-                    <path d="M11.53 2c0 2.4 1.97 4.35 4.35 4.35h1.78v1.7c0 2.4 1.94 4.34 4.34 4.35V2.84A.84.84 0 0 0 21.16 2H11.53zM5.77 7.76c0 2.4 1.96 4.34 4.34 4.34h1.78v1.7c0 2.4 1.94 4.35 4.35 4.35V8.6a.84.84 0 0 0-.84-.84H5.77zm-5.77 5.76c0 2.4 1.95 4.34 4.34 4.34h1.79v1.7c0 2.4 1.94 4.35 4.34 4.35V14.36a.84.84 0 0 0-.84-.84H0z"/>
-                  </svg>
-                  <span>Jira: {run.jira_issue_key}</span>
-                  <ExternalLink className="w-2.5 h-2.5" />
-                </a>
-              )}
+
+              {/* Tags */}
+              {run.tags &&
+                run.tags.length > 0 &&
+                run.tags.map((tag: string) => (
+                  <span
+                    key={tag}
+                    className="text-[10px] font-medium font-mono px-2 py-0.5 rounded-full bg-[#0278ff]/10 text-[#0278ff] border border-[#0278ff]/25 flex items-center gap-1"
+                  >
+                    <Tag className="w-2.5 h-2.5 text-[#0278ff]" /> #{tag}
+                  </span>
+                ))}
+
+              {/* Ephemeral Pod */}
               {run.isolated_env && (
-                <span 
-                  className="text-[10px] font-mono font-bold px-2.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 flex items-center gap-1.5 shadow-sm"
-                  title={run.runner_pod ? `Kubernetes Ephemeral Pod: ${run.runner_pod} (Non-Root UID 10001)` : 'Isolated Ephemeral Pod (Non-Root UID 10001)'}
+                <span
+                  className="text-[10px] font-mono font-semibold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-300 border border-emerald-500/25 flex items-center gap-1 shadow-sm"
+                  title={
+                    run.runner_pod
+                      ? `Kubernetes Ephemeral Pod: ${run.runner_pod} (Non-Root UID 10001)`
+                      : 'Isolated Ephemeral Pod (Non-Root UID 10001)'
+                  }
                 >
                   <span>🛡️</span>
                   <span>Pod: {run.runner_pod || 'isolated'}</span>
                 </span>
               )}
-              {run.create_jira_ticket && !run.jira_issue_key && (
-                <span className="text-[10px] font-semibold px-2.5 py-0.5 rounded-full bg-blue-500/10 text-[#2684ff] border border-blue-500/25 flex items-center gap-1 shadow-sm" title="Auto-creates Jira defect if test fails">
-                  <svg className="w-2.5 h-2.5 fill-current" viewBox="0 0 24 24">
-                    <path d="M11.53 2c0 2.4 1.97 4.35 4.35 4.35h1.78v1.7c0 2.4 1.94 4.34 4.34 4.35V2.84A.84.84 0 0 0 21.16 2H11.53zM5.77 7.76c0 2.4 1.96 4.34 4.34 4.34h1.78v1.7c0 2.4 1.94 4.35 4.35 4.35V8.6a.84.84 0 0 0-.84-.84H5.77zm-5.77 5.76c0 2.4 1.95 4.34 4.34 4.34h1.79v1.7c0 2.4 1.94 4.35 4.34 4.35V14.36a.84.84 0 0 0-.84-.84H0z"/>
-                  </svg>
-                  <span>Jira Auto-Filing</span>
-                </span>
-              )}
-              {run.notification_channel && run.notification_channel !== 'default' && (
-                <span className="text-[10px] font-mono px-2.5 py-0.5 rounded-full bg-amber-500/10 text-amber-300 border border-amber-500/20 flex items-center gap-1">
-                  <Bell className="w-3 h-3 text-amber-400" />
-                  <span>{run.notification_channel === 'none' ? 'Muted' : run.notification_channel === 'slack' ? 'Slack' : run.notification_channel === 'teams' ? 'Teams' : 'Slack & Teams'}</span>
-                </span>
-              )}
-            </div>
-            <div className="flex items-center gap-3 text-xs text-slate-400 flex-wrap">
-              <span className="font-mono text-slate-500">{run.id}</span>
-              {run.start_url && (
-                <a href={run.start_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-[#0278ff] hover:underline font-mono">
-                  {run.start_url} <ExternalLink className="w-3 h-3" />
-                </a>
-              )}
+
+              {/* Notification Channel */}
+              {run.notification_channel &&
+                run.notification_channel !== 'default' &&
+                run.notification_channel !== 'none' && (
+                  <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-300 border border-amber-500/20 flex items-center gap-1">
+                    <Bell className="w-2.5 h-2.5 text-amber-400" />
+                    <span>
+                      {run.notification_channel === 'slack'
+                        ? 'Slack'
+                        : run.notification_channel === 'teams'
+                        ? 'Teams'
+                        : 'Slack & Teams'}
+                    </span>
+                  </span>
+                )}
             </div>
           </div>
         </div>
 
-        {/* Action Controls */}
-        <div className="flex items-center gap-2.5 flex-wrap">
+        {/* Right Side: Action Controls Toolbar */}
+        <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap shrink-0 self-start lg:self-center">
           {/* Jira Integration Action: View Ticket or 1-Click Create */}
           {run.jira_issue_key ? (
             <a
               href={run.jira_issue_url || '#'}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center gap-1.5 px-3.5 py-2 bg-[#0052cc]/15 hover:bg-[#0052cc]/25 text-[#2684ff] hover:text-white border border-[#0052cc]/30 text-xs font-semibold rounded-lg transition-all shadow-sm cursor-pointer"
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-[#0052cc]/15 hover:bg-[#0052cc]/25 text-[#2684ff] hover:text-white border border-[#0052cc]/30 text-xs font-semibold rounded-lg transition-all shadow-sm cursor-pointer whitespace-nowrap"
+              title={`Open ${run.jira_issue_key} in Atlassian Jira`}
             >
-              <ExternalLink className="w-3.5 h-3.5" />
-              <span>View Jira Ticket ({run.jira_issue_key})</span>
+              <svg className="w-3.5 h-3.5 fill-current shrink-0" viewBox="0 0 24 24">
+                <path d="M11.53 2c0 2.4 1.97 4.35 4.35 4.35h1.78v1.7c0 2.4 1.94 4.34 4.34 4.35V2.84A.84.84 0 0 0 21.16 2H11.53zM5.77 7.76c0 2.4 1.96 4.34 4.34 4.34h1.78v1.7c0 2.4 1.94 4.35 4.35 4.35V8.6a.84.84 0 0 0-.84-.84H5.77zm-5.77 5.76c0 2.4 1.95 4.34 4.34 4.34h1.79v1.7c0 2.4 1.94 4.35 4.34 4.35V14.36a.84.84 0 0 0-.84-.84H0z" />
+              </svg>
+              <span>Jira: {run.jira_issue_key}</span>
+              <ExternalLink className="w-3 h-3 shrink-0 opacity-70" />
             </a>
           ) : run.status === 'completed' && !run.success ? (
             <button
               onClick={handleCreateJiraTicket}
               disabled={creatingJira}
-              className="flex items-center gap-1.5 px-3.5 py-2 bg-[#0052cc] hover:bg-[#0047b3] text-white text-xs font-semibold rounded-lg transition-all shadow-md shadow-[#0052cc]/20 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-[#0052cc] hover:bg-[#0047b3] text-white text-xs font-semibold rounded-lg transition-all shadow-md shadow-[#0052cc]/20 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer whitespace-nowrap"
               title="File automated bug ticket in Jira Cloud"
             >
               {creatingJira ? (
                 <Loader2 className="w-3.5 h-3.5 animate-spin" />
               ) : (
-                <svg className="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24">
-                  <path d="M11.53 2c0 2.4 1.97 4.35 4.35 4.35h1.78v1.7c0 2.4 1.94 4.34 4.34 4.35V2.84A.84.84 0 0 0 21.16 2H11.53zM5.77 7.76c0 2.4 1.96 4.34 4.34 4.34h1.78v1.7c0 2.4 1.94 4.35 4.35 4.35V8.6a.84.84 0 0 0-.84-.84H5.77zm-5.77 5.76c0 2.4 1.95 4.34 4.34 4.34h1.79v1.7c0 2.4 1.94 4.35 4.34 4.35V14.36a.84.84 0 0 0-.84-.84H0z"/>
+                <svg className="w-3.5 h-3.5 fill-current shrink-0" viewBox="0 0 24 24">
+                  <path d="M11.53 2c0 2.4 1.97 4.35 4.35 4.35h1.78v1.7c0 2.4 1.94 4.34 4.34 4.35V2.84A.84.84 0 0 0 21.16 2H11.53zM5.77 7.76c0 2.4 1.96 4.34 4.34 4.34h1.78v1.7c0 2.4 1.94 4.35 4.35 4.35V8.6a.84.84 0 0 0-.84-.84H5.77zm-5.77 5.76c0 2.4 1.95 4.34 4.34 4.34h1.79v1.7c0 2.4 1.94 4.35 4.34 4.35V14.36a.84.84 0 0 0-.84-.84H0z" />
                 </svg>
               )}
-              <span>{creatingJira ? 'Creating Jira Issue...' : 'File Jira Bug'}</span>
+              <span>{creatingJira ? 'Filing Jira...' : 'File Jira Bug'}</span>
             </button>
           ) : null}
 
+          {/* Export PDF */}
+          <button
+            onClick={() => window.open(`http://localhost:8000/api/runs/${run.id}/report?print=true`, '_blank')}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 text-xs font-semibold rounded-lg transition-all shadow-sm cursor-pointer whitespace-nowrap"
+            title="Print or export test run summary report as PDF"
+          >
+            <Printer className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+            <span>Export PDF</span>
+          </button>
+
+          {/* Download Artifacts Package */}
+          <a 
+            href={`http://localhost:8000/api/runs/${run.id}/download`}
+            download
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 text-xs font-semibold rounded-lg transition-all shadow-sm cursor-pointer whitespace-nowrap"
+            title="Download ZIP package with step screenshots and trace"
+          >
+            <Download className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+            <span>Download Package</span>
+          </a>
+
+          {/* Re-run & Reconfigure (Primary Action) */}
           <NewRunForm
             initialData={{
               name: run.name || run.id,
@@ -349,10 +442,11 @@ export default function ClientRunDetails({ id }: { id: string }) {
             triggerButton={(openModal) => (
               <button
                 onClick={openModal}
-                className="flex items-center gap-1.5 px-3.5 py-2 bg-[#0278ff]/15 hover:bg-[#0278ff]/25 text-[#0278ff] hover:text-white border border-[#0278ff]/30 text-xs font-semibold rounded-lg transition-all shadow-sm cursor-pointer"
+                className="flex items-center gap-1.5 px-3.5 py-1.5 bg-[#0278ff] hover:bg-[#0062d6] text-white text-xs font-semibold rounded-lg shadow-md shadow-blue-500/20 transition-all cursor-pointer whitespace-nowrap"
+                title="Configure and trigger a new execution with these parameters"
               >
-                <RotateCcw className="w-3.5 h-3.5" />
-                Re-run & Reconfigure
+                <RotateCcw className="w-3.5 h-3.5 shrink-0" />
+                <span>Re-run &amp; Reconfigure</span>
               </button>
             )}
           />
@@ -361,29 +455,12 @@ export default function ClientRunDetails({ id }: { id: string }) {
             <button
               onClick={handleCancel}
               disabled={cancelling}
-              className="flex items-center gap-1.5 px-3.5 py-2 bg-rose-600/10 hover:bg-rose-600/20 text-rose-400 border border-rose-500/30 text-xs font-semibold rounded-lg transition-all shadow-sm"
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-600/10 hover:bg-rose-600/20 text-rose-400 border border-rose-500/30 text-xs font-semibold rounded-lg transition-all shadow-sm whitespace-nowrap"
             >
-              <Ban className="w-3.5 h-3.5" />
-              {cancelling ? "Cancelling..." : "Cancel Pipeline"}
+              <Ban className="w-3.5 h-3.5 shrink-0" />
+              <span>{cancelling ? 'Cancelling...' : 'Cancel'}</span>
             </button>
           )}
-
-          <button
-            onClick={() => window.open(`http://localhost:8000/api/runs/${run.id}/report?print=true`, '_blank')}
-            className="flex items-center gap-1.5 px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 text-xs font-semibold rounded-lg transition-all shadow-sm cursor-pointer"
-          >
-            <Printer className="w-3.5 h-3.5 text-slate-400" />
-            Export PDF
-          </button>
-
-          <a 
-            href={`http://localhost:8000/api/runs/${run.id}/download`}
-            download
-            className="flex items-center gap-1.5 px-3.5 py-2 bg-[#0278ff] hover:bg-[#0062d6] text-white text-xs font-semibold rounded-lg shadow-lg shadow-[#0278ff]/20 transition-all"
-          >
-            <Download className="w-3.5 h-3.5" />
-            Download Package
-          </a>
         </div>
       </div>
 

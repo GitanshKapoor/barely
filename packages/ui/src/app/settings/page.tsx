@@ -152,6 +152,8 @@ export default function SettingsPage() {
   const [testingJira, setTestingJira] = useState(false);
   const [savingJira, setSavingJira] = useState(false);
   const [jiraTestResult, setJiraTestResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [deletingJira, setDeletingJira] = useState(false);
+  const [confirmDeleteJira, setConfirmDeleteJira] = useState(false);
 
   const [slackWebhookUrl, setSlackWebhookUrl] = useState('');
   const [slackNotifyOn, setSlackNotifyOn] = useState('failure_only');
@@ -161,6 +163,8 @@ export default function SettingsPage() {
   const [testingSlack, setTestingSlack] = useState(false);
   const [savingSlack, setSavingSlack] = useState(false);
   const [slackTestResult, setSlackTestResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [deletingSlack, setDeletingSlack] = useState(false);
+  const [confirmDeleteSlack, setConfirmDeleteSlack] = useState(false);
 
   const [teamsWebhookUrl, setTeamsWebhookUrl] = useState('');
   const [teamsNotifyOn, setTeamsNotifyOn] = useState('failure_only');
@@ -170,6 +174,8 @@ export default function SettingsPage() {
   const [testingTeams, setTestingTeams] = useState(false);
   const [savingTeams, setSavingTeams] = useState(false);
   const [teamsTestResult, setTeamsTestResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [deletingTeams, setDeletingTeams] = useState(false);
+  const [confirmDeleteTeams, setConfirmDeleteTeams] = useState(false);
 
   // General Notification Defaults
   const [defaultNotificationMechanism, setDefaultNotificationMechanism] = useState<'both' | 'slack' | 'teams' | 'none'>('both');
@@ -243,7 +249,14 @@ export default function SettingsPage() {
   const fetchSettings = React.useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
     try {
-      const res = await fetch(`${apiUrl}/api/settings`);
+      const [res, intgRes] = await Promise.all([
+        fetch(`${apiUrl}/api/settings`),
+        fetch(`${apiUrl}/api/integrations`).catch(ie => {
+          console.error('Failed to load integrations:', ie);
+          return null;
+        })
+      ]);
+
       if (!res.ok) throw new Error(`API Error: ${res.statusText}`);
       const data: SettingsResponse = await res.json();
       setSettings(data.settings);
@@ -255,37 +268,32 @@ export default function SettingsPage() {
         setModelNameInput(prev => prev ? prev : defaultModelSetting.masked_value);
       }
 
-      // Fetch enterprise integrations configuration
-      try {
-        const intgRes = await fetch(`${apiUrl}/api/integrations`);
-        if (intgRes.ok) {
-          const intgData = await intgRes.json();
-          const intg = intgData.integrations;
-          if (intg?.jira) {
-            setJiraHost(intg.jira.host || '');
-            setJiraEmail(intg.jira.email || '');
-            setJiraProjectKey(intg.jira.project_key || 'QA');
-            setJiraIssueType(intg.jira.issue_type || 'Bug');
-            setJiraAutoCreate(Boolean(intg.jira.auto_create));
-            setJiraConfigured(Boolean(intg.jira.configured));
-            setJiraMaskedToken(intg.jira.masked_token || '');
-          }
-          if (intg?.slack) {
-            setSlackNotifyOn(intg.slack.notify_on || 'failure_only');
-            setSlackConfigured(Boolean(intg.slack.configured));
-            setSlackMaskedWebhook(intg.slack.masked_webhook || '');
-          }
-          if (intg?.teams) {
-            setTeamsNotifyOn(intg.teams.notify_on || 'failure_only');
-            setTeamsConfigured(Boolean(intg.teams.configured));
-            setTeamsMaskedWebhook(intg.teams.masked_webhook || '');
-          }
-          if (intg?.default_notification_mechanism) {
-            setDefaultNotificationMechanism(intg.default_notification_mechanism as any);
-          }
+      // Process enterprise integrations configuration
+      if (intgRes && intgRes.ok) {
+        const intgData = await intgRes.json();
+        const intg = intgData.integrations;
+        if (intg?.jira) {
+          setJiraHost(intg.jira.host || '');
+          setJiraEmail(intg.jira.email || '');
+          setJiraProjectKey(intg.jira.project_key || 'QA');
+          setJiraIssueType(intg.jira.issue_type || 'Bug');
+          setJiraAutoCreate(Boolean(intg.jira.auto_create));
+          setJiraConfigured(Boolean(intg.jira.configured));
+          setJiraMaskedToken(intg.jira.masked_token || '');
         }
-      } catch (ie) {
-        console.error('Failed to load integrations:', ie);
+        if (intg?.slack) {
+          setSlackNotifyOn(intg.slack.notify_on || 'failure_only');
+          setSlackConfigured(Boolean(intg.slack.configured));
+          setSlackMaskedWebhook(intg.slack.masked_webhook || '');
+        }
+        if (intg?.teams) {
+          setTeamsNotifyOn(intg.teams.notify_on || 'failure_only');
+          setTeamsConfigured(Boolean(intg.teams.configured));
+          setTeamsMaskedWebhook(intg.teams.masked_webhook || '');
+        }
+        if (intg?.default_notification_mechanism) {
+          setDefaultNotificationMechanism(intg.default_notification_mechanism as any);
+        }
       }
 
       if (data.execution_engine) {
@@ -601,6 +609,59 @@ export default function SettingsPage() {
     }
   };
 
+  const handleDeleteIntegration = async (provider: 'slack' | 'teams' | 'jira') => {
+    if (provider === 'slack') setDeletingSlack(true);
+    else if (provider === 'teams') setDeletingTeams(true);
+    else if (provider === 'jira') setDeletingJira(true);
+
+    try {
+      const res = await fetch(`${apiUrl}/api/integrations/${provider}`, {
+        method: 'DELETE',
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.detail || data.error || `Failed to delete ${provider} integration`);
+      }
+
+      showToast(data.message || `${provider.toUpperCase()} integration removed`, 'success');
+
+      if (provider === 'slack') {
+        setSlackWebhookUrl('');
+        setSlackMaskedWebhook('');
+        setSlackConfigured(false);
+        setSlackNotifyOn('failure_only');
+        setSlackTestResult(null);
+        setConfirmDeleteSlack(false);
+      } else if (provider === 'teams') {
+        setTeamsWebhookUrl('');
+        setTeamsMaskedWebhook('');
+        setTeamsConfigured(false);
+        setTeamsNotifyOn('failure_only');
+        setTeamsTestResult(null);
+        setConfirmDeleteTeams(false);
+      } else if (provider === 'jira') {
+        setJiraHost('');
+        setJiraEmail('');
+        setJiraToken('');
+        setJiraMaskedToken('');
+        setJiraProjectKey('QA');
+        setJiraIssueType('Bug');
+        setJiraAutoCreate(false);
+        setJiraConfigured(false);
+        setJiraTestResult(null);
+        setConfirmDeleteJira(false);
+      }
+
+      await fetchSettings();
+    } catch (e: any) {
+      showToast(e.message, 'error');
+    } finally {
+      if (provider === 'slack') setDeletingSlack(false);
+      else if (provider === 'teams') setDeletingTeams(false);
+      else if (provider === 'jira') setDeletingJira(false);
+    }
+  };
+
   useEffect(() => {
     fetchSettings();
   }, [fetchSettings]);
@@ -776,65 +837,80 @@ export default function SettingsPage() {
         </button>
       </div>
 
+      {/* Sticky Section Menu & Collapse All / Expand All Bar (Always rendered instantly) */}
+      <div className="sticky top-16 z-20 -mx-1 px-3 py-2 bg-[#070b14]/95 backdrop-blur-md border border-slate-800 rounded-xl flex items-center justify-between gap-2.5 overflow-x-auto shadow-2xl">
+        <div className="flex items-center gap-1.5 shrink-0">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mr-1 flex items-center gap-1">
+            <Sliders className="w-3 h-3 text-[#0278ff]" />
+            <span className="hidden sm:inline">Sections:</span>
+          </span>
+          {[
+            { id: 'all', label: 'All' },
+            { id: 'secrets', label: '🔑 Secrets & Keys' },
+            { id: 'model', label: '🧠 AI Model' },
+            { id: 'execution', label: '🛡️ Pod Execution' },
+            { id: 'jira', label: '📋 Issue Tracking (Jira)' },
+            { id: 'notifications', label: '🔔 Alerts & Webhooks' },
+            { id: 'defaults', label: '⚙️ Defaults' },
+            { id: 'database', label: '🗄️ Database' },
+          ].map(cat => (
+            <button
+              key={cat.id}
+              type="button"
+              onClick={() => {
+                setActiveCategory(cat.id);
+                if (cat.id !== 'all') {
+                  setCollapsedSections(prev => ({ ...prev, [cat.id]: false }));
+                  setTimeout(() => {
+                    const el = document.getElementById(`section-${cat.id}`);
+                    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                  }, 50);
+                }
+              }}
+              className={`px-2.5 py-1 rounded-lg text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
+                activeCategory === cat.id
+                  ? 'bg-[#0278ff] text-white shadow-sm shadow-blue-500/25'
+                  : 'bg-slate-900/80 hover:bg-slate-800 text-slate-400 hover:text-slate-200 border border-slate-800'
+              }`}
+            >
+              {cat.label}
+            </button>
+          ))}
+        </div>
+
+        <button
+          type="button"
+          onClick={allCollapsed ? expandAllSections : collapseAllSections}
+          className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 flex items-center gap-1.5 transition-colors shrink-0 cursor-pointer shadow-sm ml-auto"
+          title={allCollapsed ? "Expand all sections" : "Collapse all sections"}
+        >
+          <ChevronsUpDown className="w-3.5 h-3.5 text-[#0278ff]" />
+          <span>{allCollapsed ? 'Expand All' : 'Collapse All'}</span>
+        </button>
+      </div>
+
       {loading ? (
-        <div className="p-12 rounded-xl bg-[#0a0f1d] border border-slate-800 text-center flex flex-col items-center justify-center gap-3">
-          <Loader2 className="w-6 h-6 text-[#0278ff] animate-spin" />
-          <p className="text-xs text-slate-400">Loading encrypted platform settings...</p>
+        <div className="space-y-4 pt-1">
+          {[
+            { label: 'Secrets & API Keys Management', icon: '🔑' },
+            { label: 'Default AI Model Configuration', icon: '🧠' },
+            { label: 'Execution Engine & Pod Concurrency', icon: '🛡️' },
+            { label: 'Atlassian Jira Cloud Integration', icon: '📋' },
+            { label: 'Incident Notifications (Slack & Teams)', icon: '🔔' },
+            { label: 'Default Test Configurations', icon: '⚙️' },
+            { label: 'Database & Storage Status', icon: '🗄️' },
+          ].map(skeleton => (
+            <div key={skeleton.label} className="rounded-xl border border-slate-800/80 bg-[#0a0f1d] px-6 py-4 flex items-center justify-between animate-pulse">
+              <div className="flex items-center gap-2.5">
+                <span className="text-base opacity-70">{skeleton.icon}</span>
+                <span className="text-sm font-semibold text-slate-400">{skeleton.label}</span>
+              </div>
+              <div className="w-4 h-4 rounded bg-slate-800/60"></div>
+            </div>
+          ))}
         </div>
       ) : (
         <div className="space-y-6">
-
-          {/* Sticky Section Menu & Collapse All / Expand All Bar */}
-          <div className="sticky top-16 z-20 -mx-1 px-3 py-2 bg-[#070b14]/95 backdrop-blur-md border border-slate-800 rounded-xl flex items-center justify-between gap-2.5 overflow-x-auto shadow-2xl">
-            <div className="flex items-center gap-1.5 shrink-0">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mr-1 flex items-center gap-1">
-                <Sliders className="w-3 h-3 text-[#0278ff]" />
-                <span className="hidden sm:inline">Sections:</span>
-              </span>
-              {[
-                { id: 'all', label: 'All' },
-                { id: 'secrets', label: '🔑 Secrets & Keys' },
-                { id: 'model', label: '🧠 AI Model' },
-                { id: 'execution', label: '🛡️ Pod Execution' },
-                { id: 'jira', label: '📋 Issue Tracking (Jira)' },
-                { id: 'notifications', label: '🔔 Alerts & Webhooks' },
-                { id: 'defaults', label: '⚙️ Defaults' },
-                { id: 'database', label: '🗄️ Database' },
-              ].map(cat => (
-                <button
-                  key={cat.id}
-                  type="button"
-                  onClick={() => {
-                    setActiveCategory(cat.id);
-                    if (cat.id !== 'all') {
-                      setCollapsedSections(prev => ({ ...prev, [cat.id]: false }));
-                      setTimeout(() => {
-                        const el = document.getElementById(`section-${cat.id}`);
-                        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                      }, 50);
-                    }
-                  }}
-                  className={`px-2.5 py-1 rounded-lg text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
-                    activeCategory === cat.id
-                      ? 'bg-[#0278ff] text-white shadow-sm shadow-blue-500/25'
-                      : 'bg-slate-900/80 hover:bg-slate-800 text-slate-400 hover:text-slate-200 border border-slate-800'
-                  }`}
-                >
-                  {cat.label}
-                </button>
-              ))}
-            </div>
-
-            <button
-              type="button"
-              onClick={allCollapsed ? expandAllSections : collapseAllSections}
-              className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 flex items-center gap-1.5 transition-colors shrink-0 cursor-pointer shadow-sm ml-auto"
-              title={allCollapsed ? "Expand all sections" : "Collapse all sections"}
-            >
-              <ChevronsUpDown className="w-3.5 h-3.5 text-[#0278ff]" />
-              <span>{allCollapsed ? 'Expand All' : 'Collapse All'}</span>
-            </button>
-          </div>
 
           {/* Section 1: Secrets & API Keys Management */}
           {(activeCategory === 'all' || activeCategory === 'secrets') && (
@@ -2328,26 +2404,66 @@ secrets:
                   )}
 
                   {/* Jira Actions */}
-                  <div className="flex items-center justify-end gap-2.5 pt-1">
-                    <button
-                      type="button"
-                      onClick={handleTestJira}
-                      disabled={testingJira}
-                      className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 flex items-center gap-1.5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
-                    >
-                      {testingJira ? <Loader2 className="w-3.5 h-3.5 animate-spin text-[#0278ff]" /> : <Zap className="w-3.5 h-3.5 text-amber-400" />}
-                      <span>Test Connection</span>
-                    </button>
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pt-1">
+                    <div>
+                      {jiraConfigured && (
+                        confirmDeleteJira ? (
+                          <div className="flex items-center gap-2 bg-rose-950/40 border border-rose-800/60 rounded-lg px-2.5 py-1 text-xs">
+                            <span className="text-rose-300 text-[11px] font-medium">Delete Jira integration?</span>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteIntegration('jira')}
+                              disabled={deletingJira}
+                              className="px-2 py-0.5 rounded text-[11px] font-semibold bg-rose-600 hover:bg-rose-500 text-white flex items-center gap-1 transition-colors cursor-pointer"
+                            >
+                              {deletingJira ? <Loader2 className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3 h-3" />}
+                              Confirm
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setConfirmDeleteJira(false)}
+                              disabled={deletingJira}
+                              className="px-2 py-0.5 rounded text-[11px] font-semibold text-slate-400 hover:text-slate-200 transition-colors cursor-pointer"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => setConfirmDeleteJira(true)}
+                            disabled={deletingJira || savingJira || testingJira}
+                            className="px-3 py-1.5 rounded-lg text-xs font-semibold text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 border border-rose-500/20 flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                            title="Disconnect and delete Jira integration"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                            <span>Disconnect Integration</span>
+                          </button>
+                        )
+                      )}
+                    </div>
 
-                    <button
-                      type="button"
-                      onClick={handleSaveJira}
-                      disabled={savingJira}
-                      className="px-4 py-1.5 rounded-lg text-xs font-semibold bg-[#0052cc] hover:bg-[#0047b3] text-white shadow-md shadow-blue-900/30 flex items-center gap-1.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
-                    >
-                      {savingJira ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
-                      <span>Save Jira Settings</span>
-                    </button>
+                    <div className="flex items-center gap-2.5 justify-end">
+                      <button
+                        type="button"
+                        onClick={handleTestJira}
+                        disabled={testingJira}
+                        className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 flex items-center gap-1.5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                      >
+                        {testingJira ? <Loader2 className="w-3.5 h-3.5 animate-spin text-[#0278ff]" /> : <Zap className="w-3.5 h-3.5 text-amber-400" />}
+                        <span>Test Connection</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={handleSaveJira}
+                        disabled={savingJira}
+                        className="px-4 py-1.5 rounded-lg text-xs font-semibold bg-[#0052cc] hover:bg-[#0047b3] text-white shadow-md shadow-blue-900/30 flex items-center gap-1.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                      >
+                        {savingJira ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                        <span>Save Jira Settings</span>
+                      </button>
+                    </div>
                   </div>
                 </div>
               )}
@@ -2587,26 +2703,66 @@ secrets:
                     )}
 
                     {/* Slack Actions Footer */}
-                    <div className="pt-3 border-t border-slate-800/60 flex items-center justify-end gap-2.5">
-                      <button
-                        type="button"
-                        onClick={handleTestSlack}
-                        disabled={testingSlack}
-                        className="px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 flex items-center gap-1.5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
-                      >
-                        {testingSlack ? <Loader2 className="w-3.5 h-3.5 animate-spin text-[#0278ff]" /> : <Send className="w-3.5 h-3.5 text-amber-400" />}
-                        <span>Send Test Card</span>
-                      </button>
+                    <div className="pt-3 border-t border-slate-800/60 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                      <div>
+                        {slackConfigured && (
+                          confirmDeleteSlack ? (
+                            <div className="flex items-center gap-2 bg-rose-950/40 border border-rose-800/60 rounded-lg px-2.5 py-1 text-xs">
+                              <span className="text-rose-300 text-[11px] font-medium">Delete Slack integration?</span>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteIntegration('slack')}
+                                disabled={deletingSlack}
+                                className="px-2 py-0.5 rounded text-[11px] font-semibold bg-rose-600 hover:bg-rose-500 text-white flex items-center gap-1 transition-colors cursor-pointer"
+                              >
+                                {deletingSlack ? <Loader2 className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3 h-3" />}
+                                Confirm
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setConfirmDeleteSlack(false)}
+                                disabled={deletingSlack}
+                                className="px-2 py-0.5 rounded text-[11px] font-semibold text-slate-400 hover:text-slate-200 transition-colors cursor-pointer"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => setConfirmDeleteSlack(true)}
+                              disabled={deletingSlack || savingSlack || testingSlack}
+                              className="px-3 py-1.5 rounded-lg text-xs font-semibold text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 border border-rose-500/20 flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                              title="Disconnect and delete Slack webhook configuration"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                              <span>Disconnect Integration</span>
+                            </button>
+                          )
+                        )}
+                      </div>
 
-                      <button
-                        type="button"
-                        onClick={handleSaveSlack}
-                        disabled={savingSlack}
-                        className="px-4 py-1.5 rounded-lg text-xs font-semibold bg-[#0278ff] hover:bg-[#0062d6] text-white shadow-md shadow-blue-500/20 flex items-center gap-1.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
-                      >
-                        {savingSlack ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
-                        <span>Save Slack Settings</span>
-                      </button>
+                      <div className="flex items-center gap-2.5 justify-end">
+                        <button
+                          type="button"
+                          onClick={handleTestSlack}
+                          disabled={testingSlack}
+                          className="px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 flex items-center gap-1.5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                        >
+                          {testingSlack ? <Loader2 className="w-3.5 h-3.5 animate-spin text-[#0278ff]" /> : <Send className="w-3.5 h-3.5 text-amber-400" />}
+                          <span>Send Test Card</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={handleSaveSlack}
+                          disabled={savingSlack}
+                          className="px-4 py-1.5 rounded-lg text-xs font-semibold bg-[#0278ff] hover:bg-[#0062d6] text-white shadow-md shadow-blue-500/20 flex items-center gap-1.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                        >
+                          {savingSlack ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                          <span>Save Slack Settings</span>
+                        </button>
+                      </div>
                     </div>
                   </div>
 
@@ -2701,26 +2857,66 @@ secrets:
                     )}
 
                     {/* Teams Actions Footer */}
-                    <div className="pt-3 border-t border-slate-800/60 flex items-center justify-end gap-2.5">
-                      <button
-                        type="button"
-                        onClick={handleTestTeams}
-                        disabled={testingTeams}
-                        className="px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 flex items-center gap-1.5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
-                      >
-                        {testingTeams ? <Loader2 className="w-3.5 h-3.5 animate-spin text-[#0278ff]" /> : <Send className="w-3.5 h-3.5 text-amber-400" />}
-                        <span>Send Test Card</span>
-                      </button>
+                    <div className="pt-3 border-t border-slate-800/60 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                      <div>
+                        {teamsConfigured && (
+                          confirmDeleteTeams ? (
+                            <div className="flex items-center gap-2 bg-rose-950/40 border border-rose-800/60 rounded-lg px-2.5 py-1 text-xs">
+                              <span className="text-rose-300 text-[11px] font-medium">Delete Teams integration?</span>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteIntegration('teams')}
+                                disabled={deletingTeams}
+                                className="px-2 py-0.5 rounded text-[11px] font-semibold bg-rose-600 hover:bg-rose-500 text-white flex items-center gap-1 transition-colors cursor-pointer"
+                              >
+                                {deletingTeams ? <Loader2 className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3 h-3" />}
+                                Confirm
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setConfirmDeleteTeams(false)}
+                                disabled={deletingTeams}
+                                className="px-2 py-0.5 rounded text-[11px] font-semibold text-slate-400 hover:text-slate-200 transition-colors cursor-pointer"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => setConfirmDeleteTeams(true)}
+                              disabled={deletingTeams || savingTeams || testingTeams}
+                              className="px-3 py-1.5 rounded-lg text-xs font-semibold text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 border border-rose-500/20 flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                              title="Disconnect and delete Microsoft Teams webhook configuration"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                              <span>Disconnect Integration</span>
+                            </button>
+                          )
+                        )}
+                      </div>
 
-                      <button
-                        type="button"
-                        onClick={handleSaveTeams}
-                        disabled={savingTeams}
-                        className="px-4 py-1.5 rounded-lg text-xs font-semibold bg-[#0278ff] hover:bg-[#0062d6] text-white shadow-md shadow-blue-500/20 flex items-center gap-1.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
-                      >
-                        {savingTeams ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
-                        <span>Save Teams Settings</span>
-                      </button>
+                      <div className="flex items-center gap-2.5 justify-end">
+                        <button
+                          type="button"
+                          onClick={handleTestTeams}
+                          disabled={testingTeams}
+                          className="px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 flex items-center gap-1.5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                        >
+                          {testingTeams ? <Loader2 className="w-3.5 h-3.5 animate-spin text-[#0278ff]" /> : <Send className="w-3.5 h-3.5 text-amber-400" />}
+                          <span>Send Test Card</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={handleSaveTeams}
+                          disabled={savingTeams}
+                          className="px-4 py-1.5 rounded-lg text-xs font-semibold bg-[#0278ff] hover:bg-[#0062d6] text-white shadow-md shadow-blue-500/20 flex items-center gap-1.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                        >
+                          {savingTeams ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                          <span>Save Teams Settings</span>
+                        </button>
+                      </div>
                     </div>
                   </div>
 

@@ -848,4 +848,53 @@ def test_integration(req: TestIntegrationRequest):
     else:
         raise HTTPException(status_code=400, detail=f"Unknown provider '{provider}'. Must be 'jira', 'slack', or 'teams'.")
 
+@app.delete("/api/integrations/{provider}")
+def delete_integration(provider: str):
+    """
+    Deletes enterprise integration configuration for Slack, Teams, or Jira.
+    Reverts status to unconfigured and wipes encrypted webhooks/tokens from the database.
+    Enforces GitOps/Helm mode protection if active.
+    """
+    from barely_core.settings import delete_setting, get_setting, set_setting, get_secrets_mode, get_integrations_summary
+    
+    secrets_mode = get_secrets_mode()
+    is_helm_mode = secrets_mode["mode"] == "helm"
+    
+    if is_helm_mode:
+        raise HTTPException(
+            status_code=403,
+            detail="Helm / GitOps Mode is active. Integrations managed via Kubernetes Secret cannot be deleted from the UI."
+        )
+        
+    p = provider.strip().lower()
+    if p == "slack":
+        delete_setting("SLACK_WEBHOOK_URL")
+        delete_setting("SLACK_NOTIFY_ON")
+        curr_mech = (get_setting("DEFAULT_NOTIFICATION_MECHANISM") or "both").strip().lower()
+        if curr_mech == "slack":
+            teams_url = get_setting("TEAMS_WEBHOOK_URL")
+            set_setting("DEFAULT_NOTIFICATION_MECHANISM", "teams" if teams_url else "none", is_secret=False)
+    elif p in ("teams", "ms_teams"):
+        delete_setting("TEAMS_WEBHOOK_URL")
+        delete_setting("TEAMS_NOTIFY_ON")
+        curr_mech = (get_setting("DEFAULT_NOTIFICATION_MECHANISM") or "both").strip().lower()
+        if curr_mech == "teams":
+            slack_url = get_setting("SLACK_WEBHOOK_URL")
+            set_setting("DEFAULT_NOTIFICATION_MECHANISM", "slack" if slack_url else "none", is_secret=False)
+    elif p == "jira":
+        delete_setting("JIRA_HOST")
+        delete_setting("JIRA_EMAIL")
+        delete_setting("JIRA_API_TOKEN")
+        delete_setting("JIRA_PROJECT_KEY")
+        delete_setting("JIRA_ISSUE_TYPE")
+        delete_setting("JIRA_AUTO_CREATE")
+    else:
+        raise HTTPException(status_code=400, detail=f"Unknown integration provider '{provider}'. Must be 'slack', 'teams', or 'jira'.")
+
+    return {
+        "success": True,
+        "message": f"{p.capitalize()} integration removed successfully.",
+        "integrations": get_integrations_summary()
+    }
+
 
