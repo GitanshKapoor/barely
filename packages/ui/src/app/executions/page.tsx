@@ -15,7 +15,8 @@ import {
   X, 
   Tag, 
   Monitor,
-  Cpu
+  Cpu,
+  ShieldCheck
 } from 'lucide-react';
 import { formatModelName } from '../../utils/models';
 
@@ -384,7 +385,8 @@ export default function ExecutionsPage() {
                       <span className="truncate max-w-xs">{run.name || run.id}</span>
                       {run.isolated_env && (
                         <span className="inline-flex items-center gap-1 text-[9px] font-mono font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/25 px-1.5 py-0.2 rounded" title="Isolated Ephemeral Non-Root Pod">
-                          🛡️ Isolated Pod
+                          <ShieldCheck className="w-2.5 h-2.5" />
+                          <span>Isolated Pod</span>
                         </span>
                       )}
                     </div>
@@ -423,11 +425,36 @@ export default function ExecutionsPage() {
                       run.status === 'cancelled' ? 'bg-orange-500/10 text-orange-400 border-orange-500/25' :
                       'bg-amber-500/10 text-amber-400 border-amber-500/20'
                     }`}>
-                      {run.status === "pending" && "⏳ Pending"}
-                      {run.status === "running" && "🔄 Running..."}
-                      {run.status === "completed" && run.success && "✓ Passed"}
-                      {run.status === "completed" && !run.success && "✕ Failed"}
-                      {run.status === "cancelled" && "⊘ Cancelled"}
+                      {run.status === "pending" && (
+                        <>
+                          <Clock className="w-3 h-3 text-amber-400" />
+                          <span>Pending</span>
+                        </>
+                      )}
+                      {run.status === "running" && (
+                        <>
+                          <RotateCw className="w-3 h-3 animate-spin text-[#0278ff]" />
+                          <span>Running...</span>
+                        </>
+                      )}
+                      {run.status === "completed" && run.success && (
+                        <>
+                          <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                          <span>Passed</span>
+                        </>
+                      )}
+                      {run.status === "completed" && !run.success && (
+                        <>
+                          <XCircle className="w-3 h-3 text-rose-400" />
+                          <span>Failed</span>
+                        </>
+                      )}
+                      {run.status === "cancelled" && (
+                        <>
+                          <Ban className="w-3 h-3 text-orange-400" />
+                          <span>Cancelled</span>
+                        </>
+                      )}
                     </span>
                   </td>
                   <td className="px-6 py-4 text-right whitespace-nowrap align-middle">

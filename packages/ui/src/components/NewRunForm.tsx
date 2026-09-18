@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
-import { Play, Globe, Smartphone, Monitor, Tablet, X, Info, Tag, ArrowRight, Loader2, Cpu, ChevronDown, Bell } from 'lucide-react';
+import { Play, Globe, Smartphone, Monitor, Tablet, X, Info, Tag, ArrowRight, Loader2, Cpu, ChevronDown, Bell, Eye, ShieldCheck } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { formatModelName } from '../utils/models';
 
@@ -598,8 +598,9 @@ export default function NewRunForm({ initialData, triggerButton, onRunCreated }:
                         {m.provider}
                       </span>
                       {m.supports_vision && (
-                        <span className="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                          👁 Vision Grounding
+                        <span className="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 inline-flex items-center gap-1">
+                          <Eye className="w-3 h-3" />
+                          <span>Vision Grounding</span>
                         </span>
                       )}
                       {m.context_window && (
@@ -693,7 +694,8 @@ export default function NewRunForm({ initialData, triggerButton, onRunCreated }:
             <div className="flex items-center justify-between p-3 rounded-lg border border-slate-800 bg-[#070b14]">
               <div className="space-y-0.5 pr-3 text-left">
                 <div className="flex items-center gap-1.5">
-                  <span className="text-xs font-bold text-slate-200">🛡️ Run in Isolated Pod</span>
+                  <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                  <span className="text-xs font-bold text-slate-200">Run in Isolated Pod</span>
                   <div className="relative group cursor-help">
                     <Info className="w-3.5 h-3.5 text-slate-400 hover:text-[#0278ff] transition-colors" />
                     <div className="absolute left-0 bottom-full mb-2 hidden group-hover:block w-72 p-3 rounded-lg bg-[#0d1322] border border-slate-700 shadow-2xl text-[11px] text-slate-300 leading-relaxed z-50 pointer-events-none text-left whitespace-normal">
@@ -811,33 +813,33 @@ export default function NewRunForm({ initialData, triggerButton, onRunCreated }:
                 className="w-full bg-[#070b14] border border-slate-800 rounded-lg px-3.5 py-2.5 text-xs font-mono text-slate-200 outline-none focus:border-[#0278ff] focus:ring-1 focus:ring-[#0278ff] transition-all cursor-pointer appearance-none pr-8 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {!slackConfigured && !teamsConfigured ? (
-                  <option value="default">⚠️ No notification channels configured (set up in Settings)</option>
+                  <option value="default">No notification channels configured (set up in Settings)</option>
                 ) : (
                   <>
                     <option value="default">
-                      ⚡ Default Channel ({defaultNotificationMechanism === 'both' ? 'Slack & Teams' : defaultNotificationMechanism === 'slack' ? 'Slack' : defaultNotificationMechanism === 'teams' ? 'Teams' : 'None'})
+                      Default Channel ({defaultNotificationMechanism === 'both' ? 'Slack & Teams' : defaultNotificationMechanism === 'slack' ? 'Slack' : defaultNotificationMechanism === 'teams' ? 'Teams' : 'None'})
                     </option>
 
                     {slackConfigured && teamsConfigured && (
                       <option value="both">
-                        🔔 Both Slack &amp; Microsoft Teams
+                        Both Slack &amp; Microsoft Teams
                       </option>
                     )}
 
                     {slackConfigured && (
                       <option value="slack">
-                        💬 Slack Channel Only
+                        Slack Channel Only
                       </option>
                     )}
 
                     {teamsConfigured && (
                       <option value="teams">
-                        👥 Microsoft Teams Channel Only
+                        Microsoft Teams Channel Only
                       </option>
                     )}
 
                     <option value="none">
-                      🔕 Mute Notifications for this Run
+                      Mute Notifications for this Run
                     </option>
                   </>
                 )}

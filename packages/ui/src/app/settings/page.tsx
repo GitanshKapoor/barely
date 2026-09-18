@@ -30,9 +30,28 @@ import {
   ChevronDown,
   ChevronRight,
   ChevronsUpDown,
-  Sliders
+  Sliders,
+  Layers,
+  Server,
+  Box,
+  Ban,
+  Cloud
 } from 'lucide-react';
 import { formatModelName } from '../../utils/models';
+
+// In-memory module cache to guarantee instantaneous 0ms page loads on repeat navigations
+let cachedSettingsData: SettingsResponse | null = null;
+let cachedIntegrationsData: any = null;
+
+// Hydrate from sessionStorage on browser initial load to prevent cold skeleton flashes
+if (typeof window !== 'undefined') {
+  try {
+    const s = sessionStorage.getItem('barely_settings_cache');
+    if (s && !cachedSettingsData) cachedSettingsData = JSON.parse(s);
+    const i = sessionStorage.getItem('barely_integrations_cache');
+    if (i && !cachedIntegrationsData) cachedIntegrationsData = JSON.parse(i);
+  } catch {}
+}
 
 interface SettingItem {
   key: string;
@@ -113,14 +132,17 @@ const PROVIDER_INFO: Record<string, { provider: string; model: string; desc: str
 export default function SettingsPage() {
   const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
-  const [settings, setSettings] = useState<SettingItem[]>([]);
-  const [dbStatus, setDbStatus] = useState<DatabaseStatus | null>(null);
-  const [deployment, setDeployment] = useState<DeploymentInfo | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [settings, setSettings] = useState<SettingItem[]>(() => cachedSettingsData?.settings || []);
+  const [dbStatus, setDbStatus] = useState<DatabaseStatus | null>(() => cachedSettingsData?.database || null);
+  const [deployment, setDeployment] = useState<DeploymentInfo | null>(() => cachedSettingsData?.deployment || null);
+  const [loading, setLoading] = useState(() => !cachedSettingsData);
   const [refreshing, setRefreshing] = useState(false);
 
   // Model configuration states
-  const [modelNameInput, setModelNameInput] = useState<string>('');
+  const [modelNameInput, setModelNameInput] = useState<string>(() => {
+    const defaultModelSetting = cachedSettingsData?.settings?.find(s => s.key === 'DEFAULT_MODEL');
+    return defaultModelSetting?.masked_value || '';
+  });
   const [testingModel, setTestingModel] = useState<boolean>(false);
   const [savingModel, setSavingModel] = useState<boolean>(false);
   const [modelTestResult, setModelTestResult] = useState<{ success: boolean; message: string } | null>(null);
@@ -140,14 +162,14 @@ export default function SettingsPage() {
   const [deletingKey, setDeletingKey] = useState<string | null>(null);
 
   // Enterprise Integrations States
-  const [jiraHost, setJiraHost] = useState('');
-  const [jiraEmail, setJiraEmail] = useState('');
+  const [jiraHost, setJiraHost] = useState(() => cachedIntegrationsData?.integrations?.jira?.host || '');
+  const [jiraEmail, setJiraEmail] = useState(() => cachedIntegrationsData?.integrations?.jira?.email || '');
   const [jiraToken, setJiraToken] = useState('');
-  const [jiraProjectKey, setJiraProjectKey] = useState('QA');
-  const [jiraIssueType, setJiraIssueType] = useState('Bug');
-  const [jiraAutoCreate, setJiraAutoCreate] = useState(false);
-  const [jiraConfigured, setJiraConfigured] = useState(false);
-  const [jiraMaskedToken, setJiraMaskedToken] = useState('');
+  const [jiraProjectKey, setJiraProjectKey] = useState(() => cachedIntegrationsData?.integrations?.jira?.project_key || 'QA');
+  const [jiraIssueType, setJiraIssueType] = useState(() => cachedIntegrationsData?.integrations?.jira?.issue_type || 'Bug');
+  const [jiraAutoCreate, setJiraAutoCreate] = useState(() => Boolean(cachedIntegrationsData?.integrations?.jira?.auto_create));
+  const [jiraConfigured, setJiraConfigured] = useState(() => Boolean(cachedIntegrationsData?.integrations?.jira?.configured));
+  const [jiraMaskedToken, setJiraMaskedToken] = useState(() => cachedIntegrationsData?.integrations?.jira?.masked_token || '');
   const [showJiraToken, setShowJiraToken] = useState(false);
   const [testingJira, setTestingJira] = useState(false);
   const [savingJira, setSavingJira] = useState(false);
@@ -156,9 +178,9 @@ export default function SettingsPage() {
   const [confirmDeleteJira, setConfirmDeleteJira] = useState(false);
 
   const [slackWebhookUrl, setSlackWebhookUrl] = useState('');
-  const [slackNotifyOn, setSlackNotifyOn] = useState('failure_only');
-  const [slackConfigured, setSlackConfigured] = useState(false);
-  const [slackMaskedWebhook, setSlackMaskedWebhook] = useState('');
+  const [slackNotifyOn, setSlackNotifyOn] = useState(() => cachedIntegrationsData?.integrations?.slack?.notify_on || 'failure_only');
+  const [slackConfigured, setSlackConfigured] = useState(() => Boolean(cachedIntegrationsData?.integrations?.slack?.configured));
+  const [slackMaskedWebhook, setSlackMaskedWebhook] = useState(() => cachedIntegrationsData?.integrations?.slack?.masked_webhook || '');
   const [showSlackWebhook, setShowSlackWebhook] = useState(false);
   const [testingSlack, setTestingSlack] = useState(false);
   const [savingSlack, setSavingSlack] = useState(false);
@@ -167,9 +189,9 @@ export default function SettingsPage() {
   const [confirmDeleteSlack, setConfirmDeleteSlack] = useState(false);
 
   const [teamsWebhookUrl, setTeamsWebhookUrl] = useState('');
-  const [teamsNotifyOn, setTeamsNotifyOn] = useState('failure_only');
-  const [teamsConfigured, setTeamsConfigured] = useState(false);
-  const [teamsMaskedWebhook, setTeamsMaskedWebhook] = useState('');
+  const [teamsNotifyOn, setTeamsNotifyOn] = useState(() => cachedIntegrationsData?.integrations?.teams?.notify_on || 'failure_only');
+  const [teamsConfigured, setTeamsConfigured] = useState(() => Boolean(cachedIntegrationsData?.integrations?.teams?.configured));
+  const [teamsMaskedWebhook, setTeamsMaskedWebhook] = useState(() => cachedIntegrationsData?.integrations?.teams?.masked_webhook || '');
   const [showTeamsWebhook, setShowTeamsWebhook] = useState(false);
   const [testingTeams, setTestingTeams] = useState(false);
   const [savingTeams, setSavingTeams] = useState(false);
@@ -178,15 +200,15 @@ export default function SettingsPage() {
   const [confirmDeleteTeams, setConfirmDeleteTeams] = useState(false);
 
   // General Notification Defaults
-  const [defaultNotificationMechanism, setDefaultNotificationMechanism] = useState<'both' | 'slack' | 'teams' | 'none'>('both');
+  const [defaultNotificationMechanism, setDefaultNotificationMechanism] = useState<'both' | 'slack' | 'teams' | 'none'>(() => cachedIntegrationsData?.integrations?.default_notification_mechanism || 'both');
   const [savingDefaultMechanism, setSavingDefaultMechanism] = useState(false);
 
   // Execution Engine & Pod Isolation States
-  const [executionMode, setExecutionMode] = useState<'worker_pool' | 'k8s_job'>('worker_pool');
-  const [maxParallelPods, setMaxParallelPods] = useState<number>(10);
+  const [executionMode, setExecutionMode] = useState<'worker_pool' | 'k8s_job'>(() => cachedSettingsData?.execution_engine?.mode || 'worker_pool');
+  const [maxParallelPods, setMaxParallelPods] = useState<number>(() => cachedSettingsData?.execution_engine?.max_parallel_pods || 10);
   const [savingEngine, setSavingEngine] = useState(false);
-  const [engineClusterStatus, setEngineClusterStatus] = useState<any>(null);
-  const [isK8sAvailable, setIsK8sAvailable] = useState(false);
+  const [engineClusterStatus, setEngineClusterStatus] = useState<any>(() => cachedSettingsData?.execution_engine?.cluster || null);
+  const [isK8sAvailable, setIsK8sAvailable] = useState<boolean>(() => Boolean(cachedSettingsData?.execution_engine?.is_k8s_available));
   const [showConcurrencyInfo, setShowConcurrencyInfo] = useState(false);
 
   // Section Collapse and Category Navigation States (default to collapsed)
@@ -259,6 +281,12 @@ export default function SettingsPage() {
 
       if (!res.ok) throw new Error(`API Error: ${res.statusText}`);
       const data: SettingsResponse = await res.json();
+      cachedSettingsData = data;
+      if (typeof window !== 'undefined') {
+        try {
+          sessionStorage.setItem('barely_settings_cache', JSON.stringify(data));
+        } catch {}
+      }
       setSettings(data.settings);
       setDbStatus(data.database);
       setDeployment(data.deployment || null);
@@ -271,6 +299,12 @@ export default function SettingsPage() {
       // Process enterprise integrations configuration
       if (intgRes && intgRes.ok) {
         const intgData = await intgRes.json();
+        cachedIntegrationsData = intgData;
+        if (typeof window !== 'undefined') {
+          try {
+            sessionStorage.setItem('barely_integrations_cache', JSON.stringify(intgData));
+          } catch {}
+        }
         const intg = intgData.integrations;
         if (intg?.jira) {
           setJiraHost(intg.jira.host || '');
@@ -816,7 +850,7 @@ export default function SettingsPage() {
                   ? 'bg-cyan-500/15 text-cyan-300 border-cyan-500/30'
                   : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/25'
               }`}>
-                {deployment?.is_kubernetes ? '⎈ Kubernetes Managed' : 'AES-256 Authenticated'}
+                {deployment?.is_kubernetes ? 'Kubernetes Managed' : 'AES-256 Authenticated'}
               </span>
             </p>
             <p className="text-slate-400 leading-relaxed max-w-2xl">
@@ -845,37 +879,37 @@ export default function SettingsPage() {
             <span className="hidden sm:inline">Sections:</span>
           </span>
           {[
-            { id: 'all', label: 'All' },
-            { id: 'secrets', label: '🔑 Secrets & Keys' },
-            { id: 'model', label: '🧠 AI Model' },
-            { id: 'execution', label: '🛡️ Pod Execution' },
-            { id: 'jira', label: '📋 Issue Tracking (Jira)' },
-            { id: 'notifications', label: '🔔 Alerts & Webhooks' },
-            { id: 'defaults', label: '⚙️ Defaults' },
-            { id: 'database', label: '🗄️ Database' },
-          ].map(cat => (
-            <button
-              key={cat.id}
-              type="button"
-              onClick={() => {
-                setActiveCategory(cat.id);
-                if (cat.id !== 'all') {
-                  setCollapsedSections(prev => ({ ...prev, [cat.id]: false }));
-                  setTimeout(() => {
-                    const el = document.getElementById(`section-${cat.id}`);
-                    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                  }, 50);
-                }
-              }}
-              className={`px-2.5 py-1 rounded-lg text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
-                activeCategory === cat.id
-                  ? 'bg-[#0278ff] text-white shadow-sm shadow-blue-500/25'
-                  : 'bg-slate-900/80 hover:bg-slate-800 text-slate-400 hover:text-slate-200 border border-slate-800'
-              }`}
-            >
-              {cat.label}
-            </button>
-          ))}
+            { id: 'all', label: 'All', icon: Layers },
+            { id: 'secrets', label: 'Secrets & Keys', icon: Key, color: 'text-amber-400' },
+            { id: 'model', label: 'AI Model', icon: Cpu, color: 'text-purple-400' },
+            { id: 'execution', label: 'Pod Execution', icon: ShieldCheck, color: 'text-emerald-400' },
+            { id: 'jira', label: 'Issue Tracking (Jira)', icon: Zap, color: 'text-[#2684ff]' },
+            { id: 'notifications', label: 'Alerts & Webhooks', icon: Bell, color: 'text-amber-400' },
+            { id: 'defaults', label: 'Defaults', icon: Sliders, color: 'text-slate-400' },
+            { id: 'database', label: 'Database', icon: Database, color: 'text-cyan-400' },
+          ].map(cat => {
+            const Icon = cat.icon;
+            return (
+              <button
+                key={cat.id}
+                type="button"
+                onClick={() => {
+                  setActiveCategory(cat.id);
+                  if (cat.id !== 'all') {
+                    setCollapsedSections(prev => ({ ...prev, [cat.id]: false }));
+                  }
+                }}
+                className={`px-2.5 py-1 rounded-lg text-xs font-semibold whitespace-nowrap transition-all cursor-pointer flex items-center gap-1.5 ${
+                  activeCategory === cat.id
+                    ? 'bg-[#0278ff] text-white shadow-sm shadow-blue-500/25'
+                    : 'bg-slate-900/80 hover:bg-slate-800 text-slate-400 hover:text-slate-200 border border-slate-800'
+                }`}
+              >
+                <Icon className={`w-3.5 h-3.5 shrink-0 ${activeCategory === cat.id ? 'text-white' : cat.color || 'text-slate-400'}`} />
+                <span>{cat.label}</span>
+              </button>
+            );
+          })}
         </div>
 
         <button
@@ -892,29 +926,31 @@ export default function SettingsPage() {
       {loading ? (
         <div className="space-y-4 pt-1">
           {[
-            { label: 'Secrets & API Keys Management', icon: '🔑' },
-            { label: 'Default AI Model Configuration', icon: '🧠' },
-            { label: 'Execution Engine & Pod Concurrency', icon: '🛡️' },
-            { label: 'Atlassian Jira Cloud Integration', icon: '📋' },
-            { label: 'Incident Notifications (Slack & Teams)', icon: '🔔' },
-            { label: 'Default Test Configurations', icon: '⚙️' },
-            { label: 'Database & Storage Status', icon: '🗄️' },
-          ].map(skeleton => (
-            <div key={skeleton.label} className="rounded-xl border border-slate-800/80 bg-[#0a0f1d] px-6 py-4 flex items-center justify-between animate-pulse">
-              <div className="flex items-center gap-2.5">
-                <span className="text-base opacity-70">{skeleton.icon}</span>
-                <span className="text-sm font-semibold text-slate-400">{skeleton.label}</span>
+            { label: 'Secrets & API Keys Management', icon: Key, color: 'text-amber-400' },
+            { label: 'Default AI Model Configuration', icon: Cpu, color: 'text-purple-400' },
+            { label: 'Execution Engine & Pod Concurrency', icon: ShieldCheck, color: 'text-emerald-400' },
+            { label: 'Atlassian Jira Cloud Integration', icon: Zap, color: 'text-[#2684ff]' },
+            { label: 'Incident Notifications (Slack & Teams)', icon: Bell, color: 'text-amber-400' },
+            { label: 'Default Test Configurations', icon: Sliders, color: 'text-slate-400' },
+            { label: 'Database & Storage Status', icon: Database, color: 'text-cyan-400' },
+          ].map(skeleton => {
+            const Icon = skeleton.icon;
+            return (
+              <div key={skeleton.label} className="rounded-xl border border-slate-800/80 bg-[#0a0f1d] px-6 py-4 flex items-center justify-between animate-pulse">
+                <div className="flex items-center gap-2.5">
+                  <Icon className={`w-4 h-4 ${skeleton.color} opacity-70`} />
+                  <span className="text-sm font-semibold text-slate-400">{skeleton.label}</span>
+                </div>
+                <div className="w-4 h-4 rounded bg-slate-800/60"></div>
               </div>
-              <div className="w-4 h-4 rounded bg-slate-800/60"></div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       ) : (
         <div className="space-y-6">
 
           {/* Section 1: Secrets & API Keys Management */}
-          {(activeCategory === 'all' || activeCategory === 'secrets') && (
-            <div id="section-secrets" className="rounded-xl border border-slate-800 bg-[#0a0f1d] shadow-xl overflow-hidden transition-all">
+          <div id="section-secrets" className={`rounded-xl border border-slate-800 bg-[#0a0f1d] shadow-xl overflow-hidden transition-all ${activeCategory === 'all' || activeCategory === 'secrets' ? '' : 'hidden'}`}>
               {/* Collapsible Card Header */}
               <div 
                 onClick={() => toggleSection('secrets')}
@@ -1036,7 +1072,8 @@ export default function SettingsPage() {
                                       : 'border-transparent text-slate-400 hover:text-slate-200'
                                   }`}
                                 >
-                                  <span>🟧 AWS Secrets Manager</span>
+                                  <span className="w-2 h-2 rounded-full bg-amber-400"></span>
+                                  <span>AWS Secrets Manager</span>
                                 </button>
                                 <button
                                   type="button"
@@ -1047,7 +1084,8 @@ export default function SettingsPage() {
                                       : 'border-transparent text-slate-400 hover:text-slate-200'
                                   }`}
                                 >
-                                  <span>🟦 Azure Key Vault</span>
+                                  <span className="w-2 h-2 rounded-full bg-blue-400"></span>
+                                  <span>Azure Key Vault</span>
                                 </button>
                                 <button
                                   type="button"
@@ -1058,7 +1096,8 @@ export default function SettingsPage() {
                                       : 'border-transparent text-slate-400 hover:text-slate-200'
                                   }`}
                                 >
-                                  <span>🗝️ HashiCorp Vault</span>
+                                  <span className="w-2 h-2 rounded-full bg-indigo-400"></span>
+                                  <span>HashiCorp Vault</span>
                                 </button>
                                 <button
                                   type="button"
@@ -1069,7 +1108,8 @@ export default function SettingsPage() {
                                       : 'border-transparent text-slate-400 hover:text-slate-200'
                                   }`}
                                 >
-                                  <span>☁️ GCP Secret Manager</span>
+                                  <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
+                                  <span>GCP Secret Manager</span>
                                 </button>
                               </div>
 
@@ -1625,11 +1665,9 @@ secrets:
         </div>
       )}
     </div>
-  )}
 
           {/* Section 2: AI Agent Model Configuration */}
-          {(activeCategory === 'all' || activeCategory === 'model') && (
-            <div id="section-model" className="rounded-xl border border-slate-800 bg-[#0a0f1d] shadow-xl overflow-hidden transition-all">
+          <div id="section-model" className={`rounded-xl border border-slate-800 bg-[#0a0f1d] shadow-xl overflow-hidden transition-all ${activeCategory === 'all' || activeCategory === 'model' ? '' : 'hidden'}`}>
               {/* Collapsible Card Header */}
               <div 
                 onClick={() => toggleSection('model')}
@@ -1727,7 +1765,6 @@ secrets:
                 </div>
               )}
             </div>
-          )}
 
           {/* Edit Model Popup Modal */}
           {isEditModelModalOpen && (
@@ -1919,8 +1956,7 @@ secrets:
           )}
 
           {/* Section 3: Execution Engine & Ephemeral Pod Isolation */}
-          {(activeCategory === 'all' || activeCategory === 'execution') && (
-            <div id="section-execution" className="rounded-xl border border-slate-800 bg-[#0a0f1d] shadow-xl overflow-hidden transition-all">
+          <div id="section-execution" className={`rounded-xl border border-slate-800 bg-[#0a0f1d] shadow-xl overflow-hidden transition-all ${activeCategory === 'all' || activeCategory === 'execution' ? '' : 'hidden'}`}>
               {/* Collapsible Card Header */}
               <div 
                 onClick={() => toggleSection('execution')}
@@ -1960,7 +1996,7 @@ secrets:
                   {collapsedSections.execution && (
                     <span className="text-[11px] font-mono text-slate-400 bg-slate-900 px-2.5 py-1 rounded-full border border-slate-800 hidden sm:inline-flex items-center gap-1.5">
                       <span className={`w-1.5 h-1.5 rounded-full ${executionMode === 'k8s_job' ? 'bg-cyan-400' : 'bg-slate-400'}`} />
-                      {executionMode === 'k8s_job' ? `⎈ K8s Pods (Max: ${maxParallelPods})` : 'Worker Pool'}
+                      {executionMode === 'k8s_job' ? `K8s Pods (Max: ${maxParallelPods})` : 'Worker Pool'}
                     </span>
                   )}
 
@@ -1999,7 +2035,7 @@ secrets:
                           <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm ${
                             executionMode === 'worker_pool' ? 'bg-[#0278ff]/20 text-[#0278ff]' : 'bg-slate-800 text-slate-400'
                           }`}>
-                            ⚙️
+                            <Server className="w-4 h-4" />
                           </div>
                           <div>
                             <h4 className="text-sm font-bold text-white flex items-center gap-1.5">
@@ -2025,9 +2061,18 @@ secrets:
                       </p>
 
                       <div className="mt-4 pt-3 border-t border-slate-800/60 flex flex-wrap gap-2 text-[10px] font-mono text-slate-400">
-                        <span className="px-2 py-0.5 rounded bg-slate-900 border border-slate-800">⚡ Sub-second Startup</span>
-                        <span className="px-2 py-0.5 rounded bg-slate-900 border border-slate-800">📦 Low CPU/RAM Overhead</span>
-                        <span className="px-2 py-0.5 rounded bg-slate-900 border border-slate-800">🔄 Shared Process Tree</span>
+                        <span className="px-2 py-0.5 rounded bg-slate-900 border border-slate-800 inline-flex items-center gap-1.5">
+                          <Zap className="w-3 h-3 text-amber-400" />
+                          Sub-second Startup
+                        </span>
+                        <span className="px-2 py-0.5 rounded bg-slate-900 border border-slate-800 inline-flex items-center gap-1.5">
+                          <Box className="w-3 h-3 text-slate-400" />
+                          Low CPU/RAM Overhead
+                        </span>
+                        <span className="px-2 py-0.5 rounded bg-slate-900 border border-slate-800 inline-flex items-center gap-1.5">
+                          <RefreshCw className="w-3 h-3 text-blue-400" />
+                          Shared Process Tree
+                        </span>
                       </div>
                     </div>
 
@@ -2054,7 +2099,7 @@ secrets:
                           <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm ${
                             executionMode === 'k8s_job' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-slate-800 text-slate-400'
                           }`}>
-                            🛡️
+                            <ShieldCheck className="w-4 h-4" />
                           </div>
                           <div>
                             <h4 className="text-sm font-bold text-white flex items-center gap-1.5">
@@ -2082,9 +2127,18 @@ secrets:
                       </p>
 
                       <div className="mt-4 pt-3 border-t border-slate-800/60 flex flex-wrap gap-2 text-[10px] font-mono text-emerald-300">
-                        <span className="px-2 py-0.5 rounded bg-emerald-950/40 border border-emerald-500/30">🔒 Non-Root (UID 10001)</span>
-                        <span className="px-2 py-0.5 rounded bg-emerald-950/40 border border-emerald-500/30">🚫 drop: ALL</span>
-                        <span className="px-2 py-0.5 rounded bg-emerald-950/40 border border-emerald-500/30">⚡ /dev/shm 1Gi</span>
+                        <span className="px-2 py-0.5 rounded bg-emerald-950/40 border border-emerald-500/30 inline-flex items-center gap-1.5">
+                          <Lock className="w-3 h-3 text-emerald-400" />
+                          Non-Root (UID 10001)
+                        </span>
+                        <span className="px-2 py-0.5 rounded bg-emerald-950/40 border border-emerald-500/30 inline-flex items-center gap-1.5">
+                          <Ban className="w-3 h-3 text-emerald-400" />
+                          drop: ALL
+                        </span>
+                        <span className="px-2 py-0.5 rounded bg-emerald-950/40 border border-emerald-500/30 inline-flex items-center gap-1.5">
+                          <Zap className="w-3 h-3 text-emerald-400" />
+                          /dev/shm 1Gi
+                        </span>
                       </div>
                     </div>
                   </div>
@@ -2094,7 +2148,7 @@ secrets:
                     <div className="space-y-1">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="text-xs font-bold text-white flex items-center gap-1.5">
-                          <span>⚡</span>
+                          <Zap className="w-3.5 h-3.5 text-amber-400" />
                           <span>Max Concurrent {isK8sAvailable ? 'Runner Pods' : 'Workers'}: {maxParallelPods || 10}</span>
                         </span>
                         <span className="px-2 py-0.5 rounded-full text-[10px] font-mono bg-cyan-500/10 text-cyan-300 border border-cyan-500/25 font-semibold">
@@ -2172,7 +2226,7 @@ secrets:
                   <div className="p-4 rounded-xl bg-slate-950/60 border border-slate-800 space-y-3">
                     <div className="flex items-center justify-between">
                       <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
-                        <span>🛡️</span>
+                        <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
                         <span>Pod Security Standards &amp; Isolation Guarantees</span>
                       </h4>
                       <span className="text-[10px] font-mono text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/25">
@@ -2228,11 +2282,9 @@ secrets:
                 </div>
               )}
             </div>
-          )}
 
           {/* Section 4: Issue Tracking & Defect Management (Jira Cloud) */}
-          {(activeCategory === 'all' || activeCategory === 'jira') && (
-            <div id="section-jira" className="rounded-xl border border-slate-800 bg-[#0a0f1d] shadow-xl overflow-hidden transition-all">
+          <div id="section-jira" className={`rounded-xl border border-slate-800 bg-[#0a0f1d] shadow-xl overflow-hidden transition-all ${activeCategory === 'all' || activeCategory === 'jira' ? '' : 'hidden'}`}>
               {/* Collapsible Card Header */}
               <div 
                 onClick={() => toggleSection('jira')}
@@ -2468,11 +2520,9 @@ secrets:
                 </div>
               )}
             </div>
-          )}
 
           {/* Section 5: Incident Alerts & Webhook Notifications (Slack & Microsoft Teams) */}
-          {(activeCategory === 'all' || activeCategory === 'notifications') && (
-            <div id="section-notifications" className="rounded-xl border border-slate-800 bg-[#0a0f1d] shadow-xl overflow-hidden transition-all">
+          <div id="section-notifications" className={`rounded-xl border border-slate-800 bg-[#0a0f1d] shadow-xl overflow-hidden transition-all ${activeCategory === 'all' || activeCategory === 'notifications' ? '' : 'hidden'}`}>
               {/* Collapsible Card Header */}
               <div 
                 onClick={() => toggleSection('notifications')}
@@ -2923,11 +2973,9 @@ secrets:
                 </div>
               )}
             </div>
-          )}
 
           {/* Section 6: Agent Defaults */}
-          {(activeCategory === 'all' || activeCategory === 'defaults') && (
-            <div id="section-defaults" className="rounded-xl border border-slate-800 bg-[#0a0f1d] shadow-xl overflow-hidden transition-all">
+          <div id="section-defaults" className={`rounded-xl border border-slate-800 bg-[#0a0f1d] shadow-xl overflow-hidden transition-all ${activeCategory === 'all' || activeCategory === 'defaults' ? '' : 'hidden'}`}>
               {/* Collapsible Card Header */}
               <div 
                 onClick={() => toggleSection('defaults')}
@@ -3006,11 +3054,9 @@ secrets:
                 </div>
               )}
             </div>
-          )}
 
           {/* Section 7: Database Connection Status */}
-          {(activeCategory === 'all' || activeCategory === 'database') && (
-            <div id="section-database" className="rounded-xl border border-slate-800 bg-[#0a0f1d] shadow-xl overflow-hidden transition-all">
+          <div id="section-database" className={`rounded-xl border border-slate-800 bg-[#0a0f1d] shadow-xl overflow-hidden transition-all ${activeCategory === 'all' || activeCategory === 'database' ? '' : 'hidden'}`}>
               {/* Collapsible Card Header */}
               <div 
                 onClick={() => toggleSection('database')}
@@ -3047,12 +3093,12 @@ secrets:
                         ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
                         : 'bg-indigo-500/15 text-indigo-300 border-indigo-500/30'
                     }`}>
-                      {dbStatus?.storage_type === 'gcp' && <span>☁️</span>}
-                      {dbStatus?.storage_type === 'aws' && <span>🟧</span>}
-                      {dbStatus?.storage_type === 'azure' && <span>🟦</span>}
-                      {(dbStatus?.storage_type === 'supabase' || dbStatus?.storage_type === 'neon') && <span>⚡</span>}
-                      {dbStatus?.storage_type === 'docker' && <span>🐳</span>}
-                      {!['gcp', 'aws', 'azure', 'supabase', 'neon', 'docker'].includes(dbStatus?.storage_type || '') && <span>☁️</span>}
+                      {dbStatus?.storage_type === 'gcp' && <Cloud className="w-3.5 h-3.5 text-sky-400" />}
+                      {dbStatus?.storage_type === 'aws' && <span className="w-2 h-2 rounded-full bg-amber-400" />}
+                      {dbStatus?.storage_type === 'azure' && <span className="w-2 h-2 rounded-full bg-blue-400" />}
+                      {(dbStatus?.storage_type === 'supabase' || dbStatus?.storage_type === 'neon') && <Zap className="w-3.5 h-3.5 text-emerald-400" />}
+                      {dbStatus?.storage_type === 'docker' && <Server className="w-3.5 h-3.5 text-indigo-400" />}
+                      {!['gcp', 'aws', 'azure', 'supabase', 'neon', 'docker'].includes(dbStatus?.storage_type || '') && <Database className="w-3.5 h-3.5 text-indigo-400" />}
                       <span>{dbStatus?.provider_name || 'Docker (Local)'}</span>
                     </span>
 
@@ -3105,7 +3151,6 @@ secrets:
                 </div>
               )}
             </div>
-          )}
 
         </div>
       )}

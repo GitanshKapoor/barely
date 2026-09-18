@@ -26,7 +26,10 @@ import {
   Monitor,
   Smartphone,
   Copy,
-  Check
+  Check,
+  ShieldCheck,
+  Camera,
+  X
 } from 'lucide-react';
 import NewRunForm from '../../../components/NewRunForm';
 import { formatModelName } from '../../../utils/models';
@@ -342,7 +345,7 @@ export default function ClientRunDetails({ id }: { id: string }) {
                       : 'Isolated Ephemeral Pod (Non-Root UID 10001)'
                   }
                 >
-                  <span>🛡️</span>
+                  <ShieldCheck className="w-3 h-3 text-emerald-400 shrink-0" />
                   <span>Pod: {run.runner_pod || 'isolated'}</span>
                 </span>
               )}
@@ -481,9 +484,10 @@ export default function ClientRunDetails({ id }: { id: string }) {
           </div>
           <button
             onClick={() => setJiraMessage(null)}
-            className="text-slate-400 hover:text-white text-xs px-2 py-0.5 cursor-pointer"
+            className="text-slate-400 hover:text-white text-xs p-1 rounded hover:bg-slate-800 transition-colors cursor-pointer"
+            aria-label="Dismiss message"
           >
-            ✕
+            <X className="w-3.5 h-3.5" />
           </button>
         </div>
       )}
@@ -574,7 +578,10 @@ export default function ClientRunDetails({ id }: { id: string }) {
                           Step {idx + 1}
                         </span>
                         {step.screenshot && (
-                          <span className="text-[10px] text-slate-500 font-mono">📷 screenshot captured</span>
+                          <span className="text-[10px] text-slate-500 font-mono inline-flex items-center gap-1">
+                            <Camera className="w-2.5 h-2.5 text-slate-400" />
+                            <span>screenshot captured</span>
+                          </span>
                         )}
                       </div>
 
