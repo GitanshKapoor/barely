@@ -1,3 +1,5 @@
+import os
+import re
 import json
 import uuid
 import datetime
@@ -11,6 +13,34 @@ from pydantic import BaseModel
 from typing import Optional, List
 
 from barely_api.report import router as report_router
+
+def extract_clean_llm_error(raw_err: str) -> str:
+    """Extracts human-readable message from litellm/provider exception strings."""
+    if not raw_err:
+        return "Unknown error occurred"
+    
+    # Check if there is embedded JSON in the error (e.g. Anthropic, OpenAI, LiteLLM)
+    json_match = re.search(r'\{.*\}', raw_err)
+    if json_match:
+        try:
+            parsed = json.loads(json_match.group(0))
+            if isinstance(parsed, dict):
+                if "error" in parsed and isinstance(parsed["error"], dict):
+                    err_obj = parsed["error"]
+                    msg = err_obj.get("message")
+                    err_type = err_obj.get("type", "")
+                    if msg:
+                        prefix = f"{err_type.replace('_', ' ').title()}: " if err_type else ""
+                        return f"{prefix}{msg}"
+                elif "message" in parsed:
+                    return str(parsed["message"])
+        except Exception:
+            pass
+
+    # Strip verbose exception class prefixes
+    cleaned = re.sub(r'^(litellm\.[a-zA-Z0-9_.]+:|Exception:|\w+Exception:)\s*', '', raw_err).strip()
+    cleaned = re.sub(r',\s*request_id:.*$', '', cleaned).strip()
+    return cleaned or raw_err
 
 app = FastAPI(title="Barely Control Plane API")
 
@@ -74,7 +104,11 @@ def list_runs():
                 "tags": [t for t in r.tags.split(",") if t] if r.tags else [],
                 "jira_issue_key": getattr(r, "jira_issue_key", None),
                 "jira_issue_url": getattr(r, "jira_issue_url", None),
-                "create_jira_ticket": getattr(r, "create_jira_ticket", None),
+                "create_jira_ticket": (
+                    r.create_jira_ticket
+                    if getattr(r, "create_jira_ticket", None) is not None
+                    else (get_setting("JIRA_AUTO_CREATE") or "").strip().lower() in ("true", "1", "yes")
+                ),
                 "notification_channel": getattr(r, "notification_channel", None),
                 "isolated_env": bool(getattr(r, "isolated_env", False)),
                 "runner_pod": getattr(r, "runner_pod", None),
@@ -166,7 +200,11 @@ def get_run(run_id: str):
             "logs": r.logs or "",
             "jira_issue_key": getattr(r, "jira_issue_key", None),
             "jira_issue_url": getattr(r, "jira_issue_url", None),
-            "create_jira_ticket": getattr(r, "create_jira_ticket", None),
+            "create_jira_ticket": (
+                r.create_jira_ticket
+                if getattr(r, "create_jira_ticket", None) is not None
+                else (get_setting("JIRA_AUTO_CREATE") or "").strip().lower() in ("true", "1", "yes")
+            ),
             "notification_channel": getattr(r, "notification_channel", None),
             "isolated_env": bool(getattr(r, "isolated_env", False)),
             "runner_pod": getattr(r, "runner_pod", None),
@@ -456,17 +494,36 @@ def update_execution_engine(req: SetExecutionEngineRequest):
 
 @app.post("/api/settings")
 def save_setting(req: SaveSettingRequest):
-    from barely_core.settings import set_setting, read_k8s_secret_file
+    from barely_core.settings import set_setting, read_k8s_secret_file, get_secrets_mode
     if not req.key or not req.key.strip():
         raise HTTPException(status_code=400, detail="Key cannot be empty")
     
     key_clean = req.key.strip()
 
-    # Check if actively managed by K8s volume mount or container environment
-    if read_k8s_secret_file(key_clean) or os.getenv(key_clean):
+    # Priority infrastructure locks:
+    # 1. Kubernetes Secret Volume file mount (Helm/ESO)
+    if read_k8s_secret_file(key_clean):
         raise HTTPException(
             status_code=403, 
-            detail=f"Setting '{key_clean}' is managed externally via Helm / Kubernetes Secret (ESO) or Environment. Modifications should be made in your GitOps repository or Cloud Secret Manager."
+            detail=f"Setting '{key_clean}' is mounted via Kubernetes Secret volume and locked against UI modifications."
+        )
+
+    # 2. Maximum pod concurrency is strictly infrastructure-managed
+    if key_clean == "MAX_PARALLEL_PODS":
+        raise HTTPException(
+            status_code=403,
+            detail="MAX_PARALLEL_PODS is an infrastructure capacity constraint managed via Helm values or Environment."
+        )
+
+    # 3. Helm mode active for secret credentials
+    secrets_mode = get_secrets_mode()
+    if secrets_mode["mode"] == "helm" and key_clean in [
+        "ANTHROPIC_API_KEY", "OPENAI_API_KEY", "GEMINI_API_KEY", "GROQ_API_KEY",
+        "JIRA_API_TOKEN", "SLACK_WEBHOOK_URL", "TEAMS_WEBHOOK_URL"
+    ]:
+        raise HTTPException(
+            status_code=403,
+            detail=f"Helm / GitOps Mode is active. Secret '{key_clean}' must be configured via Helm values or Kubernetes Secret."
         )
         
     set_setting(key_clean, req.value)
@@ -477,10 +534,10 @@ def remove_setting(key: str):
     from barely_core.settings import delete_setting, read_k8s_secret_file
     
     key_clean = key.strip()
-    if read_k8s_secret_file(key_clean) or os.getenv(key_clean):
+    if read_k8s_secret_file(key_clean):
         raise HTTPException(
             status_code=403,
-            detail=f"Cannot delete setting '{key_clean}': managed externally via Infrastructure."
+            detail=f"Cannot delete setting '{key_clean}': mounted via Kubernetes Secret volume."
         )
 
     deleted = delete_setting(key_clean)
@@ -547,14 +604,15 @@ def test_key(req: TestKeyRequest):
             # If authentication failure or quota exceeded, stop trying
             break
 
-    err_display = last_error_message or "Unknown verification failure"
-    for part in active_key.split("-"):
-        if len(part) > 6 and part in err_display:
-            err_display = err_display.replace(part, "••••")
+    err_display = extract_clean_llm_error(last_error_message or "Unknown verification failure")
+    if active_key:
+        for part in active_key.split("-"):
+            if len(part) > 6 and part in err_display:
+                err_display = err_display.replace(part, "••••")
 
     return {
         "success": False,
-        "error": f"Verification failed: {err_display[:250]}"
+        "error": f"Verification failed: {err_display}"
     }
 
 class TestModelRequest(BaseModel):
@@ -590,13 +648,14 @@ def test_model(req: TestModelRequest):
         }
     except Exception as e:
         err_str = str(e)
+        clean_msg = extract_clean_llm_error(err_str)
         if active_key:
             for part in active_key.split("-"):
-                if len(part) > 6 and part in err_str:
-                    err_str = err_str.replace(part, "••••")
+                if len(part) > 6 and part in clean_msg:
+                    clean_msg = clean_msg.replace(part, "••••")
         return {
             "success": False,
-            "error": f"Test failed for '{target_model}': {err_str[:250]}"
+            "error": clean_msg
         }
 
 # -------------------------------------------------------------

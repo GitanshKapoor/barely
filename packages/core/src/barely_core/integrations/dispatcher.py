@@ -8,6 +8,15 @@ from barely_core.integrations.teams import TeamsClient
 
 logger = logging.getLogger("barely_dispatcher")
 
+def _append_run_log(run: RunRecord, text: str, db):
+    try:
+        import datetime
+        timestamp = datetime.datetime.now().strftime("%H:%M:%S")
+        run.logs = (run.logs or "") + f"[{timestamp}] {text}\n"
+        db.commit()
+    except Exception as e:
+        logger.debug(f"Failed to append run log: {e}")
+
 def dispatch_run_notifications(run_id: str):
     """
     Orchestrates post-run integrations:
@@ -60,17 +69,20 @@ def dispatch_run_notifications(run_id: str):
             jira_client = JiraClient()
             if jira_client.is_configured:
                 logger.info(f"Triggering automated Jira bug creation for failed run {run_id}")
+                _append_run_log(run, f"📋 Filing automated Jira defect report to project '{jira_client._project_key}'...", db)
                 success, issue_key, issue_url, error = jira_client.create_issue(run_data)
                 if success and issue_key:
                     run.jira_issue_key = issue_key
                     run.jira_issue_url = issue_url
-                    db.commit()
+                    _append_run_log(run, f"🎫 Automated Jira ticket created: {issue_key} ({issue_url})", db)
                     run_data["jira_issue_key"] = issue_key
                     run_data["jira_issue_url"] = issue_url
                     logger.info(f"Auto-created Jira ticket {issue_key} for run {run_id}")
                 else:
+                    _append_run_log(run, f"⚠️ Failed to auto-create Jira ticket: {error}", db)
                     logger.warning(f"Failed to auto-create Jira ticket: {error}")
             else:
+                _append_run_log(run, "⚠️ Jira auto-create active, but Jira integration is not fully configured in Settings.", db)
                 logger.warning(
                     f"Jira auto-create active for failed run {run_id}, but JiraClient is not fully configured "
                     f"(host={bool(jira_client._host)}, email={bool(jira_client._email)}, "
@@ -101,7 +113,9 @@ def dispatch_run_notifications(run_id: str):
                 if should_notify_slack:
                     try:
                         slack_client.send_notification(run_data)
+                        _append_run_log(run, "📢 Incident notification dispatched to Slack.", db)
                     except Exception as se:
+                        _append_run_log(run, f"⚠️ Failed to dispatch Slack notification: {se}", db)
                         logger.error(f"Error dispatching Slack notification: {se}")
 
         # -------------------------------------------------------------
@@ -119,7 +133,9 @@ def dispatch_run_notifications(run_id: str):
                 if should_notify_teams:
                     try:
                         teams_client.send_notification(run_data)
+                        _append_run_log(run, "📢 Incident notification dispatched to Microsoft Teams.", db)
                     except Exception as te:
+                        _append_run_log(run, f"⚠️ Failed to dispatch Teams notification: {te}", db)
                         logger.error(f"Error dispatching Teams notification: {te}")
 
     except Exception as e:

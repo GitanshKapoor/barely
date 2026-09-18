@@ -375,24 +375,37 @@ Always adopt the persona, domain knowledge, and testing mindset appropriate for 
     def _save_result_db(self, success: bool, reason: str, rich_history: list):
         if not self.run_id:
             return
+        # 1. Record outcome and failure reason first
         db = SessionLocal()
         try:
             run_rec = db.query(RunRecord).filter(RunRecord.id == self.run_id).first()
-            if run_rec:
-                if run_rec.status != "cancelled":
-                    run_rec.status = "completed"
-                    run_rec.success = success
-                    run_rec.failure_reason = reason
+            if run_rec and run_rec.status != "cancelled":
+                run_rec.success = success
+                run_rec.failure_reason = reason
                 db.commit()
         except Exception as e:
             logger.error(f"DB Save Error: {e}")
         finally:
             db.close()
 
-        # Trigger notifications & automated Jira filing asynchronously/post-commit
+        # 2. Trigger integrations (Jira ticket auto-creation, Slack/Teams)
+        # Executing before marking status 'completed' eliminates race condition with UI polling.
         try:
             from barely_core.integrations.dispatcher import dispatch_run_notifications
             dispatch_run_notifications(self.run_id)
         except Exception as ne:
             logger.error(f"Failed to dispatch post-run integrations for {self.run_id}: {ne}")
+
+        # 3. Mark run status as completed
+        db = SessionLocal()
+        try:
+            run_rec = db.query(RunRecord).filter(RunRecord.id == self.run_id).first()
+            if run_rec and run_rec.status != "cancelled":
+                run_rec.status = "completed"
+                db.commit()
+        except Exception as e:
+            logger.error(f"DB Status Completion Error: {e}")
+        finally:
+            db.close()
+
 

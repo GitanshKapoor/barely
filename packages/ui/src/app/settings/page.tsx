@@ -124,6 +124,7 @@ export default function SettingsPage() {
   const [testingModel, setTestingModel] = useState<boolean>(false);
   const [savingModel, setSavingModel] = useState<boolean>(false);
   const [modelTestResult, setModelTestResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [modelSaveError, setModelSaveError] = useState<string | null>(null);
   const [isEditModelModalOpen, setIsEditModelModalOpen] = useState<boolean>(false);
 
   // Enterprise ESO Guide state
@@ -182,15 +183,15 @@ export default function SettingsPage() {
   const [isK8sAvailable, setIsK8sAvailable] = useState(false);
   const [showConcurrencyInfo, setShowConcurrencyInfo] = useState(false);
 
-  // Section Collapse and Category Navigation States
+  // Section Collapse and Category Navigation States (default to collapsed)
   const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({
-    secrets: false,
-    model: false,
-    execution: false,
-    jira: false,
-    notifications: false,
-    defaults: false,
-    database: false,
+    secrets: true,
+    model: true,
+    execution: true,
+    jira: true,
+    notifications: true,
+    defaults: true,
+    database: true,
   });
   const [activeCategory, setActiveCategory] = useState<string>('all');
 
@@ -368,10 +369,12 @@ export default function SettingsPage() {
   const handleSaveModel = async () => {
     const target = modelNameInput.trim();
     if (!target) {
+      setModelSaveError('Please enter a model name');
       showToast('Please enter a model name', 'error');
       return;
     }
     setSavingModel(true);
+    setModelSaveError(null);
     try {
       const res = await fetch(`${apiUrl}/api/settings`, {
         method: 'POST',
@@ -380,14 +383,20 @@ export default function SettingsPage() {
       });
       if (!res.ok) {
         const err = await res.json();
-        throw new Error(err.detail || 'Failed to save model');
+        const msg = err.detail || 'Failed to save model';
+        setModelSaveError(msg);
+        showToast(msg, 'error');
+        return;
       }
       showToast(`Default AI model updated to '${formatModelName(target)}'`, 'success');
       setIsEditModelModalOpen(false);
       setModelTestResult(null);
+      setModelSaveError(null);
       await fetchSettings();
     } catch (err: any) {
-      showToast(`Error saving model: ${err.message}`, 'error');
+      const msg = err.message || 'Error saving model';
+      setModelSaveError(msg);
+      showToast(`Error saving model: ${msg}`, 'error');
     } finally {
       setSavingModel(false);
     }
@@ -1579,6 +1588,7 @@ secrets:
                         e.stopPropagation();
                         setModelNameInput(activeModel);
                         setModelTestResult(null);
+                        setModelSaveError(null);
                         setIsEditModelModalOpen(true);
                       }}
                       className="p-1 rounded hover:bg-slate-800 text-slate-400 hover:text-purple-300 transition-colors ml-0.5 cursor-pointer"
@@ -1628,6 +1638,7 @@ secrets:
                       onClick={() => {
                         setModelNameInput(activeModel);
                         setModelTestResult(null);
+                        setModelSaveError(null);
                         setIsEditModelModalOpen(true);
                       }}
                       className="px-3.5 py-2 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 hover:border-purple-500/40 flex items-center gap-2 transition-all shadow-sm shrink-0 self-start sm:self-auto cursor-pointer"
@@ -1650,6 +1661,7 @@ secrets:
                 if (e.target === e.currentTarget) {
                   setIsEditModelModalOpen(false);
                   setModelTestResult(null);
+                  setModelSaveError(null);
                 }
               }}
             >
@@ -1670,6 +1682,7 @@ secrets:
                     onClick={() => {
                       setIsEditModelModalOpen(false);
                       setModelTestResult(null);
+                      setModelSaveError(null);
                     }}
                     className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
                   >
@@ -1724,17 +1737,35 @@ secrets:
 
                   {/* Test Result Feedback */}
                   {modelTestResult && (
-                    <div className={`p-3 rounded-lg border text-xs flex items-center gap-2 ${
+                    <div className={`p-3.5 rounded-xl border text-xs ${
                       modelTestResult.success 
-                        ? 'bg-emerald-950/30 border-emerald-500/30 text-emerald-300' 
-                        : 'bg-rose-950/30 border-rose-500/30 text-rose-300'
+                        ? 'bg-emerald-950/40 border-emerald-500/40 text-emerald-300' 
+                        : 'bg-rose-950/40 border-rose-500/40 text-rose-300'
                     }`}>
-                      {modelTestResult.success ? (
-                        <Check className="w-4 h-4 text-emerald-400 shrink-0" />
-                      ) : (
+                      <div className="flex items-center gap-2 font-semibold text-xs">
+                        {modelTestResult.success ? (
+                          <Check className="w-4 h-4 text-emerald-400 shrink-0" />
+                        ) : (
+                          <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+                        )}
+                        <span>{modelTestResult.success ? '1-Token Verification Succeeded' : 'Model Verification Error'}</span>
+                      </div>
+                      <div className="mt-2 font-mono text-[11px] leading-relaxed break-words text-slate-200 bg-black/40 p-2.5 rounded-lg border border-white/5">
+                        {modelTestResult.message}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Save Error Feedback */}
+                  {modelSaveError && (
+                    <div className="p-3.5 rounded-xl border border-rose-500/40 bg-rose-950/40 text-rose-300 text-xs">
+                      <div className="flex items-center gap-2 font-semibold text-rose-200">
                         <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
-                      )}
-                      <span className="font-mono text-[11px] break-all">{modelTestResult.message}</span>
+                        <span>Failed to Save Model</span>
+                      </div>
+                      <div className="mt-2 font-mono text-[11px] leading-relaxed break-words text-slate-200 bg-black/40 p-2.5 rounded-lg border border-white/5">
+                        {modelSaveError}
+                      </div>
                     </div>
                   )}
 
@@ -1786,6 +1817,7 @@ secrets:
                     onClick={() => {
                       setIsEditModelModalOpen(false);
                       setModelTestResult(null);
+                      setModelSaveError(null);
                     }}
                     disabled={savingModel}
                     className="px-4 py-2 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition-colors cursor-pointer"

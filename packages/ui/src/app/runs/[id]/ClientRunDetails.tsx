@@ -151,11 +151,14 @@ export default function ClientRunDetails({ id }: { id: string }) {
   }, [id]);
 
   useEffect(() => {
-    if (!run || run.status === 'running' || run.status === 'pending' || run.status === 'queued') {
+    const isOngoing = !run || run.status === 'running' || run.status === 'pending' || run.status === 'queued';
+    const isWaitingForJira = run?.status === 'completed' && !run.success && Boolean(run.create_jira_ticket) && !run.jira_issue_key;
+
+    if (isOngoing || isWaitingForJira) {
       const timer = setInterval(fetchRun, 2000);
       return () => clearInterval(timer);
     }
-  }, [run?.status, id]);
+  }, [run?.status, run?.success, run?.create_jira_ticket, run?.jira_issue_key, id]);
 
   useEffect(() => {
     if (activeTab === 'logs' && terminalBottomRef.current) {
@@ -306,7 +309,7 @@ export default function ClientRunDetails({ id }: { id: string }) {
               className="flex items-center gap-1.5 px-3.5 py-2 bg-[#0052cc]/15 hover:bg-[#0052cc]/25 text-[#2684ff] hover:text-white border border-[#0052cc]/30 text-xs font-semibold rounded-lg transition-all shadow-sm cursor-pointer"
             >
               <ExternalLink className="w-3.5 h-3.5" />
-              <span>View Jira Ticket</span>
+              <span>View Jira Ticket ({run.jira_issue_key})</span>
             </a>
           ) : run.status === 'completed' && !run.success ? (
             <button

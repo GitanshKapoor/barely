@@ -68,6 +68,7 @@ export default function NewRunForm({ initialData, triggerButton, onRunCreated }:
   // Enterprise Integrations (Jira, Slack, Teams)
   const [jiraConfigured, setJiraConfigured] = useState(false);
   const [jiraProjectKey, setJiraProjectKey] = useState('QA');
+  const [jiraAutoCreateDefault, setJiraAutoCreateDefault] = useState(false);
   const [createJiraTicket, setCreateJiraTicket] = useState(Boolean(initialData?.createJiraTicket));
   const [slackConfigured, setSlackConfigured] = useState(false);
   const [teamsConfigured, setTeamsConfigured] = useState(false);
@@ -109,8 +110,10 @@ export default function NewRunForm({ initialData, triggerButton, onRunCreated }:
           if (intg?.jira) {
             setJiraConfigured(Boolean(intg.jira.configured));
             setJiraProjectKey(intg.jira.project_key || 'QA');
+            const autoCreate = Boolean(intg.jira.auto_create);
+            setJiraAutoCreateDefault(autoCreate);
             if (initialData?.createJiraTicket === undefined) {
-              setCreateJiraTicket(Boolean(intg.jira.auto_create));
+              setCreateJiraTicket(autoCreate);
             }
           }
           if (intg?.slack) {
@@ -228,6 +231,7 @@ export default function NewRunForm({ initialData, triggerButton, onRunCreated }:
       setTags([]);
       setTagInput('');
       setNotificationChannel('default');
+      setCreateJiraTicket(jiraAutoCreateDefault);
     }
     setIsOpen(true);
   };

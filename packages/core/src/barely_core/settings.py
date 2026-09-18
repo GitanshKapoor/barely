@@ -282,12 +282,6 @@ def list_settings_status() -> List[Dict[str, Any]]:
             source = "kubernetes"
             is_read_only = True
             masked_val = mask_secret(k8s_file_val) if is_secret else k8s_file_val
-        elif env_val:
-            is_configured = True
-            is_infra_managed = True
-            source = "kubernetes" if in_k8s else "environment"
-            is_read_only = True
-            masked_val = mask_secret(env_val) if is_secret else env_val
         elif db_rec and db_rec.value:
             is_configured = True
             is_infra_managed = False
@@ -302,6 +296,12 @@ def list_settings_status() -> List[Dict[str, Any]]:
                     masked_val = "••••••••"
             else:
                 masked_val = db_rec.value
+        elif env_val:
+            is_configured = True
+            is_infra_managed = True if (is_secret or in_k8s) else False
+            source = "kubernetes" if in_k8s else "environment"
+            is_read_only = True if (is_secret or in_k8s) else False
+            masked_val = mask_secret(env_val) if is_secret else env_val
         else:
             is_configured = False
             is_infra_managed = False

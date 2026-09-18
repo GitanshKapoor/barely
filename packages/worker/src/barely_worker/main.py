@@ -43,10 +43,9 @@ def process_job(run_id: str, test_name: str, goal_text: str, start_url: str, dev
         try:
             run = db.query(RunRecord).filter(RunRecord.id == run_id).first()
             if run:
-                run.status = "completed"
                 run.success = False
                 run.failure_reason = f"Fatal Worker Crash: {str(e)}"
-            db.commit()
+                db.commit()
         except Exception as dbe:
             logger.error(f"Failed to update job status after crash: {dbe}")
         finally:
@@ -57,6 +56,17 @@ def process_job(run_id: str, test_name: str, goal_text: str, start_url: str, dev
             dispatch_run_notifications(run_id)
         except Exception as ne:
             logger.error(f"Failed to dispatch post-crash notifications for {run_id}: {ne}")
+
+        db = SessionLocal()
+        try:
+            run = db.query(RunRecord).filter(RunRecord.id == run_id).first()
+            if run and run.status != "cancelled":
+                run.status = "completed"
+                db.commit()
+        except Exception as dbe:
+            logger.error(f"Failed to mark run completed after crash: {dbe}")
+        finally:
+            db.close()
 
 def run_single_job(run_id: str):
     """
