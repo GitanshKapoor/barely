@@ -49,8 +49,6 @@ Barely combines vision-enabled AI reasoning with enterprise cloud execution prim
 - ☁️ **Cloud-Native Kubernetes & AWS ECS:** Ephemeral non-root container runner jobs (`UID 10001`), production Helm charts with HPA, and AWS ECS Fargate Terraform task definitions.
 - 📊 **Executive PDF Reports & Artifact Bundles:** One-click export of print-ready multi-page audit PDFs and downloadable `.zip` bundles with step screenshots and video traces.
 
-> 💡 **Future Roadmap & Release Milestones**: For upcoming distributed fleet orchestration, multi-agent sharding, and Release 2.x milestones, see our [Interactive Documentation & Roadmap](docs/index.html#roadmap).
-
 ## 🚀 Getting Started
 
 Barely is built for speed and simplicity. It can be launched instantly with Docker Compose or installed locally as a Python package.
