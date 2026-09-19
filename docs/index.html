@@ -786,7 +786,7 @@
                 <i data-lucide="book-open" class="w-3.5 h-3.5"></i>
                 <span>Runbook</span>
               </a>
-              <button onclick="copyCommand(this, 'kubectl create namespace barely 2>/dev/null || true\nkubectl create secret generic barely-db-secret -n barely --from-literal=url=\x22postgresql://user:pass@rds.endpoint:5432/barelydb?sslmode=require\x22\nkubectl create secret generic barely-secrets -n barely --from-literal=anthropic_api_key=\x22sk-ant-api03-...\x22\nhelm install barely ./charts/barely -n barely --create-namespace --set ingress.enabled=true --set ingress.hosts[0].host=\x22barely.internal\x22')" class="flex items-center gap-1 text-slate-300 hover:text-white shrink-0">
+              <button onclick="copyCommand(this, 'kubectl create namespace barely 2>/dev/null || true\nkubectl create secret generic barely-db-secret -n barely --from-literal=url=\x22postgresql://user:pass@rds.endpoint:5432/barelydb?sslmode=require\x22\nkubectl create secret generic barely-secrets -n barely --from-literal=barely_secret_key=\x22$(openssl rand -hex 32)\x22 --from-literal=anthropic_api_key=\x22sk-ant-api03-...\x22\nhelm install barely ./charts/barely -n barely --create-namespace --set ingress.enabled=true --set ingress.hosts[0].host=\x22barely.internal\x22')" class="flex items-center gap-1 text-slate-300 hover:text-white shrink-0">
                 <i data-lucide="copy" class="w-3.5 h-3.5"></i>
                 <span>Copy</span>
               </button>
@@ -797,6 +797,7 @@
   --from-literal=url=<span class="text-sky-300">"postgresql://user:pass@rds.endpoint:5432/barelydb?sslmode=require"</span>
 
 <span class="text-brand-400">kubectl</span> create secret generic barely-secrets -n barely \
+  --from-literal=barely_secret_key=<span class="text-amber-300">"$(openssl rand -hex 32)"</span> \
   --from-literal=anthropic_api_key=<span class="text-amber-300">"sk-ant-api03-..."</span>
 
 <span class="text-slate-500"># 2. Deploy Helm chart with NGINX Ingress & HPA (zero plaintext CLI secrets)</span>

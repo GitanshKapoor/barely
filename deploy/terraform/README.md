@@ -140,6 +140,7 @@ aws secretsmanager put-secret-value \
   --secret-id barely-prod-secrets \
   --secret-string '{
     "DATABASE_URL": "postgresql://barely_user:password@rds.endpoint:5432/barelydb?sslmode=require",
+    "BARELY_SECRET_KEY": "your_256_bit_hex_secret_key_here",
     "ANTHROPIC_API_KEY": "sk-ant-api03-...",
     "OPENAI_API_KEY": "sk-proj-...",
     "JIRA_API_TOKEN": "your_token",

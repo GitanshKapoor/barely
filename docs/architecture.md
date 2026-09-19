@@ -201,7 +201,7 @@ securityContext:
 Browser engines execute intensive multi-tab layout rendering. Without dedicated shared memory, Docker containers frequently crash with `SIGSEGV` or `Target closed`. Barely provisions 1GB dedicated `/dev/shm` across Docker Compose, Kubernetes Helm, and AWS ECS task definitions.
 
 ### 3. Zero-Leak Secrets Management
-- **AES-256 Fernet Encryption**: Sensitive tokens (API keys, Jira tokens, Slack webhooks) are encrypted dynamically in PostgreSQL.
+- **Master Encryption Key (`BARELY_SECRET_KEY`)**: 256-bit symmetric key (`openssl rand -hex 32`) powering Authenticated Symmetric Cipher / Fernet AES-256 encryption for all credentials stored at rest in PostgreSQL.
 - **Zero-Leak Masking**: Keys are sanitized and masked in all API responses and UI components (`sk-ant-***`).
 - **CNCF External Secrets Operator (ESO)**: Native support for synchronizing secrets directly from AWS Secrets Manager or HashiCorp Vault into Kubernetes pods without plain-text storage in Helm values.
 

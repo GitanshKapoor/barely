@@ -119,12 +119,13 @@ kubectl create secret generic barely-db-secret \
 ```bash
 kubectl create secret generic barely-secrets \
   --namespace barely \
+  --from-literal=barely_secret_key="$(openssl rand -hex 32)" \
   --from-literal=anthropic_api_key="sk-ant-api03-..." \
   --from-literal=openai_api_key="sk-proj-..." \
   --from-literal=jira_api_token="your_token" \
   --from-literal=slack_webhook_url="https://hooks.slack.com/services/..."
 ```
-*(Alternatively, enable `externalSecrets.enabled: true` to synchronize automatically from AWS Secrets Manager or HashiCorp Vault).*
+*(Alternatively, enable `externalSecrets.enabled: true` to synchronize automatically from AWS Secrets Manager or HashiCorp Vault. If omitted, `barely-api` automatically generates and commits a master key directly to PostgreSQL on initial boot).*
 
 ### 4. Create Production `values-prod.yaml`
 ```yaml

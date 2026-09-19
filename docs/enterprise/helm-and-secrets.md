@@ -291,3 +291,42 @@ When `secrets.mode: "helm"` is active:
 * **Auto-Disabled Secret Inputs**: All secret fields (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, etc.) are grayed out with a lock icon 🔒 and marked **Read-Only** to prevent accidental drift.
 * **API Level Enforcement**: The API rejects secret updates with `HTTP 403 Forbidden` if anyone attempts to edit via API when Helm mode is active.
 * **Live Testing Active**: The **Test** button remains 100% active, allowing operators to run live 1-token pings against Anthropic, OpenAI, Groq, or Gemini to verify credentials directly from the web dashboard.
+
+---
+
+## 8. Master Encryption Key (`BARELY_SECRET_KEY` & `.barely_master.key`)
+
+Barely encrypts all credentials at rest in PostgreSQL/SQLite using **AES-256 / Authenticated Keystream Cipher (Encrypt-then-MAC)**. The master key ensures that tokens saved in the database cannot be read in plaintext by database administrators or unauthorized processes.
+
+### How Users Generate a Master Key
+
+Generate a cryptographically secure 256-bit symmetric key using either OpenSSL or Python:
+
+```bash
+# Option 1: Using OpenSSL (Standard terminal on Linux/macOS)
+openssl rand -hex 32
+
+# Option 2: Using Python 3
+python3 -c "import secrets; print(secrets.token_hex(32))"
+```
+*Example output*: `a1b2c3d4e5f67890123456789abcdef0123456789abcdef0123456789abcdef0`
+
+### How to Configure Across Environments
+
+| Environment | Configuration Location | Setup Example |
+| :--- | :--- | :--- |
+| 🐳 **Docker Compose** | Root `.env` file | `BARELY_SECRET_KEY=a1b2c3...` |
+| ⎈ **Kubernetes (Helm)** | `barely-secrets` K8s Secret | `kubectl create secret generic barely-secrets -n barely --from-literal=barely_secret_key="$(openssl rand -hex 32)"` |
+| ☁️ **AWS ECS (Terraform)**| AWS Secrets Manager | `"BARELY_SECRET_KEY": "a1b2c3..."` inside `${name_prefix}-secrets` |
+| 🔄 **CI/CD Pipelines** | GitHub / GitLab Secrets | `BARELY_SECRET_KEY: ${{ secrets.BARELY_SECRET_KEY }}` |
+| 💻 **Native CLI** | Auto-created `.barely_master.key` | Generated automatically by `barely run` with `chmod 0600` |
+
+### Key Resolution Priority Hierarchy
+
+When Barely starts, it searches for the master encryption key in this exact order:
+
+1. **`BARELY_SECRET_KEY` (Environment Variable)**: Highest priority. Recommended for 12-factor apps, Docker Compose, Kubernetes, and ECS.
+2. **`_INTERNAL_MASTER_KEY` (PostgreSQL Database Record)**: If no env var is passed, `barely-api` generates a key on first boot and commits it to the shared database. All worker pods and runners automatically share this key.
+3. **`.barely_master.key` (Local Workspace File)**: Fallback for standalone local development when running without an external database. Ignored by `.gitignore` (`*.key`).
+
+> **Tip**: If you have both `BARELY_SECRET_KEY` in `.env` and `.barely_master.key` in your workspace, you can safely delete `.barely_master.key`. Because `.env` takes Priority 1, Barely will always use the key from `.env`.
