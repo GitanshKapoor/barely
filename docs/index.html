@@ -120,7 +120,7 @@
       <div class="hidden lg:flex items-center space-x-7 text-sm font-medium text-slate-300">
         <a href="#features" class="hover:text-white transition-colors">Features</a>
         <a href="#architecture" class="hover:text-white transition-colors">Architecture</a>
-        <a href="#quickstart" class="hover:text-white transition-colors">Quickstart</a>
+        <a href="#quickstart" class="hover:text-white transition-colors">Quickstart &amp; Deployments</a>
         <a href="#roadmap" class="hover:text-white transition-colors">Roadmap</a>
         <a href="https://github.com/GitanshKapoor/barely#readme" target="_blank" class="hover:text-white transition-colors flex items-center gap-1">
           Docs <i data-lucide="external-link" class="w-3.5 h-3.5"></i>
@@ -173,11 +173,11 @@
           <span class="text-slate-500 text-xs">➔</span>
         </a>
         <a href="#quickstart" onclick="toggleMobileMenu()" class="flex items-center justify-between py-2.5 px-3 rounded-lg hover:bg-dark-800 transition-colors">
-          <span>Quickstart</span>
+          <span>Quickstart &amp; Deployments</span>
           <span class="text-slate-500 text-xs">➔</span>
         </a>
         <a href="#roadmap" onclick="toggleMobileMenu()" class="flex items-center justify-between py-2.5 px-3 rounded-lg hover:bg-dark-800 transition-colors">
-          <span>Roadmap (v2.0)</span>
+          <span>Roadmap (v3.0)</span>
           <span class="text-slate-500 text-xs">➔</span>
         </a>
         <a href="https://github.com/GitanshKapoor/barely#readme" target="_blank" class="flex items-center justify-between py-2.5 px-3 rounded-lg hover:bg-dark-800 transition-colors text-sky-400">
@@ -644,15 +644,23 @@
           Up and Running in 60 Seconds
         </h2>
         <p class="text-slate-400 text-xs sm:text-base leading-relaxed">
-          Deploy the complete stack via Docker Compose or run the native Python worker for visual browser execution.
+          Deploy the complete stack via Docker Compose, Kubernetes Helm, AWS ECS Terraform, or run locally via native Python CLI.
         </p>
       </div>
 
       <!-- Tabs Navigation -->
-      <div class="flex flex-wrap sm:flex-nowrap justify-center gap-2 mb-6 px-1">
+      <div class="flex flex-wrap justify-center gap-2 mb-6 px-1">
         <button onclick="switchTab('docker')" id="tab-btn-docker" class="tab-btn active px-3.5 py-2 sm:px-4 sm:py-2 rounded-lg text-xs sm:text-sm font-semibold bg-brand-500 text-white shadow-lg transition-all flex items-center gap-1.5">
           <i data-lucide="container" class="w-4 h-4"></i>
           <span>Docker Compose</span>
+        </button>
+        <button onclick="switchTab('helm')" id="tab-btn-helm" class="tab-btn px-3.5 py-2 sm:px-4 sm:py-2 rounded-lg text-xs sm:text-sm font-semibold bg-dark-800 text-slate-300 hover:bg-dark-700 transition-all flex items-center gap-1.5 border border-dark-700">
+          <i data-lucide="layers" class="w-4 h-4"></i>
+          <span>Kubernetes (Helm)</span>
+        </button>
+        <button onclick="switchTab('terraform')" id="tab-btn-terraform" class="tab-btn px-3.5 py-2 sm:px-4 sm:py-2 rounded-lg text-xs sm:text-sm font-semibold bg-dark-800 text-slate-300 hover:bg-dark-700 transition-all flex items-center gap-1.5 border border-dark-700">
+          <i data-lucide="cloud" class="w-4 h-4"></i>
+          <span>AWS ECS (Terraform)</span>
         </button>
         <button onclick="switchTab('cli')" id="tab-btn-cli" class="tab-btn px-3.5 py-2 sm:px-4 sm:py-2 rounded-lg text-xs sm:text-sm font-semibold bg-dark-800 text-slate-300 hover:bg-dark-700 transition-all flex items-center gap-1.5 border border-dark-700">
           <i data-lucide="terminal" class="w-4 h-4"></i>
@@ -669,10 +677,16 @@
         <div class="rounded-xl overflow-hidden bg-dark-850 border border-dark-700/80 shadow-2xl">
           <div class="flex items-center justify-between px-3 sm:px-4 py-2.5 sm:py-3 bg-dark-900 border-b border-dark-700/60 font-mono text-[11px] sm:text-xs text-slate-400">
             <span class="truncate pr-2">docker-compose.yml • Control Plane + Worker + DB + UI</span>
-            <button onclick="copyCommand(this, 'git clone https://github.com/GitanshKapoor/barely.git\ncd barely\ncp .env.example .env\ndocker compose up -d')" class="flex items-center gap-1 text-slate-300 hover:text-white shrink-0">
-              <i data-lucide="copy" class="w-3.5 h-3.5"></i>
-              <span>Copy</span>
-            </button>
+            <div class="flex items-center gap-3 shrink-0">
+              <a href="https://github.com/GitanshKapoor/barely/tree/main/deploy/docker" target="_blank" class="hidden xs:flex items-center gap-1 text-sky-400 hover:text-sky-300 text-[11px]">
+                <i data-lucide="book-open" class="w-3.5 h-3.5"></i>
+                <span>Runbook</span>
+              </a>
+              <button onclick="copyCommand(this, 'git clone https://github.com/GitanshKapoor/barely.git\ncd barely\ncp .env.example .env\ndocker compose up -d')" class="flex items-center gap-1 text-slate-300 hover:text-white shrink-0">
+                <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+                <span>Copy</span>
+              </button>
+            </div>
           </div>
           <pre class="p-3.5 sm:p-5 font-mono text-[11px] sm:text-xs sm:text-sm text-slate-200 overflow-x-auto leading-relaxed"><code><span class="text-slate-500"># 1. Clone repository</span>
 <span class="text-brand-400">git</span> clone https://github.com/GitanshKapoor/barely.git
@@ -684,14 +698,84 @@
 <span class="text-slate-500"># 3. Boot database, control plane API, worker, and web dashboard</span>
 <span class="text-brand-400">docker</span> compose up -d
 
-<span class="text-emerald-400">✔</span> [barely-db]     PostgreSQL 15 running on port 5432
+<span class="text-emerald-400">✔</span> [barely-db]     PostgreSQL 16 running on port 5432 (Internal Network Only)
 <span class="text-emerald-400">✔</span> [barely-api]    FastAPI Control Plane running on http://localhost:8000
-<span class="text-emerald-400">✔</span> [barely-worker] Autonomous Playwright Engine active
+<span class="text-emerald-400">✔</span> [barely-worker] Autonomous Playwright Engine active (UID 10001, 1GB shm)
 <span class="text-emerald-400">✔</span> [barely-ui]     Next.js Web Dashboard ready on http://localhost:3000</code></pre>
         </div>
       </div>
 
-      <!-- Tab 2: Native CLI -->
+      <!-- Tab 2: Kubernetes (Helm v3) -->
+      <div id="tab-content-helm" class="tab-panel hidden">
+        <div class="rounded-xl overflow-hidden bg-dark-850 border border-dark-700/80 shadow-2xl">
+          <div class="flex items-center justify-between px-3 sm:px-4 py-2.5 sm:py-3 bg-dark-900 border-b border-dark-700/60 font-mono text-[11px] sm:text-xs text-slate-400">
+            <span class="truncate pr-2">charts/barely • Production Helm v3 Chart + Ingress + HPA</span>
+            <div class="flex items-center gap-3 shrink-0">
+              <a href="https://github.com/GitanshKapoor/barely/tree/main/charts/barely" target="_blank" class="hidden xs:flex items-center gap-1 text-sky-400 hover:text-sky-300 text-[11px]">
+                <i data-lucide="book-open" class="w-3.5 h-3.5"></i>
+                <span>Runbook</span>
+              </a>
+              <button onclick="copyCommand(this, 'kubectl create namespace barely 2>/dev/null || true\nkubectl create secret generic barely-db-secret -n barely --from-literal=url=\x22postgresql://user:pass@rds.endpoint:5432/barelydb?sslmode=require\x22\nkubectl create secret generic barely-secrets -n barely --from-literal=anthropic_api_key=\x22sk-ant-api03-...\x22\nhelm install barely ./charts/barely -n barely --create-namespace --set ingress.enabled=true --set ingress.hosts[0].host=\x22barely.internal\x22')" class="flex items-center gap-1 text-slate-300 hover:text-white shrink-0">
+                <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+                <span>Copy</span>
+              </button>
+            </div>
+          </div>
+          <pre class="p-3.5 sm:p-5 font-mono text-[11px] sm:text-xs sm:text-sm text-slate-200 overflow-x-auto leading-relaxed"><code><span class="text-slate-500"># 1. Provision secrets securely via Kubernetes Secrets (or sync via CNCF ESO)</span>
+<span class="text-brand-400">kubectl</span> create secret generic barely-db-secret -n barely \
+  --from-literal=url=<span class="text-sky-300">"postgresql://user:pass@rds.endpoint:5432/barelydb?sslmode=require"</span>
+
+<span class="text-brand-400">kubectl</span> create secret generic barely-secrets -n barely \
+  --from-literal=anthropic_api_key=<span class="text-amber-300">"sk-ant-api03-..."</span>
+
+<span class="text-slate-500"># 2. Deploy Helm chart with NGINX Ingress & HPA (zero plaintext CLI secrets)</span>
+<span class="text-brand-400">helm</span> install barely ./charts/barely -n barely --create-namespace \
+  --set ingress.enabled=true \
+  --set ingress.hosts[0].host=<span class="text-sky-300">"barely.internal"</span>
+
+<span class="text-slate-500"># 3. Verify unprivileged runner pods (UID 10001 · 1GB /dev/shm)</span>
+<span class="text-brand-400">kubectl</span> get pods -n barely
+
+<span class="text-emerald-400">✔</span> [barely-ui-7d84bc-x92q1]      1/1 Running   (Next.js Standalone, port 3000)
+<span class="text-emerald-400">✔</span> [barely-api-6cb5f7-m48l2]     1/1 Running   (FastAPI Control Plane, port 8000)
+<span class="text-emerald-400">✔</span> [barely-worker-59f77b-k8p9r]  1/1 Running   (Playwright Browser Pod, shm 1Gi)
+<span class="text-slate-400">ℹ  PostgreSQL 16: Managed Cloud Database (Amazon RDS / Cloud SQL / Neon)</span>
+<span class="text-slate-400">ℹ  CNCF ESO: Native support for AWS Secrets Manager &amp; HashiCorp Vault sync</span></code></pre>
+        </div>
+      </div>
+
+      <!-- Tab 3: AWS ECS (Terraform) -->
+      <div id="tab-content-terraform" class="tab-panel hidden">
+        <div class="rounded-xl overflow-hidden bg-dark-850 border border-dark-700/80 shadow-2xl">
+          <div class="flex items-center justify-between px-3 sm:px-4 py-2.5 sm:py-3 bg-dark-900 border-b border-dark-700/60 font-mono text-[11px] sm:text-xs text-slate-400">
+            <span class="truncate pr-2">deploy/terraform • AWS ECS Fargate + ALB + Cloud Map Private DNS</span>
+            <div class="flex items-center gap-3 shrink-0">
+              <a href="https://github.com/GitanshKapoor/barely/tree/main/deploy/terraform" target="_blank" class="hidden xs:flex items-center gap-1 text-sky-400 hover:text-sky-300 text-[11px]">
+                <i data-lucide="book-open" class="w-3.5 h-3.5"></i>
+                <span>Runbook</span>
+              </a>
+              <button onclick="copyCommand(this, 'cd deploy/terraform\ncp terraform.tfvars.example terraform.tfvars\nterraform init\nterraform apply')" class="flex items-center gap-1 text-slate-300 hover:text-white shrink-0">
+                <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+                <span>Copy</span>
+              </button>
+            </div>
+          </div>
+          <pre class="p-3.5 sm:p-5 font-mono text-[11px] sm:text-xs sm:text-sm text-slate-200 overflow-x-auto leading-relaxed"><code><span class="text-slate-500"># 1. Initialize production Terraform module</span>
+<span class="text-brand-400">cd</span> deploy/terraform
+<span class="text-brand-400">cp</span> terraform.tfvars.example terraform.tfvars
+<span class="text-brand-400">terraform</span> init
+
+<span class="text-slate-500"># 2. Provision zero-trust Fargate tasks in 100% private subnets</span>
+<span class="text-brand-400">terraform</span> apply
+
+<span class="text-emerald-400">✔</span> Apply complete! Resources: 14 added, 0 changed, 0 destroyed.
+<span class="text-emerald-400">✔</span> Outputs:
+<span class="text-slate-400">  alb_dns_name =</span> <span class="text-sky-300">"barely-alb-123456789.us-east-1.elb.amazonaws.com"</span>
+<span class="text-slate-400">  cloudmap_namespace =</span> <span class="text-sky-300">"barely.internal"</span></code></pre>
+        </div>
+      </div>
+
+      <!-- Tab 4: Native CLI -->
       <div id="tab-content-cli" class="tab-panel hidden">
         <div class="rounded-xl overflow-hidden bg-dark-850 border border-dark-700/80 shadow-2xl">
           <div class="flex items-center justify-between px-3 sm:px-4 py-2.5 sm:py-3 bg-dark-900 border-b border-dark-700/60 font-mono text-[11px] sm:text-xs text-slate-400">
@@ -712,7 +796,7 @@
         </div>
       </div>
 
-      <!-- Tab 3: Goal File -->
+      <!-- Tab 5: Goal File -->
       <div id="tab-content-goal" class="tab-panel hidden">
         <div class="rounded-xl overflow-hidden bg-dark-850 border border-dark-700/80 shadow-2xl">
           <div class="flex items-center justify-between px-3 sm:px-4 py-2.5 sm:py-3 bg-dark-900 border-b border-dark-700/60 font-mono text-[11px] sm:text-xs text-slate-400">
@@ -733,6 +817,59 @@
 3. Click the first product card and click <span class="text-amber-300">"Add to Cart"</span>
 4. Verify the cart badge displays <span class="text-amber-300">"1"</span>
 5. Proceed to checkout and assert total price matches <span class="text-amber-300">"$99"</span></code></pre>
+        </div>
+      </div>
+
+      <!-- Cloud Deployment Runbooks Grid -->
+      <div class="mt-10 pt-8 border-t border-dark-700/60">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between mb-5 gap-1.5">
+          <div class="flex items-center gap-2">
+            <i data-lucide="server" class="w-4 h-4 text-sky-400"></i>
+            <h3 class="text-sm sm:text-base font-bold text-white">Enterprise Cloud Deployments &amp; Runbooks</h3>
+          </div>
+          <span class="text-[11px] font-mono text-slate-400">Zero-Trust UID 10001 • Production Ready</span>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+          <!-- Card 1: Docker Compose -->
+          <a href="https://github.com/GitanshKapoor/barely/tree/main/deploy/docker" target="_blank" class="p-4 rounded-xl bg-dark-850/80 hover:bg-dark-800/80 border border-dark-700 hover:border-slate-600 transition-all group block">
+            <div class="flex items-center justify-between mb-2">
+              <span class="p-2 rounded-lg bg-sky-500/10 text-sky-400 group-hover:scale-105 transition-transform"><i data-lucide="container" class="w-4 h-4"></i></span>
+              <i data-lucide="arrow-up-right" class="w-4 h-4 text-slate-500 group-hover:text-white transition-colors"></i>
+            </div>
+            <div class="text-sm font-semibold text-white group-hover:text-sky-300 transition-colors">Docker Compose</div>
+            <p class="text-[11px] text-slate-400 mt-1 leading-relaxed">Multi-bridge network segmentation, unprivileged UID 10001, 1GB /dev/shm.</p>
+          </a>
+
+          <!-- Card 2: Kubernetes Helm -->
+          <a href="https://github.com/GitanshKapoor/barely/tree/main/charts/barely" target="_blank" class="p-4 rounded-xl bg-dark-850/80 hover:bg-dark-800/80 border border-dark-700 hover:border-slate-600 transition-all group block">
+            <div class="flex items-center justify-between mb-2">
+              <span class="p-2 rounded-lg bg-blue-500/10 text-blue-400 group-hover:scale-105 transition-transform"><i data-lucide="layers" class="w-4 h-4"></i></span>
+              <i data-lucide="arrow-up-right" class="w-4 h-4 text-slate-500 group-hover:text-white transition-colors"></i>
+            </div>
+            <div class="text-sm font-semibold text-white group-hover:text-blue-300 transition-colors">Kubernetes (Helm v3)</div>
+            <p class="text-[11px] text-slate-400 mt-1 leading-relaxed">Production Helm chart, NGINX Ingress, HPA scaling, zero-trust NetworkPolicy.</p>
+          </a>
+
+          <!-- Card 3: AWS ECS Terraform -->
+          <a href="https://github.com/GitanshKapoor/barely/tree/main/deploy/terraform" target="_blank" class="p-4 rounded-xl bg-dark-850/80 hover:bg-dark-800/80 border border-dark-700 hover:border-slate-600 transition-all group block">
+            <div class="flex items-center justify-between mb-2">
+              <span class="p-2 rounded-lg bg-purple-500/10 text-purple-400 group-hover:scale-105 transition-transform"><i data-lucide="cloud" class="w-4 h-4"></i></span>
+              <i data-lucide="arrow-up-right" class="w-4 h-4 text-slate-500 group-hover:text-white transition-colors"></i>
+            </div>
+            <div class="text-sm font-semibold text-white group-hover:text-purple-300 transition-colors">AWS ECS (Terraform)</div>
+            <p class="text-[11px] text-slate-400 mt-1 leading-relaxed">Fargate in private subnets, ALB routing, AWS Cloud Map DNS, Secrets Manager.</p>
+          </a>
+
+          <!-- Card 4: CI/CD Integration -->
+          <a href="https://github.com/GitanshKapoor/barely/tree/main/deploy/ci-cd" target="_blank" class="p-4 rounded-xl bg-dark-850/80 hover:bg-dark-800/80 border border-dark-700 hover:border-slate-600 transition-all group block">
+            <div class="flex items-center justify-between mb-2">
+              <span class="p-2 rounded-lg bg-emerald-500/10 text-emerald-400 group-hover:scale-105 transition-transform"><i data-lucide="git-pull-request" class="w-4 h-4"></i></span>
+              <i data-lucide="arrow-up-right" class="w-4 h-4 text-slate-500 group-hover:text-white transition-colors"></i>
+            </div>
+            <div class="text-sm font-semibold text-white group-hover:text-emerald-300 transition-colors">CI/CD Gating</div>
+            <p class="text-[11px] text-slate-400 mt-1 leading-relaxed">Automated AI test runs on PRs, GitHub secrets setup, audit PDF artifacts.</p>
+          </a>
         </div>
       </div>
 
@@ -929,6 +1066,10 @@
       if (targetBtn) {
         targetBtn.classList.remove('bg-dark-800', 'text-slate-300');
         targetBtn.classList.add('bg-brand-500', 'text-white', 'shadow-lg');
+      }
+
+      if (window.lucide && window.lucide.createIcons) {
+        window.lucide.createIcons();
       }
     }
 
