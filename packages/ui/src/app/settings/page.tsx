@@ -436,10 +436,27 @@ export default function SettingsPage() {
     setTestingModel(true);
     setModelTestResult(null);
     try {
+      let keyToPass: string | undefined = undefined;
+      const lower = target.toLowerCase();
+      if (lower.startsWith('anthropic') || lower.includes('claude')) {
+        keyToPass = inputValues['ANTHROPIC_API_KEY']?.trim();
+      } else if (lower.startsWith('openai') || lower.includes('gpt') || lower.startsWith('o1') || lower.startsWith('o3')) {
+        keyToPass = inputValues['OPENAI_API_KEY']?.trim();
+      } else if (lower.startsWith('groq') || lower.includes('llama') || lower.includes('mixtral') || lower.includes('deepseek')) {
+        keyToPass = inputValues['GROQ_API_KEY']?.trim();
+      } else if (lower.startsWith('gemini')) {
+        keyToPass = inputValues['GEMINI_API_KEY']?.trim();
+      }
+
+      const payload: any = { model: target };
+      if (keyToPass) {
+        payload.api_key = keyToPass;
+      }
+
       const res = await fetch(`${apiUrl}/api/settings/test-model`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ model: target })
+        body: JSON.stringify(payload)
       });
       const data = await res.json();
       if (data.success) {

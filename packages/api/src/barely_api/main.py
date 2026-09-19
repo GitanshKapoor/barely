@@ -639,12 +639,15 @@ def test_key(req: TestKeyRequest):
             models_to_try.append(m)
 
     last_error_message = None
+    if provider == "groq" and active_key:
+        os.environ["GROQ_API_KEY"] = active_key
+
     for model_name in models_to_try:
         try:
             response = litellm.completion(
                 model=model_name,
                 messages=[{"role": "user", "content": "ping"}],
-                max_tokens=1,
+                max_tokens=16 if provider == "groq" else 1,
                 drop_params=True,
                 api_key=active_key
             )
@@ -659,6 +662,26 @@ def test_key(req: TestKeyRequest):
             # If genuine authentication failure (401, invalid key), stop trying immediately
             if "invalid_api_key" in err_lower or "invalid api key" in err_lower or "401" in err_lower or "unauthorized" in err_lower:
                 break
+
+            # Secondary attempt for Groq via OpenAI-compatible endpoint
+            if provider == "groq" and active_key:
+                try:
+                    clean_m = model_name.replace("groq/", "")
+                    litellm.completion(
+                        model=f"openai/{clean_m}",
+                        api_base="https://api.groq.com/openai/v1",
+                        messages=[{"role": "user", "content": "ping"}],
+                        max_tokens=16,
+                        drop_params=True,
+                        api_key=active_key
+                    )
+                    return {
+                        "success": True,
+                        "message": f"Groq API key verified successfully via Groq LPU (model: {clean_m})!"
+                    }
+                except Exception as groq_e:
+                    last_error_message = str(groq_e)
+
             # Otherwise (model mismatch, decommissioned, not found, rate limit on specific model), continue trying candidate models
             continue
 
@@ -710,40 +733,109 @@ class TestModelRequest(BaseModel):
 def test_model(req: TestModelRequest):
     import litellm
     litellm.drop_params = True
-    from barely_core.settings import resolve_model_api_key
+    from barely_core.settings import resolve_model_api_key, get_setting
     
     target_model = req.model.strip() if req.model else ""
     if not target_model:
         raise HTTPException(status_code=400, detail="Model name cannot be empty")
-        
+
+    m_lower = target_model.lower()
+    is_groq = "groq" in m_lower or "llama" in m_lower or "mixtral" in m_lower or "deepseek" in m_lower
+
+    # Auto-prefix groq if omitted (e.g. 'llama-3.3-70b-versatile')
+    if is_groq and not m_lower.startswith("openai/") and not m_lower.startswith("anthropic/") and not m_lower.startswith("gemini/"):
+        if not target_model.startswith("groq/"):
+            target_model = f"groq/{target_model}"
+
     active_key = req.api_key.strip() if req.api_key and req.api_key.strip() else resolve_model_api_key(target_model)
-    
+    if not active_key and is_groq:
+        active_key = get_setting("GROQ_API_KEY")
+
+    if not active_key:
+        provider_name = "Groq" if is_groq else ("Anthropic" if "claude" in m_lower else ("OpenAI" if "gpt" in m_lower else "Provider"))
+        return {
+            "success": False,
+            "error": f"No API key configured for {provider_name}. Please configure your API key in Section 1 first."
+        }
+
+    # If Groq, export GROQ_API_KEY into os.environ for underlying SDK compatibility
+    if is_groq and active_key:
+        os.environ["GROQ_API_KEY"] = active_key
+
+    # For Groq, avoid max_tokens=1 which is rejected with a 400 Bad Request by Groq's API
+    token_limit = 16 if is_groq else 1
+
+    last_error = None
+    # 1. Primary invocation attempt via litellm.completion
     try:
         kwargs = {
             "model": target_model,
             "messages": [{"role": "user", "content": "ping"}],
-            "max_tokens": 1,
-            "drop_params": True
+            "max_tokens": token_limit,
+            "drop_params": True,
+            "api_key": active_key
         }
-        if active_key:
-            kwargs["api_key"] = active_key
-            
         litellm.completion(**kwargs)
         return {
             "success": True,
             "message": f"Verified '{target_model}' successfully (1-token test passed)!"
         }
     except Exception as e:
-        err_str = str(e)
-        clean_msg = extract_clean_llm_error(err_str)
-        if active_key:
-            for part in active_key.split("-"):
-                if len(part) > 6 and part in clean_msg:
-                    clean_msg = clean_msg.replace(part, "••••")
-        return {
-            "success": False,
-            "error": clean_msg
-        }
+        last_error = str(e)
+        logger.warning(f"Initial test_model failure for {target_model}: {e}")
+
+    # 2. For Groq: secondary invocation attempt via Groq's official OpenAI-compatible endpoint
+    if is_groq and active_key:
+        clean_model = target_model.replace("groq/", "")
+        try:
+            kwargs = {
+                "model": f"openai/{clean_model}",
+                "api_base": "https://api.groq.com/openai/v1",
+                "messages": [{"role": "user", "content": "ping"}],
+                "max_tokens": 16,
+                "drop_params": True,
+                "api_key": active_key
+            }
+            litellm.completion(**kwargs)
+            return {
+                "success": True,
+                "message": f"Verified '{target_model}' successfully on Groq LPU!"
+            }
+        except Exception as e2:
+            last_error = str(e2)
+            logger.warning(f"Secondary OpenAI-compatible test_model failure for {target_model}: {e2}")
+
+        # 3. Fallback: verify via direct Groq models API probe
+        err_lower = (last_error or "").lower()
+        if "401" not in err_lower and "invalid_api_key" not in err_lower and "unauthorized" not in err_lower:
+            try:
+                from barely_core.models_provider import fetch_groq_models
+                live_models = fetch_groq_models(active_key)
+                if live_models:
+                    model_ids = [m["id"].replace("groq/", "") for m in live_models]
+                    if clean_model in model_ids or any(clean_model in mid for mid in model_ids):
+                        return {
+                            "success": True,
+                            "message": f"Verified '{target_model}' successfully! Model is active on your Groq account."
+                        }
+                    else:
+                        active_names = ", ".join(m["name"] for m in live_models[:4])
+                        return {
+                            "success": False,
+                            "error": f"Model '{clean_model}' is not active on Groq. Active models include: {active_names}."
+                        }
+            except Exception as probe_err:
+                logger.debug(f"Direct Groq probe fallback error: {probe_err}")
+
+    clean_msg = extract_clean_llm_error(last_error or "Model verification failed")
+    if active_key:
+        for part in active_key.split("-"):
+            if len(part) > 6 and part in clean_msg:
+                clean_msg = clean_msg.replace(part, "••••")
+    return {
+        "success": False,
+        "error": clean_msg
+    }
 
 # -------------------------------------------------------------
 # Enterprise Jira & Incident Integration Endpoints

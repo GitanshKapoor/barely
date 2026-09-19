@@ -102,5 +102,94 @@ class TestAgentLoopLiteLLM(unittest.TestCase):
         third_call_kwargs = mock_completion.call_args_list[2][1]
         self.assertEqual(third_call_kwargs.get("temperature"), 1.0)
 
+    @patch("barely_core.agent.loop.resolve_model_api_key")
+    @patch("barely_core.agent.loop.litellm.completion")
+    def test_call_llm_groq_prefix_and_environ(self, mock_completion, mock_resolve_key):
+        """
+        Verify that Groq models without groq/ prefix are auto-prefixed, GROQ_API_KEY is exported,
+        and safe max_tokens=2048 is provided.
+        """
+        import os
+        mock_resolve_key.return_value = "gsk_test_token_123"
+
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock()]
+        mock_response.choices[0].message.content = '{"thought": "Fill search input", "action": "type", "element_id": 12, "text": "Barely testing"}'
+        mock_completion.return_value = mock_response
+
+        dummy_engine = MagicMock()
+        agent = AgentLoop(engine=dummy_engine, model="llama-3.3-70b-versatile")
+
+        result = agent._call_llm("Perform test step")
+        self.assertEqual(result.get("action"), "type")
+        self.assertEqual(result.get("text"), "Barely testing")
+        self.assertEqual(mock_completion.call_count, 1)
+
+        call_kwargs = mock_completion.call_args[1]
+        self.assertEqual(call_kwargs.get("model"), "groq/llama-3.3-70b-versatile")
+        self.assertEqual(call_kwargs.get("max_tokens"), 2048)
+        self.assertEqual(os.environ.get("GROQ_API_KEY"), "gsk_test_token_123")
+
+    @patch("barely_core.agent.loop.resolve_model_api_key")
+    @patch("barely_core.agent.loop.litellm.completion")
+    def test_call_llm_groq_fallback_openai_endpoint(self, mock_completion, mock_resolve_key):
+        """
+        Verify that if the native groq/ provider router fails, it falls back to the official
+        OpenAI-compatible endpoint at https://api.groq.com/openai/v1.
+        """
+        mock_resolve_key.return_value = "gsk_test_token_123"
+
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock()]
+        mock_response.choices[0].message.content = '{"thought": "Finish test", "action": "finish"}'
+
+        # First call fails with a provider error, second call succeeds via fallback
+        err = Exception("Provider not found / connection error for groq/llama-3.3-70b-versatile")
+        mock_completion.side_effect = [err, mock_response]
+
+        dummy_engine = MagicMock()
+        agent = AgentLoop(engine=dummy_engine, model="groq/llama-3.3-70b-versatile")
+
+        result = agent._call_llm("Perform test step")
+        self.assertEqual(result.get("action"), "finish")
+        self.assertEqual(mock_completion.call_count, 2)
+
+        fallback_call_kwargs = mock_completion.call_args_list[1][1]
+        self.assertEqual(fallback_call_kwargs.get("model"), "openai/llama-3.3-70b-versatile")
+        self.assertEqual(fallback_call_kwargs.get("api_base"), "https://api.groq.com/openai/v1")
+
+    @patch("barely_core.agent.loop.resolve_model_api_key")
+    @patch("barely_core.agent.loop.litellm.completion")
+    def test_call_llm_groq_deepseek_r1_strips_think_tags(self, mock_completion, mock_resolve_key):
+        """
+        Verify that DeepSeek R1 models on Groq outputting <think>...</think> reasoning blocks
+        have their thought tags stripped so that valid JSON actions are extracted cleanly.
+        """
+        mock_resolve_key.return_value = "gsk_test_token_123"
+
+        mock_response = MagicMock()
+        mock_response.choices = [MagicMock()]
+        mock_response.choices[0].message.content = """
+<think>
+Analyzing accessibility DOM tree.
+The user wants to click the Checkout button. Element ID is 44.
+</think>
+```json
+{
+  "thought": "Click the Checkout button",
+  "action": "click",
+  "element_id": 44
+}
+```
+"""
+        mock_completion.return_value = mock_response
+
+        dummy_engine = MagicMock()
+        agent = AgentLoop(engine=dummy_engine, model="groq/deepseek-r1-distill-llama-70b")
+
+        result = agent._call_llm("Click checkout")
+        self.assertEqual(result.get("action"), "click")
+        self.assertEqual(result.get("element_id"), 44)
+
 if __name__ == "__main__":
     unittest.main()

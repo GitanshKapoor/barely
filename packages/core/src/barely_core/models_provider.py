@@ -190,7 +190,7 @@ def fetch_groq_models(api_key: str) -> List[Dict[str, Any]]:
     Strictly filters for ACTIVE chat/vision inference models (excludes whisper, guard, and deprecated models).
     """
     clean_key = api_key.strip()
-    if not clean_key or not clean_key.startswith("gsk_"):
+    if not clean_key:
         return []
 
     req = urllib.request.Request(

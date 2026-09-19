@@ -318,16 +318,31 @@ Always adopt the persona, domain knowledge, and testing mindset appropriate for 
             {"role": "user", "content": prompt}
         ]
         
+        import os
+
         # Dynamically resolve encrypted key from DB or fallback to environment
         api_key = resolve_model_api_key(self.model)
         call_kwargs = {}
         if api_key:
             call_kwargs["api_key"] = api_key
 
+        model_name = self.model
+        m_lower = model_name.lower()
+        is_groq = "groq" in m_lower or "llama" in m_lower or "mixtral" in m_lower or "deepseek" in m_lower
+        if is_groq and not m_lower.startswith("openai/") and not m_lower.startswith("anthropic/") and not m_lower.startswith("gemini/"):
+            if not model_name.startswith("groq/"):
+                model_name = f"groq/{model_name}"
+            if api_key:
+                os.environ["GROQ_API_KEY"] = api_key
+
+        # Safe token ceiling to prevent LiteLLM/Groq token overflow or missing token errors
+        call_kwargs["max_tokens"] = 2048
+
         # Call LiteLLM with drop_params=True and resilient fallback for models rejecting custom temperature (e.g. claude-sonnet-5, o1, o3-mini)
+        response = None
         try:
             response = litellm.completion(
-                model=self.model,
+                model=model_name,
                 messages=messages,
                 temperature=0.0,
                 drop_params=True,
@@ -337,20 +352,20 @@ Always adopt the persona, domain knowledge, and testing mindset appropriate for 
             err_str = str(e).lower()
             if "unsupportedparamserror" in err_str or "temperature" in err_str or "unsupported params" in err_str:
                 logger.warning(
-                    f"Model '{self.model}' rejected temperature=0.0 ({e}). Retrying without temperature..."
+                    f"Model '{model_name}' rejected temperature=0.0 ({e}). Retrying without temperature..."
                 )
                 try:
                     response = litellm.completion(
-                        model=self.model,
+                        model=model_name,
                         messages=messages,
                         drop_params=True,
                         **call_kwargs
                     )
                 except Exception as e2:
                     if "temperature=1" in str(e2).lower() or "only temperature=1" in err_str:
-                        logger.warning(f"Model '{self.model}' mandates temperature=1.0. Retrying with temperature=1.0...")
+                        logger.warning(f"Model '{model_name}' mandates temperature=1.0. Retrying with temperature=1.0...")
                         response = litellm.completion(
-                            model=self.model,
+                            model=model_name,
                             messages=messages,
                             temperature=1.0,
                             drop_params=True,
@@ -358,10 +373,31 @@ Always adopt the persona, domain knowledge, and testing mindset appropriate for 
                         )
                     else:
                         raise e2
+            elif is_groq and ("not_found" in err_str or "connection" in err_str or "unsupported" in err_str or "provider" in err_str):
+                # Resilient fallback: Try Groq via its OpenAI-compatible endpoint
+                clean_slug = model_name.replace("groq/", "")
+                logger.warning(f"Groq provider invocation error ({e}). Retrying via Groq OpenAI-compatible endpoint...")
+                try:
+                    call_kwargs_openai = dict(call_kwargs)
+                    call_kwargs_openai["api_base"] = "https://api.groq.com/openai/v1"
+                    response = litellm.completion(
+                        model=f"openai/{clean_slug}",
+                        messages=messages,
+                        drop_params=True,
+                        **call_kwargs_openai
+                    )
+                except Exception as e_retry:
+                    raise e_retry
             else:
                 raise
-        raw_output = response.choices[0].message.content
+
+        raw_output = ""
+        if response and response.choices and len(response.choices) > 0 and response.choices[0].message:
+            raw_output = response.choices[0].message.content or ""
         
+        # Strip DeepSeek R1 reasoning thought tags (<think>...</think>) if present
+        raw_output = re.sub(r'<think>.*?</think>', '', raw_output, flags=re.DOTALL).strip()
+
         # More robust JSON extraction using regex to find the first { and last }
         json_match = re.search(r'\{.*\}', raw_output, re.DOTALL)
         if json_match:
