@@ -31,6 +31,7 @@ interface ModelOption {
   description?: string;
   is_default?: boolean;
   enabled?: boolean;
+  configured?: boolean;
 }
 
 interface NewRunFormProps {
@@ -287,6 +288,16 @@ export default function NewRunForm({ initialData, triggerButton, onRunCreated }:
       e.preventDefault();
       e.stopPropagation();
     }
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+    fetch(`${apiUrl}/api/models`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (data) {
+          if (data.default_model) setDefaultModelName(data.default_model);
+          if (data.models && Array.isArray(data.models)) setAvailableModels(data.models);
+        }
+      })
+      .catch(() => {});
     if (initialData) {
       setName(initialData.name || '');
       setUrl(initialData.url || 'https://');
@@ -689,10 +700,10 @@ export default function NewRunForm({ initialData, triggerButton, onRunCreated }:
                         ⚡ Platform Default ({formatModelName(defaultModelName)})
                       </option>
 
-                      {availableModels.filter(m => m.provider === 'anthropic' && m.enabled !== false).length > 0 && (
+                      {availableModels.filter(m => m.provider === 'anthropic' && m.enabled !== false && m.configured !== false).length > 0 && (
                         <optgroup label="Anthropic (High Reasoning)">
                           {availableModels
-                            .filter(m => m.provider === 'anthropic' && m.enabled !== false)
+                            .filter(m => m.provider === 'anthropic' && m.enabled !== false && m.configured !== false)
                             .map(m => (
                               <option key={m.id} value={m.id}>
                                 {m.name} {m.recommended ? '★ (Recommended)' : ''}
@@ -701,10 +712,10 @@ export default function NewRunForm({ initialData, triggerButton, onRunCreated }:
                         </optgroup>
                       )}
 
-                      {availableModels.filter(m => m.provider === 'openai' && m.enabled !== false).length > 0 && (
+                      {availableModels.filter(m => m.provider === 'openai' && m.enabled !== false && m.configured !== false).length > 0 && (
                         <optgroup label="OpenAI (Vision Grounding)">
                           {availableModels
-                            .filter(m => m.provider === 'openai' && m.enabled !== false)
+                            .filter(m => m.provider === 'openai' && m.enabled !== false && m.configured !== false)
                             .map(m => (
                               <option key={m.id} value={m.id}>
                                 {m.name} {m.recommended ? '★ (Recommended)' : ''}
@@ -713,10 +724,10 @@ export default function NewRunForm({ initialData, triggerButton, onRunCreated }:
                         </optgroup>
                       )}
 
-                      {availableModels.filter(m => m.provider === 'gemini' && m.enabled !== false).length > 0 && (
+                      {availableModels.filter(m => m.provider === 'gemini' && m.enabled !== false && m.configured !== false).length > 0 && (
                         <optgroup label="Google Gemini (Long Context & Vision)">
                           {availableModels
-                            .filter(m => m.provider === 'gemini' && m.enabled !== false)
+                            .filter(m => m.provider === 'gemini' && m.enabled !== false && m.configured !== false)
                             .map(m => (
                               <option key={m.id} value={m.id}>
                                 {m.name} {m.recommended ? '★ (Recommended)' : ''}
@@ -725,10 +736,10 @@ export default function NewRunForm({ initialData, triggerButton, onRunCreated }:
                         </optgroup>
                       )}
 
-                      {availableModels.filter(m => m.provider === 'groq' && m.enabled !== false).length > 0 && (
+                      {availableModels.filter(m => m.provider === 'groq' && m.enabled !== false && m.configured !== false).length > 0 && (
                         <optgroup label="Groq (High-Speed LPU)">
                           {availableModels
-                            .filter(m => m.provider === 'groq' && m.enabled !== false)
+                            .filter(m => m.provider === 'groq' && m.enabled !== false && m.configured !== false)
                             .map(m => (
                               <option key={m.id} value={m.id}>
                                 {m.name} {m.recommended ? '★ (Recommended)' : ''}

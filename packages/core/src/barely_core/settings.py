@@ -518,24 +518,35 @@ def list_supported_models() -> Dict[str, Any]:
     provider_sync_status: Dict[str, Dict[str, Any]] = {}
 
     for provider, key in provider_keys.items():
-        if key and key.strip():
+        is_conf = bool(key and key.strip())
+        if is_conf:
             try:
                 dyn = get_dynamic_models_for_provider(provider, key.strip())
                 if dyn:
                     dynamic_models_by_provider[provider] = dyn
                     provider_sync_status[provider] = {"configured": True, "dynamic": True, "count": len(dyn)}
                 else:
-                    provider_sync_status[provider] = {"configured": True, "dynamic": False, "count": 0}
+                    curated_count = len([m for m in KNOWN_MODELS if m["provider"] == provider])
+                    provider_sync_status[provider] = {"configured": True, "dynamic": False, "count": curated_count}
             except Exception as ex:
                 logger.debug(f"Dynamic fetch error for {provider}: {ex}")
-                provider_sync_status[provider] = {"configured": True, "dynamic": False, "error": str(ex)}
+                curated_count = len([m for m in KNOWN_MODELS if m["provider"] == provider])
+                provider_sync_status[provider] = {"configured": True, "dynamic": False, "count": curated_count, "error": str(ex)}
         else:
             provider_sync_status[provider] = {"configured": False, "dynamic": False, "count": 0}
 
-    # Assemble complete model catalog: use dynamic models if available, otherwise curated fallback
+    # Assemble complete model catalog:
+    # If at least one provider has an active API key, ONLY include models for configured providers!
+    has_any_key = any(bool(k and k.strip()) for k in provider_keys.values())
     combined_models: List[Dict[str, Any]] = []
 
     for provider in ("anthropic", "groq", "openai", "gemini"):
+        is_conf = bool(provider_keys.get(provider) and provider_keys[provider].strip())
+
+        # Omit unconfigured providers if the user has configured at least one provider key
+        if has_any_key and not is_conf:
+            continue
+
         if provider in dynamic_models_by_provider and dynamic_models_by_provider[provider]:
             combined_models.extend(dynamic_models_by_provider[provider])
         else:
@@ -544,6 +555,14 @@ def list_supported_models() -> Dict[str, Any]:
                 m_copy = dict(m)
                 m_copy["dynamic"] = False
                 combined_models.append(m_copy)
+
+    # Ensure the active default_model is present in combined_models so active model badges don't break
+    if default_model and not any(m["id"] == default_model for m in combined_models):
+        matching_known = next((m for m in KNOWN_MODELS if m["id"] == default_model), None)
+        if matching_known:
+            m_copy = dict(matching_known)
+            m_copy["dynamic"] = False
+            combined_models.append(m_copy)
 
     # Check if Helm or environment specified a list of enabled models
     raw_enabled = os.getenv("MODELS_ENABLED") or os.getenv("BARELY_MODELS_ENABLED")
@@ -562,7 +581,8 @@ def list_supported_models() -> Dict[str, Any]:
         m_copy = dict(m)
         m_copy["is_default"] = (m["id"] == default_model)
         m_copy["enabled"] = (m["id"] in enabled_set) if enabled_set else True
-        m_copy["configured"] = provider_sync_status.get(m["provider"], {}).get("configured", False)
+        prov = m.get("provider", "")
+        m_copy["configured"] = bool(provider_keys.get(prov) and provider_keys[prov].strip())
         models_list.append(m_copy)
 
     return {

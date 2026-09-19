@@ -1954,7 +1954,7 @@ secrets:
                         const status = syncStatus[p.id];
                         const isDyn = Boolean(status?.dynamic);
                         const isConfigured = Boolean(status?.configured);
-                        const count = status?.count || availableModels.filter(m => m.provider === p.id).length;
+                        const count = status?.count || (isConfigured ? availableModels.filter(m => m.provider === p.id && m.configured !== false).length : 0);
 
                         return (
                           <div key={p.id} className="p-3.5 rounded-xl bg-[#070b14] border border-slate-800/80 flex flex-col justify-between gap-3">
@@ -2073,10 +2073,10 @@ secrets:
                         }}
                         className="w-full bg-[#070b14] border border-slate-800 focus:border-[#0278ff] focus:ring-1 focus:ring-[#0278ff] rounded-lg px-3.5 py-2.5 text-xs text-white outline-none transition-all appearance-none cursor-pointer"
                       >
-                        {availableModels.filter(m => m.provider === 'anthropic' && m.enabled !== false).length > 0 && (
+                        {availableModels.filter(m => m.provider === 'anthropic' && m.enabled !== false && m.configured !== false).length > 0 && (
                           <optgroup label="Anthropic (High Reasoning)">
                             {availableModels
-                              .filter(m => m.provider === 'anthropic' && m.enabled !== false)
+                              .filter(m => m.provider === 'anthropic' && m.enabled !== false && m.configured !== false)
                               .map(m => (
                                 <option key={m.id} value={m.id}>
                                   {m.name} {m.recommended ? '★ (Recommended)' : ''}
@@ -2085,10 +2085,10 @@ secrets:
                           </optgroup>
                         )}
 
-                        {availableModels.filter(m => m.provider === 'openai' && m.enabled !== false).length > 0 && (
+                        {availableModels.filter(m => m.provider === 'openai' && m.enabled !== false && m.configured !== false).length > 0 && (
                           <optgroup label="OpenAI (Vision Grounding)">
                             {availableModels
-                              .filter(m => m.provider === 'openai' && m.enabled !== false)
+                              .filter(m => m.provider === 'openai' && m.enabled !== false && m.configured !== false)
                               .map(m => (
                                 <option key={m.id} value={m.id}>
                                   {m.name} {m.recommended ? '★ (Recommended)' : ''}
@@ -2097,10 +2097,10 @@ secrets:
                           </optgroup>
                         )}
 
-                        {availableModels.filter(m => m.provider === 'gemini' && m.enabled !== false).length > 0 && (
+                        {availableModels.filter(m => m.provider === 'gemini' && m.enabled !== false && m.configured !== false).length > 0 && (
                           <optgroup label="Google Gemini (Long Context & Vision)">
                             {availableModels
-                              .filter(m => m.provider === 'gemini' && m.enabled !== false)
+                              .filter(m => m.provider === 'gemini' && m.enabled !== false && m.configured !== false)
                               .map(m => (
                                 <option key={m.id} value={m.id}>
                                   {m.name} {m.recommended ? '★ (Recommended)' : ''}
@@ -2109,10 +2109,10 @@ secrets:
                           </optgroup>
                         )}
 
-                        {availableModels.filter(m => m.provider === 'groq' && m.enabled !== false).length > 0 && (
+                        {availableModels.filter(m => m.provider === 'groq' && m.enabled !== false && m.configured !== false).length > 0 && (
                           <optgroup label="Groq (High-Speed LPU)">
                             {availableModels
-                              .filter(m => m.provider === 'groq' && m.enabled !== false)
+                              .filter(m => m.provider === 'groq' && m.enabled !== false && m.configured !== false)
                               .map(m => (
                                 <option key={m.id} value={m.id}>
                                   {m.name} {m.recommended ? '★ (Recommended)' : ''}

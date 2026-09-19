@@ -224,5 +224,60 @@ class TestDynamicModelsProvider(unittest.TestCase):
         self.assertEqual(resolve_model_api_key("o3-mini"), "sk-proj-val")
         self.assertEqual(resolve_model_api_key("gemini/gemini-2.0-flash"), "AIzaSy-val")
 
+    @patch("barely_core.models_provider.get_dynamic_models_for_provider")
+    @patch("barely_core.settings.get_setting")
+    def test_list_supported_models_filters_unconfigured_providers(self, mock_get_setting, mock_dynamic):
+        # Scenario: User has configured keys for Anthropic and Groq only (OpenAI and Gemini unconfigured)
+        mock_get_setting.side_effect = lambda k: {
+            "ANTHROPIC_API_KEY": "sk-ant-active-key",
+            "GROQ_API_KEY": "gsk_active_key",
+            "OPENAI_API_KEY": "",
+            "GEMINI_API_KEY": None,
+            "DEFAULT_MODEL": "anthropic/claude-3-7-sonnet"
+        }.get(k)
+        mock_dynamic.return_value = None  # Fallback to curated catalog for configured providers
+
+        res = list_supported_models()
+        models = res["models"]
+        providers_present = set(m["provider"] for m in models)
+
+        # Only Anthropic and Groq models should be present
+        self.assertEqual(providers_present, {"anthropic", "groq"})
+        self.assertNotIn("openai", providers_present)
+        self.assertNotIn("gemini", providers_present)
+
+        # All returned models must be flagged as configured
+        for m in models:
+            self.assertTrue(m["configured"], f"Model {m['id']} should be marked configured=True")
+
+        # Sync status should reflect exact provider state
+        self.assertTrue(res["sync_status"]["anthropic"]["configured"])
+        self.assertTrue(res["sync_status"]["groq"]["configured"])
+        self.assertFalse(res["sync_status"]["openai"]["configured"])
+        self.assertFalse(res["sync_status"]["gemini"]["configured"])
+
+    @patch("barely_core.models_provider.get_dynamic_models_for_provider")
+    @patch("barely_core.settings.get_setting")
+    def test_list_supported_models_no_keys_configured(self, mock_get_setting, mock_dynamic):
+        # Scenario: Clean install with zero keys configured
+        mock_get_setting.side_effect = lambda k: {
+            "ANTHROPIC_API_KEY": "",
+            "GROQ_API_KEY": "",
+            "OPENAI_API_KEY": "",
+            "GEMINI_API_KEY": "",
+            "DEFAULT_MODEL": "anthropic/claude-3-7-sonnet"
+        }.get(k)
+        mock_dynamic.return_value = None
+
+        res = list_supported_models()
+        models = res["models"]
+        providers_present = set(m["provider"] for m in models)
+
+        # In clean preview mode with no keys, all 4 catalog providers are present
+        self.assertEqual(providers_present, {"anthropic", "groq", "openai", "gemini"})
+        # But none are marked configured
+        for m in models:
+            self.assertFalse(m["configured"], f"Model {m['id']} should be marked configured=False")
+
 if __name__ == "__main__":
     unittest.main()
