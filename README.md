@@ -50,7 +50,7 @@ Barely combines vision-enabled AI reasoning with enterprise cloud execution prim
 - ☁️ **Cloud-Native Kubernetes & AWS ECS:** Ephemeral non-root container runner jobs (`UID 10001`), production Helm charts with HPA, and AWS ECS Fargate Terraform task definitions.
 - 📊 **Executive PDF Reports & Artifact Bundles:** One-click export of print-ready multi-page audit PDFs and downloadable `.zip` bundles with step screenshots and video traces.
 
-> 🌐 **Interactive Documentation & Roadmap:** Explore visual architectural topologies, cloud execution runbooks, and upcoming Release 3.0 milestones in our [Interactive Documentation Portal](docs/index.html).
+> 🌐 **Interactive Documentation & Roadmap:** Explore visual architectural topologies, cloud execution runbooks, and upcoming Release 3.0 milestones in our [Interactive Documentation Portal](https://gitanshkapoor.github.io/barely/#roadmap).
 
 ## 🚀 Getting Started
 
