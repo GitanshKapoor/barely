@@ -111,7 +111,7 @@
         </a>
         <div class="hidden md:flex items-center pl-2">
           <span class="text-xs font-semibold px-2.5 py-0.5 rounded-full k8s-badge text-sky-400">
-            v1.0 "Baby Kangaroo"
+            v2.0 "Boss Penguin"
           </span>
         </div>
       </div>
@@ -201,7 +201,7 @@
       <!-- Release Announcement Pill -->
       <div class="inline-flex items-center gap-2 px-3.5 py-1 rounded-full k8s-badge text-[11px] sm:text-xs text-sky-300 mb-6 sm:mb-8 animate-pulse max-w-full flex-wrap justify-center text-center">
         <span class="w-2 h-2 rounded-full bg-emerald-400 shrink-0"></span>
-        <span class="font-semibold tracking-wide">Release 1.0 General Availability</span>
+        <span class="font-semibold tracking-wide">Release 2.0 "Boss Penguin" Available Now</span>
         <span class="hidden xs:inline text-slate-500">•</span>
         <a href="#quickstart" class="hover:underline text-white flex items-center gap-1">Deploy with Docker <i data-lucide="arrow-right" class="w-3.5 h-3.5"></i></a>
       </div>
@@ -739,16 +739,16 @@
     </div>
   </section>
 
-  <!-- Release 2.0 Roadmap (Kubernetes / Argo style) -->
+  <!-- Release 3.0 Roadmap -->
   <section id="roadmap" class="py-14 sm:py-20 border-t border-dark-800">
     <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
       <div class="text-center max-w-2xl mx-auto mb-8 sm:mb-12">
         <span class="text-xs font-bold uppercase tracking-wider text-purple-400">Roadmap</span>
         <h2 class="text-2xl sm:text-4xl font-extrabold text-white mt-1.5 mb-3">
-          Coming in Release 2.0
+          Coming in Release 3.0
         </h2>
         <p class="text-slate-400 text-xs sm:text-base leading-relaxed">
-          Expanding from single-node autonomous execution to enterprise cloud orchestration.
+          Advancing from parallel cloud orchestration to distributed fleet coordination, enterprise IAM, and intelligent batched telemetry.
         </p>
       </div>
 
@@ -756,48 +756,72 @@
         
         <div class="p-4 sm:p-5 rounded-xl bg-dark-850 border border-dark-700/70 flex items-start gap-3">
           <div class="w-8 h-8 rounded-lg bg-purple-500/10 text-purple-400 flex items-center justify-center shrink-0 mt-0.5">
-            <i data-lucide="cloud" class="w-4 h-4"></i>
+            <i data-lucide="network" class="w-4 h-4"></i>
           </div>
           <div>
-            <h4 class="text-sm font-semibold text-white">Kubernetes (K8s) & AWS ECS Integration</h4>
+            <h4 class="text-sm font-semibold text-white">Multi-Agent Fleet Orchestrator</h4>
             <p class="text-xs text-slate-400 mt-1 leading-relaxed">
-              Production-ready Helm charts, Kubernetes Operator / pod autoscalers, and AWS ECS task definitions for horizontally orchestrating agent runner fleets at scale.
-            </p>
-          </div>
-        </div>
-
-        <div class="p-4 sm:p-5 rounded-xl bg-dark-850 border border-dark-700/70 flex items-start gap-3">
-          <div class="w-8 h-8 rounded-lg bg-blue-500/10 text-blue-400 flex items-center justify-center shrink-0 mt-0.5">
-            <i data-lucide="bug" class="w-4 h-4"></i>
-          </div>
-          <div>
-            <h4 class="text-sm font-semibold text-white">Automated Jira & GitHub Defect Sync</h4>
-            <p class="text-xs text-slate-400 mt-1 leading-relaxed">
-              Auto-create rich bug tickets with reproduction steps, error logs, and failure screenshots when visual or assertion regressions occur.
+              Orchestrator leader agent dynamically partitioning and distributing large test suites across clustered runners with work-stealing and multi-agent collaborative flows.
             </p>
           </div>
         </div>
 
         <div class="p-4 sm:p-5 rounded-xl bg-dark-850 border border-dark-700/70 flex items-start gap-3">
           <div class="w-8 h-8 rounded-lg bg-emerald-500/10 text-emerald-400 flex items-center justify-center shrink-0 mt-0.5">
-            <i data-lucide="key" class="w-4 h-4"></i>
+            <i data-lucide="shield-check" class="w-4 h-4"></i>
           </div>
           <div>
-            <h4 class="text-sm font-semibold text-white">Enterprise Secrets Management</h4>
+            <h4 class="text-sm font-semibold text-white">AI Execution Guardrails</h4>
             <p class="text-xs text-slate-400 mt-1 leading-relaxed">
-              Native integration with AWS Secrets Manager, HashiCorp Vault, and encrypted secret stores so credentials are never hardcoded.
+              Autonomous safety policies, domain boundary enforcement, strict rate limiting, and prompt injection filters protecting live browser automation.
+            </p>
+          </div>
+        </div>
+
+        <div class="p-4 sm:p-5 rounded-xl bg-dark-850 border border-dark-700/70 flex items-start gap-3">
+          <div class="w-8 h-8 rounded-lg bg-blue-500/10 text-blue-400 flex items-center justify-center shrink-0 mt-0.5">
+            <i data-lucide="users" class="w-4 h-4"></i>
+          </div>
+          <div>
+            <h4 class="text-sm font-semibold text-white">Enterprise IAM, Workspaces &amp; Test Folders</h4>
+            <p class="text-xs text-slate-400 mt-1 leading-relaxed">
+              Multi-tenant role-based access control (RBAC), SSO/SAML auth, isolated team workspaces, and nested folder-based test suite organization.
             </p>
           </div>
         </div>
 
         <div class="p-4 sm:p-5 rounded-xl bg-dark-850 border border-dark-700/70 flex items-start gap-3">
           <div class="w-8 h-8 rounded-lg bg-amber-500/10 text-amber-400 flex items-center justify-center shrink-0 mt-0.5">
-            <i data-lucide="network" class="w-4 h-4"></i>
+            <i data-lucide="sparkles" class="w-4 h-4"></i>
           </div>
           <div>
-            <h4 class="text-sm font-semibold text-white">Distributed Multi-Agent Fleet</h4>
+            <h4 class="text-sm font-semibold text-white">Next-Gen UI Refresh</h4>
             <p class="text-xs text-slate-400 mt-1 leading-relaxed">
-              Coordinated fleet of parallel autonomous agents executing across sharded test suites with intelligent task balancing.
+              Modernized application canvas with reactive state caching, streamlined test drawer configurators, and high-density executive dark mode tokens.
+            </p>
+          </div>
+        </div>
+
+        <div class="p-4 sm:p-5 rounded-xl bg-dark-850 border border-dark-700/70 flex items-start gap-3">
+          <div class="w-8 h-8 rounded-lg bg-cyan-500/10 text-cyan-400 flex items-center justify-center shrink-0 mt-0.5">
+            <i data-lucide="layout-dashboard" class="w-4 h-4"></i>
+          </div>
+          <div>
+            <h4 class="text-sm font-semibold text-white">Executive Dashboard Revamp &amp; Analytics</h4>
+            <p class="text-xs text-slate-400 mt-1 leading-relaxed">
+              Customizable analytics dashboard featuring test flakiness heatmaps, P95/P99 duration tracking, failure category charts, and regression telemetry widgets.
+            </p>
+          </div>
+        </div>
+
+        <div class="p-4 sm:p-5 rounded-xl bg-dark-850 border border-dark-700/70 flex items-start gap-3">
+          <div class="w-8 h-8 rounded-lg bg-rose-500/10 text-rose-400 flex items-center justify-center shrink-0 mt-0.5">
+            <i data-lucide="bell" class="w-4 h-4"></i>
+          </div>
+          <div>
+            <h4 class="text-sm font-semibold text-white">Smart Batched Notification Engine</h4>
+            <p class="text-xs text-slate-400 mt-1 leading-relaxed">
+              Context-aware alert aggregation: individual test runs notify immediately, while test folder and suite runs automatically batch results into unified rollup summaries with multi-test status cards.
             </p>
           </div>
         </div>
