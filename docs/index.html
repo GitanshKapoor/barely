@@ -321,44 +321,61 @@
           </div>
           <div class="flex items-center gap-2 font-mono text-[11px] sm:text-xs text-emerald-400 bg-emerald-500/10 px-3 py-1 rounded-full border border-emerald-500/20 self-start sm:self-auto shrink-0">
             <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-            Zero-Disk PostgreSQL Stack
+            Cloud-Native • PostgreSQL 16 • Non-Root UID 10001
           </div>
         </div>
 
-        <!-- 3-Tier Architecture Grid -->
+        <!-- 3-Tier Core Architecture Grid (Symmetrical 2-Card Layout) -->
         <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6 relative">
           
           <!-- Column 1: Client & Ingestion Tier -->
           <div class="flex flex-col space-y-3 sm:space-y-4">
             <div class="text-xs font-mono font-bold uppercase tracking-wider text-sky-400 flex items-center gap-2">
-              <span class="w-2 h-2 rounded-full bg-sky-400"></span> 01. Ingestion & Client
+              <span class="w-2 h-2 rounded-full bg-sky-400"></span> 01. Ingestion &amp; Client
             </div>
-            <div class="p-3.5 sm:p-4 rounded-xl bg-dark-900 border border-dark-700/80 space-y-2.5 sm:space-y-3 h-full flex flex-col justify-between">
-              <div class="space-y-2">
-                <div class="p-2.5 sm:p-3 rounded-lg bg-dark-800 border border-dark-700 flex items-center justify-between">
-                  <div class="flex items-center gap-2">
-                    <i data-lucide="layout-dashboard" class="w-4 h-4 text-brand-400"></i>
-                    <span class="text-xs font-semibold text-white">Next.js 16 UI Dashboard</span>
+            <div class="p-3.5 sm:p-4 rounded-xl bg-dark-900 border border-dark-700/80 flex flex-col justify-between h-full space-y-3">
+              <div class="space-y-3">
+                <!-- Card 1A: Web Dashboard -->
+                <div class="p-3 rounded-lg bg-dark-800 border border-dark-700 flex flex-col justify-between h-[124px]">
+                  <div>
+                    <div class="flex items-center justify-between mb-1.5">
+                      <div class="flex items-center gap-2">
+                        <i data-lucide="layout-dashboard" class="w-4 h-4 text-brand-400"></i>
+                        <span class="text-xs font-bold text-white">Next.js 16 Dashboard</span>
+                      </div>
+                      <span class="text-[10px] font-mono text-slate-400 bg-dark-750 px-2 py-0.5 rounded border border-dark-600">:3000</span>
+                    </div>
+                    <p class="text-[11px] text-slate-400 leading-relaxed">Interactive goal configurator, live DOM execution stream, and visual diff inspector.</p>
                   </div>
-                  <span class="text-[10px] font-mono text-slate-400 bg-dark-750 px-2 py-0.5 rounded border border-dark-600">:3000</span>
+                  <div class="flex items-center gap-1.5 text-[10px] font-mono text-slate-400 pt-1">
+                    <span class="px-1.5 py-0.5 rounded bg-dark-750 border border-dark-700 text-sky-300">Next.js 16</span>
+                    <span class="px-1.5 py-0.5 rounded bg-dark-750 border border-dark-700 text-slate-300">Turbopack</span>
+                    <span class="px-1.5 py-0.5 rounded bg-dark-750 border border-dark-700 text-emerald-300">Dark Tokens</span>
+                  </div>
                 </div>
-                <div class="p-2.5 sm:p-3 rounded-lg bg-dark-800 border border-dark-700 flex items-center justify-between">
-                  <div class="flex items-center gap-2">
-                    <i data-lucide="terminal" class="w-4 h-4 text-sky-400"></i>
-                    <span class="text-xs font-semibold text-white">Native CLI Runner</span>
+
+                <!-- Card 1B: CLI & CI/CD Runner -->
+                <div class="p-3 rounded-lg bg-dark-800 border border-dark-700 flex flex-col justify-between h-[124px]">
+                  <div>
+                    <div class="flex items-center justify-between mb-1.5">
+                      <div class="flex items-center gap-2">
+                        <i data-lucide="terminal" class="w-4 h-4 text-sky-400"></i>
+                        <span class="text-xs font-bold text-white">Native CLI &amp; CI/CD</span>
+                      </div>
+                      <span class="text-[10px] font-mono text-sky-300 bg-dark-750 px-2 py-0.5 rounded border border-dark-600">uv barely</span>
+                    </div>
+                    <p class="text-[11px] text-slate-400 leading-relaxed">Standalone local execution via uv with automated PR test gating in GitHub Actions.</p>
                   </div>
-                  <span class="text-[10px] font-mono text-slate-400 bg-dark-750 px-2 py-0.5 rounded border border-dark-600">uv barely</span>
-                </div>
-                <div class="p-2.5 sm:p-3 rounded-lg bg-dark-800 border border-dark-700 flex items-center justify-between">
-                  <div class="flex items-center gap-2">
-                    <i data-lucide="git-branch" class="w-4 h-4 text-purple-400"></i>
-                    <span class="text-xs font-semibold text-white">CI/CD Webhook / Action</span>
+                  <div class="flex items-center gap-1.5 text-[10px] font-mono text-slate-400 pt-1">
+                    <span class="px-1.5 py-0.5 rounded bg-dark-750 border border-dark-700 text-amber-300">Python 3.12+</span>
+                    <span class="px-1.5 py-0.5 rounded bg-dark-750 border border-dark-700 text-purple-300">PR Gating</span>
+                    <span class="px-1.5 py-0.5 rounded bg-dark-750 border border-dark-700 text-slate-300">REST API</span>
                   </div>
-                  <span class="text-[10px] font-mono text-slate-400 bg-dark-750 px-2 py-0.5 rounded border border-dark-600">REST</span>
                 </div>
               </div>
-              <div class="pt-2 text-[11px] font-mono text-slate-500 border-t border-dark-700/50 flex items-center justify-between">
-                <span>Dispatches test goals</span>
+
+              <div class="pt-2 text-[11px] font-mono text-slate-400 border-t border-dark-700/50 flex items-center justify-between">
+                <span>Dispatches test intent</span>
                 <span class="text-sky-400 font-bold">➔</span>
               </div>
             </div>
@@ -367,81 +384,135 @@
           <!-- Column 2: Control Plane & State -->
           <div class="flex flex-col space-y-3 sm:space-y-4">
             <div class="text-xs font-mono font-bold uppercase tracking-wider text-indigo-400 flex items-center gap-2">
-              <span class="w-2 h-2 rounded-full bg-indigo-400"></span> 02. Control Plane & State
+              <span class="w-2 h-2 rounded-full bg-indigo-400"></span> 02. Control Plane &amp; State
             </div>
-            <div class="p-3.5 sm:p-4 rounded-xl bg-dark-900 border border-dark-700/80 space-y-2.5 sm:space-y-3 h-full flex flex-col justify-between">
-              <div class="space-y-2">
-                <div class="p-2.5 sm:p-3 rounded-lg bg-indigo-950/20 border border-indigo-500/30">
-                  <div class="flex items-center justify-between mb-1">
-                    <span class="text-xs font-semibold text-white flex items-center gap-2">
-                      <i data-lucide="server" class="w-4 h-4 text-indigo-400"></i> FastAPI Gateway
-                    </span>
-                    <span class="text-[10px] font-mono text-indigo-300 bg-indigo-950/60 px-2 py-0.5 rounded border border-indigo-500/30">:8000</span>
+            <div class="p-3.5 sm:p-4 rounded-xl bg-dark-900 border border-dark-700/80 flex flex-col justify-between h-full space-y-3">
+              <div class="space-y-3">
+                <!-- Card 2A: FastAPI Control Plane -->
+                <div class="p-3 rounded-lg bg-indigo-950/20 border border-indigo-500/30 flex flex-col justify-between h-[124px]">
+                  <div>
+                    <div class="flex items-center justify-between mb-1.5">
+                      <div class="flex items-center gap-2">
+                        <i data-lucide="server" class="w-4 h-4 text-indigo-400"></i>
+                        <span class="text-xs font-bold text-white">FastAPI Control Plane</span>
+                      </div>
+                      <span class="text-[10px] font-mono text-indigo-300 bg-indigo-950/60 px-2 py-0.5 rounded border border-indigo-500/30">:8000</span>
+                    </div>
+                    <p class="text-[11px] text-slate-400 leading-relaxed">Pydantic validation, async job queue dispatcher, and AES-256 Fernet secret security.</p>
                   </div>
-                  <p class="text-[11px] text-slate-400">Pydantic validation, job queue dispatcher, real-time status poller</p>
+                  <div class="flex items-center gap-1.5 text-[10px] font-mono text-slate-400 pt-1">
+                    <span class="px-1.5 py-0.5 rounded bg-dark-750 border border-dark-700 text-indigo-300">AsyncIO</span>
+                    <span class="px-1.5 py-0.5 rounded bg-dark-750 border border-dark-700 text-emerald-300">AES-256</span>
+                    <span class="px-1.5 py-0.5 rounded bg-dark-750 border border-dark-700 text-sky-300">OpenAPI</span>
+                  </div>
                 </div>
-                <div class="p-2.5 sm:p-3 rounded-lg bg-dark-800 border border-dark-700">
-                  <div class="flex items-center justify-between mb-1">
-                    <span class="text-xs font-semibold text-white flex items-center gap-2">
-                      <i data-lucide="database" class="w-4 h-4 text-blue-400"></i> PostgreSQL 15 Cluster
-                    </span>
-                    <span class="text-[10px] font-mono text-emerald-400 bg-dark-750 px-2 py-0.5 rounded border border-dark-600">:5432</span>
+
+                <!-- Card 2B: PostgreSQL 16 State Store -->
+                <div class="p-3 rounded-lg bg-dark-800 border border-dark-700 flex flex-col justify-between h-[124px]">
+                  <div>
+                    <div class="flex items-center justify-between mb-1.5">
+                      <div class="flex items-center gap-2">
+                        <i data-lucide="database" class="w-4 h-4 text-blue-400"></i>
+                        <span class="text-xs font-bold text-white">PostgreSQL 16 Store</span>
+                      </div>
+                      <span class="text-[10px] font-mono text-emerald-400 bg-dark-750 px-2 py-0.5 rounded border border-dark-600">:5432</span>
+                    </div>
+                    <p class="text-[11px] text-slate-400 leading-relaxed">Cloud database persistence for runs, golden baselines, and $0 action plan cache.</p>
                   </div>
-                  <div class="grid grid-cols-2 gap-1 text-[10px] font-mono text-slate-400 mt-2">
-                    <div class="p-1 bg-dark-750 rounded text-center border border-dark-700/50 text-sky-300">test_runs</div>
-                    <div class="p-1 bg-dark-750 rounded text-center border border-dark-700/50 text-emerald-300">$0 action_cache</div>
-                    <div class="p-1 bg-dark-750 rounded text-center border border-dark-700/50 text-purple-300">vrt_baselines</div>
-                    <div class="p-1 bg-dark-750 rounded text-center border border-dark-700/50 text-amber-300">pdf_artifacts</div>
+                  <div class="grid grid-cols-4 gap-1 text-[9px] font-mono text-center pt-1">
+                    <span class="py-0.5 bg-dark-750 rounded border border-dark-700 text-sky-300">test_runs</span>
+                    <span class="py-0.5 bg-dark-750 rounded border border-dark-700 text-emerald-300">$0 cache</span>
+                    <span class="py-0.5 bg-dark-750 rounded border border-dark-700 text-purple-300">vrt_diffs</span>
+                    <span class="py-0.5 bg-dark-750 rounded border border-dark-700 text-amber-300">artifacts</span>
                   </div>
                 </div>
               </div>
-              <div class="pt-2 text-[11px] font-mono text-slate-500 border-t border-dark-700/50 flex items-center justify-between">
-                <span>Coordinates execution</span>
+
+              <div class="pt-2 text-[11px] font-mono text-slate-400 border-t border-dark-700/50 flex items-center justify-between">
+                <span>Coordinates state &amp; cache</span>
                 <span class="text-indigo-400 font-bold">➔</span>
               </div>
             </div>
           </div>
 
-          <!-- Column 3: Autonomous Worker Fleet -->
+          <!-- Column 3: Autonomous AI Worker Fleet -->
           <div class="flex flex-col space-y-3 sm:space-y-4">
             <div class="text-xs font-mono font-bold uppercase tracking-wider text-emerald-400 flex items-center gap-2">
               <span class="w-2 h-2 rounded-full bg-emerald-400"></span> 03. Autonomous Worker Engine
             </div>
-            <div class="p-3.5 sm:p-4 rounded-xl bg-dark-900 border border-dark-700/80 space-y-2.5 sm:space-y-3 h-full flex flex-col justify-between">
-              <div class="space-y-2">
-                <div class="p-2.5 sm:p-3 rounded-lg bg-dark-800 border border-dark-700">
-                  <div class="flex items-center justify-between mb-0.5">
-                    <span class="text-xs font-semibold text-white flex items-center gap-2">
-                      <i data-lucide="brain-circuit" class="w-4 h-4 text-amber-400"></i> DOM Distiller + Multi-LLM
-                    </span>
-                    <span class="text-[10px] font-mono text-amber-400 bg-dark-750 px-2 py-0.5 rounded border border-dark-600">Claude 3.5</span>
+            <div class="p-3.5 sm:p-4 rounded-xl bg-dark-900 border border-dark-700/80 flex flex-col justify-between h-full space-y-3">
+              <div class="space-y-3">
+                <!-- Card 3A: DOM Distiller & Multi-LLM -->
+                <div class="p-3 rounded-lg bg-dark-800 border border-dark-700 flex flex-col justify-between h-[124px]">
+                  <div>
+                    <div class="flex items-center justify-between mb-1.5">
+                      <div class="flex items-center gap-2">
+                        <i data-lucide="brain-circuit" class="w-4 h-4 text-amber-400"></i>
+                        <span class="text-xs font-bold text-white">DOM Distiller + AI Loop</span>
+                      </div>
+                      <span class="text-[10px] font-mono text-amber-300 bg-dark-750 px-2 py-0.5 rounded border border-dark-600">LiteLLM</span>
+                    </div>
+                    <p class="text-[11px] text-slate-400 leading-relaxed">ARIA tree distillation with multi-modal vision reasoning across Claude, GPT, Gemini &amp; Groq.</p>
                   </div>
-                  <p class="text-[11px] text-slate-400">Filters interactable trees, checks $0 cache hit, or reasons actions</p>
+                  <div class="flex items-center gap-1.5 text-[10px] font-mono text-slate-400 pt-1">
+                    <span class="px-1.5 py-0.5 rounded bg-dark-750 border border-dark-700 text-amber-300">Vision AI</span>
+                    <span class="px-1.5 py-0.5 rounded bg-dark-750 border border-dark-700 text-sky-300">Multi-Model</span>
+                    <span class="px-1.5 py-0.5 rounded bg-dark-750 border border-dark-700 text-emerald-300">Self-Healing</span>
+                  </div>
                 </div>
-                <div class="p-2.5 sm:p-3 rounded-lg bg-emerald-950/20 border border-emerald-500/30">
-                  <div class="flex items-center justify-between mb-0.5">
-                    <span class="text-xs font-semibold text-white flex items-center gap-2">
-                      <i data-lucide="wrench" class="w-4 h-4 text-emerald-400"></i> Playwright & Auto-Healing
-                    </span>
-                    <span class="text-[10px] font-mono text-emerald-300 bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-500/30">Chromium</span>
+
+                <!-- Card 3B: Playwright Driver & Cloud Runners -->
+                <div class="p-3 rounded-lg bg-emerald-950/20 border border-emerald-500/30 flex flex-col justify-between h-[124px]">
+                  <div>
+                    <div class="flex items-center justify-between mb-1.5">
+                      <div class="flex items-center gap-2">
+                        <i data-lucide="container" class="w-4 h-4 text-emerald-400"></i>
+                        <span class="text-xs font-bold text-white">Playwright Cloud Runners</span>
+                      </div>
+                      <span class="text-[10px] font-mono text-emerald-300 bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-500/30">UID 10001</span>
+                    </div>
+                    <p class="text-[11px] text-slate-400 leading-relaxed">Ephemeral browser sandboxing in K8s runner pods or AWS ECS Fargate tasks with 1GB shm.</p>
                   </div>
-                  <p class="text-[11px] text-slate-400">Strict locators, fallback healing, desktop & mobile viewports</p>
-                </div>
-                <div class="p-2 sm:p-2.5 rounded-lg bg-dark-800 border border-dark-700 flex items-center justify-between">
-                  <div class="flex items-center gap-2">
-                    <i data-lucide="file-check-2" class="w-4 h-4 text-rose-400"></i>
-                    <span class="text-xs font-semibold text-white">Deliverables</span>
+                  <div class="flex items-center gap-1.5 text-[10px] font-mono text-slate-400 pt-1">
+                    <span class="px-1.5 py-0.5 rounded bg-dark-750 border border-dark-700 text-emerald-300">Chromium</span>
+                    <span class="px-1.5 py-0.5 rounded bg-dark-750 border border-dark-700 text-purple-300">K8s / ECS</span>
+                    <span class="px-1.5 py-0.5 rounded bg-dark-750 border border-dark-700 text-cyan-300">1GB /dev/shm</span>
                   </div>
-                  <span class="text-[10px] font-mono text-slate-300 bg-dark-750 px-2 py-0.5 rounded">PDF / HTML / .zip</span>
                 </div>
               </div>
-              <div class="pt-2 text-[11px] font-mono text-slate-500 border-t border-dark-700/50 flex items-center justify-between">
-                <span>Persists telemetry & artifacts</span>
-                <span class="text-emerald-400 font-semibold text-xs">100% Postgres</span>
+
+              <div class="pt-2 text-[11px] font-mono text-slate-400 border-t border-dark-700/50 flex items-center justify-between">
+                <span>Executes &amp; verifies actions</span>
+                <span class="text-emerald-400 font-bold">➔</span>
               </div>
             </div>
           </div>
 
+        </div>
+
+        <!-- Tier 04: Outbound Deliverables & Incident Alerts Pipeline -->
+        <div class="mt-4 sm:mt-6 p-3.5 sm:p-4 rounded-xl bg-dark-900 border border-dark-700/80 flex flex-col md:flex-row items-center justify-between gap-3 text-xs font-mono">
+          <div class="flex items-center gap-2.5 text-slate-300">
+            <span class="p-1.5 rounded-lg bg-brand-500/10 text-brand-400 border border-brand-500/20"><i data-lucide="package-check" class="w-4 h-4"></i></span>
+            <div>
+              <span class="font-bold text-white text-xs sm:text-sm">04. Deliverables &amp; Incident Alerts</span>
+              <span class="text-slate-400 hidden sm:inline ml-2 text-[11px]">• Automated telemetry &amp; notifications on every test run</span>
+            </div>
+          </div>
+          <div class="flex flex-wrap items-center gap-2">
+            <span class="px-2.5 py-1 rounded-lg bg-dark-800 border border-dark-700 text-slate-300 flex items-center gap-1.5 text-[11px]">
+              <i data-lucide="file-text" class="w-3.5 h-3.5 text-rose-400"></i> Executive PDF
+            </span>
+            <span class="px-2.5 py-1 rounded-lg bg-dark-800 border border-dark-700 text-slate-300 flex items-center gap-1.5 text-[11px]">
+              <i data-lucide="camera" class="w-3.5 h-3.5 text-amber-400"></i> Golden VRT Baselines
+            </span>
+            <span class="px-2.5 py-1 rounded-lg bg-dark-800 border border-dark-700 text-slate-300 flex items-center gap-1.5 text-[11px]">
+              <i data-lucide="bug" class="w-3.5 h-3.5 text-sky-400"></i> Jira &amp; GitHub Sync
+            </span>
+            <span class="px-2.5 py-1 rounded-lg bg-dark-800 border border-dark-700 text-slate-300 flex items-center gap-1.5 text-[11px]">
+              <i data-lucide="bell" class="w-3.5 h-3.5 text-emerald-400"></i> Slack &amp; Teams Alerts
+            </span>
+          </div>
         </div>
 
         <!-- Footer Link in Architecture Box -->
