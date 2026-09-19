@@ -28,7 +28,7 @@ from barely_core.models_provider import (
     invalidate_models_cache,
     _MODELS_CACHE
 )
-from barely_core.settings import resolve_model_api_key, list_supported_models
+from barely_core.settings import resolve_model_api_key, list_supported_models, get_model_provider
 
 class TestDynamicModelsProvider(unittest.TestCase):
     def setUp(self):
@@ -223,6 +223,40 @@ class TestDynamicModelsProvider(unittest.TestCase):
         self.assertEqual(resolve_model_api_key("openai/gpt-4o"), "sk-proj-val")
         self.assertEqual(resolve_model_api_key("o3-mini"), "sk-proj-val")
         self.assertEqual(resolve_model_api_key("gemini/gemini-2.0-flash"), "AIzaSy-val")
+        # Ensure Groq-hosted open-weights models with "openai" or "gpt" in the slug resolve to GROQ_API_KEY
+        self.assertEqual(resolve_model_api_key("groq/openai/gpt-oss-120b"), "gsk_val")
+        self.assertEqual(resolve_model_api_key("groq/meta/llama-3.1-8b-instant"), "gsk_val")
+
+    def test_get_model_provider(self):
+        self.assertEqual(get_model_provider("anthropic/claude-3-7-sonnet"), "anthropic")
+        self.assertEqual(get_model_provider("claude-3-5-sonnet"), "anthropic")
+        self.assertEqual(get_model_provider("groq/llama-3.3-70b-versatile"), "groq")
+        self.assertEqual(get_model_provider("groq/openai/gpt-oss-120b"), "groq")
+        self.assertEqual(get_model_provider("llama-3.3-70b-versatile"), "groq")
+        self.assertEqual(get_model_provider("deepseek-r1-distill-llama-70b"), "groq")
+        self.assertEqual(get_model_provider("openai/gpt-4o"), "openai")
+        self.assertEqual(get_model_provider("gpt-4o"), "openai")
+        self.assertEqual(get_model_provider("gemini/gemini-2.0-flash"), "gemini")
+        self.assertEqual(get_model_provider("gemini-1.5-pro"), "gemini")
+
+    @patch("barely_core.models_provider.get_dynamic_models_for_provider")
+    @patch("barely_core.settings.get_setting")
+    def test_list_supported_models_unconfigured_default_fallback(self, mock_get_setting, mock_dynamic):
+        # Scenario: User had DEFAULT_MODEL=groq/openai/gpt-oss-120b, but deleted their GROQ key, leaving Anthropic configured
+        mock_get_setting.side_effect = lambda k: {
+            "ANTHROPIC_API_KEY": "sk-ant-active-key",
+            "GROQ_API_KEY": "",
+            "OPENAI_API_KEY": "",
+            "GEMINI_API_KEY": "",
+            "DEFAULT_MODEL": "groq/openai/gpt-oss-120b"
+        }.get(k)
+        mock_dynamic.return_value = None
+
+        res = list_supported_models()
+        # default_model MUST auto-fallback to an active configured model (Anthropic)
+        self.assertTrue(res["default_model"].startswith("anthropic/"))
+        # Unconfigured Groq model must NOT be in models list
+        self.assertNotIn("groq/openai/gpt-oss-120b", [m["id"] for m in res["models"]])
 
     @patch("barely_core.models_provider.get_dynamic_models_for_provider")
     @patch("barely_core.settings.get_setting")

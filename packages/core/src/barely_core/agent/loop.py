@@ -322,18 +322,45 @@ Always adopt the persona, domain knowledge, and testing mindset appropriate for 
 
         # Dynamically resolve encrypted key from DB or fallback to environment
         api_key = resolve_model_api_key(self.model)
+
+        # If active model has no API key configured, check if any alternate provider is configured
+        if not api_key:
+            from barely_core.settings import get_model_provider, get_setting
+            active_prov = get_model_provider(self.model)
+            fallback_candidates = [
+                ("anthropic", "anthropic/claude-3-7-sonnet", "ANTHROPIC_API_KEY"),
+                ("openai", "openai/gpt-4o", "OPENAI_API_KEY"),
+                ("groq", "groq/llama-3.3-70b-versatile", "GROQ_API_KEY"),
+                ("gemini", "gemini/gemini-2.0-flash", "GEMINI_API_KEY"),
+            ]
+            for prov, fallback_model, key_name in fallback_candidates:
+                cand_key = get_setting(key_name)
+                if cand_key and cand_key.strip():
+                    logger.warning(
+                        f"Active model '{self.model}' has no {active_prov.upper()}_API_KEY configured. "
+                        f"Auto-falling back to configured model '{fallback_model}'."
+                    )
+                    self.model = fallback_model
+                    api_key = cand_key.strip()
+                    break
+
+        if not api_key:
+            from barely_core.settings import get_model_provider
+            raise ValueError(
+                f"No API key configured for model '{self.model}'. Please configure your {get_model_provider(self.model).upper()}_API_KEY in Settings."
+            )
+
         call_kwargs = {}
-        if api_key:
-            call_kwargs["api_key"] = api_key
+        call_kwargs["api_key"] = api_key
 
         model_name = self.model
-        m_lower = model_name.lower()
-        is_groq = "groq" in m_lower or "llama" in m_lower or "mixtral" in m_lower or "deepseek" in m_lower
-        if is_groq and not m_lower.startswith("openai/") and not m_lower.startswith("anthropic/") and not m_lower.startswith("gemini/"):
+        from barely_core.settings import get_model_provider
+        prov = get_model_provider(model_name)
+        is_groq = (prov == "groq")
+        if is_groq:
             if not model_name.startswith("groq/"):
                 model_name = f"groq/{model_name}"
-            if api_key:
-                os.environ["GROQ_API_KEY"] = api_key
+            os.environ["GROQ_API_KEY"] = api_key
 
         # Safe token ceiling to prevent LiteLLM/Groq token overflow or missing token errors
         call_kwargs["max_tokens"] = 2048
@@ -375,13 +402,14 @@ Always adopt the persona, domain knowledge, and testing mindset appropriate for 
                         raise e2
             elif is_groq and ("not_found" in err_str or "connection" in err_str or "unsupported" in err_str or "provider" in err_str):
                 # Resilient fallback: Try Groq via its OpenAI-compatible endpoint
-                clean_slug = model_name.replace("groq/", "")
+                clean_slug = model_name[5:] if model_name.startswith("groq/") else model_name
+                call_slug = clean_slug if clean_slug.startswith("openai/") else f"openai/{clean_slug}"
                 logger.warning(f"Groq provider invocation error ({e}). Retrying via Groq OpenAI-compatible endpoint...")
                 try:
                     call_kwargs_openai = dict(call_kwargs)
                     call_kwargs_openai["api_base"] = "https://api.groq.com/openai/v1"
                     response = litellm.completion(
-                        model=f"openai/{clean_slug}",
+                        model=call_slug,
                         messages=messages,
                         drop_params=True,
                         **call_kwargs_openai

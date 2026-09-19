@@ -19,6 +19,33 @@ logger = logging.getLogger("barely_worker")
 def process_job(run_id: str, test_name: str, goal_text: str, start_url: str, device: str, strict_mode: bool = False, use_cache: bool = False, model: Optional[str] = None, context: Optional[str] = None):
     try:
         active_model = model or get_setting("DEFAULT_MODEL") or "anthropic/claude-3-7-sonnet"
+
+        # Validate that the active model has a configured API key, otherwise auto-fallback to a configured provider
+        from barely_core.settings import resolve_model_api_key, get_model_provider
+        resolved_key = resolve_model_api_key(active_model)
+        if not resolved_key:
+            fallback_candidates = [
+                ("anthropic", "anthropic/claude-3-7-sonnet", "ANTHROPIC_API_KEY"),
+                ("openai", "openai/gpt-4o", "OPENAI_API_KEY"),
+                ("groq", "groq/llama-3.3-70b-versatile", "GROQ_API_KEY"),
+                ("gemini", "gemini/gemini-2.0-flash", "GEMINI_API_KEY"),
+            ]
+            for prov, fallback_model, key_name in fallback_candidates:
+                cand_key = get_setting(key_name)
+                if cand_key and cand_key.strip():
+                    logger.warning(
+                        f"Selected model '{active_model}' has no {get_model_provider(active_model).upper()}_API_KEY configured. "
+                        f"Auto-switching run {run_id} to active provider model '{fallback_model}'."
+                    )
+                    active_model = fallback_model
+                    resolved_key = cand_key.strip()
+                    break
+
+        if not resolved_key:
+            raise ValueError(
+                f"No API key configured for model '{active_model}'. Please configure your {get_model_provider(active_model).upper()}_API_KEY in Settings."
+            )
+
         logger.info(f"Picked up job: {run_id} ({test_name}) targeting {start_url} (model={active_model}, strict_mode={strict_mode}, use_cache={use_cache})")
         
         parsed_goal = Goal(
@@ -39,12 +66,23 @@ def process_job(run_id: str, test_name: str, goal_text: str, start_url: str, dev
         
     except Exception as e:
         logger.error(f"Job {run_id} failed: {e}")
+        err_msg = str(e)
+        err_lower = err_msg.lower()
+        if "invalid api key" in err_lower or "invalid_api_key" in err_lower or "authenticationerror" in err_lower:
+            from barely_core.settings import get_model_provider
+            prov = get_model_provider(active_model).capitalize()
+            failure_reason = f"{prov} Authentication Error: Invalid API key for model '{active_model}'. Please update your {prov.upper()}_API_KEY in Settings."
+        elif "no api key configured" in err_lower:
+            failure_reason = err_msg
+        else:
+            failure_reason = f"Execution Failure: {err_msg}"
+
         db = SessionLocal()
         try:
             run = db.query(RunRecord).filter(RunRecord.id == run_id).first()
             if run:
                 run.success = False
-                run.failure_reason = f"Fatal Worker Crash: {str(e)}"
+                run.failure_reason = failure_reason
                 db.commit()
         except Exception as dbe:
             logger.error(f"Failed to update job status after crash: {dbe}")

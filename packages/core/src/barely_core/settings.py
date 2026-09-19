@@ -237,6 +237,27 @@ def delete_setting(key: str) -> bool:
         if rec:
             db.delete(rec)
             db.commit()
+
+            # If an API key was deleted, check if DEFAULT_MODEL was using that provider.
+            # If so, remove the DEFAULT_MODEL override so it doesn't point to an unconfigured provider!
+            key_to_prov = {
+                "ANTHROPIC_API_KEY": "anthropic",
+                "GROQ_API_KEY": "groq",
+                "OPENAI_API_KEY": "openai",
+                "GEMINI_API_KEY": "gemini",
+            }
+            if key in key_to_prov:
+                deleted_prov = key_to_prov[key]
+                def_rec = db.query(SettingRecord).filter(SettingRecord.key == "DEFAULT_MODEL").first()
+                if def_rec and def_rec.value:
+                    try:
+                        dec_val = decrypt_secret(def_rec.value)
+                        if get_model_provider(dec_val) == deleted_prov:
+                            db.delete(def_rec)
+                            db.commit()
+                    except Exception:
+                        pass
+
             return True
         return False
     finally:
@@ -324,20 +345,48 @@ def list_settings_status() -> List[Dict[str, Any]]:
 
     return result
 
+def get_model_provider(model: str) -> str:
+    """
+    Returns the provider ('anthropic', 'groq', 'openai', 'gemini') for a model name or ID.
+    Explicit provider prefixes take absolute precedence over model name substrings.
+    """
+    m = (model or "").lower().strip()
+    if m.startswith("anthropic/"):
+        return "anthropic"
+    if m.startswith("groq/"):
+        return "groq"
+    if m.startswith("openai/"):
+        return "openai"
+    if m.startswith("gemini/"):
+        return "gemini"
+
+    # Keyword heuristics when model identifier is provided without provider prefix
+    if "claude" in m:
+        return "anthropic"
+    if "llama" in m or "mixtral" in m or "deepseek" in m or "gemma" in m or "groq" in m or "qwen" in m:
+        return "groq"
+    if "gpt" in m or m.startswith("o1") or m.startswith("o3") or "chatgpt" in m:
+        return "openai"
+    if "gemini" in m:
+        return "gemini"
+    return "unknown"
+
 def resolve_model_api_key(model: str) -> Optional[str]:
     """
     Resolves the active API key for a specified LiteLLM model string.
     Supports Anthropic, OpenAI, Groq, and Google Gemini.
     """
-    m = (model or "").lower()
-    if m.startswith("anthropic/") or "claude" in m:
-        return get_setting("ANTHROPIC_API_KEY")
-    elif m.startswith("openai/") or "gpt" in m or m.startswith("o1") or m.startswith("o3") or "chatgpt" in m:
-        return get_setting("OPENAI_API_KEY")
-    elif m.startswith("groq/") or "llama" in m or "mixtral" in m or "deepseek" in m or "gemma" in m or "qwen" in m:
-        return get_setting("GROQ_API_KEY")
-    elif m.startswith("gemini/") or "gemini" in m:
-        return get_setting("GEMINI_API_KEY")
+    prov = get_model_provider(model)
+    key_map = {
+        "anthropic": "ANTHROPIC_API_KEY",
+        "groq": "GROQ_API_KEY",
+        "openai": "OPENAI_API_KEY",
+        "gemini": "GEMINI_API_KEY",
+    }
+    key_name = key_map.get(prov)
+    if key_name:
+        val = get_setting(key_name)
+        return val.strip() if val and val.strip() else None
     return None
 
 PROVIDER_DOCS = {
@@ -556,13 +605,22 @@ def list_supported_models() -> Dict[str, Any]:
                 m_copy["dynamic"] = False
                 combined_models.append(m_copy)
 
-    # Ensure the active default_model is present in combined_models so active model badges don't break
+    # Ensure default_model resolves to a configured provider if keys are configured
+    if has_any_key:
+        def_prov = get_model_provider(default_model)
+        if not (provider_keys.get(def_prov) and provider_keys[def_prov].strip()):
+            rec_model = next((m["id"] for m in combined_models if m.get("recommended")), None)
+            default_model = rec_model or (combined_models[0]["id"] if combined_models else "anthropic/claude-3-7-sonnet")
+
+    # Ensure the active default_model is present in combined_models only if its provider is configured
     if default_model and not any(m["id"] == default_model for m in combined_models):
-        matching_known = next((m for m in KNOWN_MODELS if m["id"] == default_model), None)
-        if matching_known:
-            m_copy = dict(matching_known)
-            m_copy["dynamic"] = False
-            combined_models.append(m_copy)
+        def_prov = get_model_provider(default_model)
+        if not has_any_key or (provider_keys.get(def_prov) and provider_keys[def_prov].strip()):
+            matching_known = next((m for m in KNOWN_MODELS if m["id"] == default_model), None)
+            if matching_known:
+                m_copy = dict(matching_known)
+                m_copy["dynamic"] = False
+                combined_models.append(m_copy)
 
     # Check if Helm or environment specified a list of enabled models
     raw_enabled = os.getenv("MODELS_ENABLED") or os.getenv("BARELY_MODELS_ENABLED")
