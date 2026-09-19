@@ -555,7 +555,7 @@ def remove_setting(key: str):
 
     deleted = delete_setting(key_clean)
     if not deleted and key_clean != "DEFAULT_MODEL":
-        return {"message": f"No database override found for '{key_clean}'", "deleted": False}
+        return {"message": f"Setting '{key_clean}' was not found", "deleted": False}
 
     llm_key_map = {
         "ANTHROPIC_API_KEY": "anthropic",
@@ -571,7 +571,15 @@ def remove_setting(key: str):
         from barely_core.models_provider import invalidate_models_cache
         invalidate_models_cache()
 
-    return {"message": f"Setting '{key_clean}' database override removed", "deleted": True}
+    friendly_names = {
+        "ANTHROPIC_API_KEY": "Anthropic API key",
+        "GROQ_API_KEY": "Groq API key",
+        "OPENAI_API_KEY": "OpenAI API key",
+        "GEMINI_API_KEY": "Google Gemini API key",
+        "DEFAULT_MODEL": "Default model configuration",
+    }
+    label = friendly_names.get(key_clean, f"Setting '{key_clean}'")
+    return {"message": f"{label} deleted successfully", "deleted": True}
 
 @app.post("/api/settings/test-key")
 def test_key(req: TestKeyRequest):

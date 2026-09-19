@@ -813,6 +813,17 @@ export default function SettingsPage() {
     setShowPlaintext(prev => ({ ...prev, [key]: !prev[key] }));
   };
 
+  const getFriendlyKeyLabel = (key: string): string => {
+    const friendlyNames: Record<string, string> = {
+      ANTHROPIC_API_KEY: 'Anthropic API key',
+      GROQ_API_KEY: 'Groq API key',
+      OPENAI_API_KEY: 'OpenAI API key',
+      GEMINI_API_KEY: 'Google Gemini API key',
+      DEFAULT_MODEL: 'Default model configuration',
+    };
+    return friendlyNames[key] || settings.find(s => s.key === key)?.label || key;
+  };
+
   const saveSetting = async (key: string) => {
     const val = inputValues[key];
     if (val === undefined || val.trim() === '') {
@@ -821,6 +832,7 @@ export default function SettingsPage() {
     }
 
     setSavingKey(key);
+    const label = getFriendlyKeyLabel(key);
     try {
       const res = await fetch(`${apiUrl}/api/settings`, {
         method: 'POST',
@@ -833,11 +845,11 @@ export default function SettingsPage() {
         throw new Error(err.detail || 'Save failed');
       }
 
-      showToast(`Setting '${key}' saved and encrypted securely in PostgreSQL!`, 'success');
+      showToast(`${label} saved successfully!`, 'success');
       setInputValues(prev => ({ ...prev, [key]: '' }));
       await fetchSettings();
     } catch (err: any) {
-      showToast(`Error saving setting: ${err.message}`, 'error');
+      showToast(`Error saving ${label}: ${err.message}`, 'error');
     } finally {
       setSavingKey(null);
     }
@@ -845,16 +857,18 @@ export default function SettingsPage() {
 
   const deleteSetting = async (key: string) => {
     setDeletingKey(key);
+    const label = getFriendlyKeyLabel(key);
     try {
       const res = await fetch(`${apiUrl}/api/settings/${encodeURIComponent(key)}`, {
         method: 'DELETE'
       });
-      if (!res.ok) throw new Error('Failed to delete setting');
-      showToast(`Database override for '${key}' removed. Falling back to environment.`, 'info');
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(data?.detail || data?.error || 'Failed to delete key');
+      showToast(data?.message || `${label} deleted successfully`, 'success');
       setInputValues(prev => ({ ...prev, [key]: '' }));
       await fetchSettings();
     } catch (err: any) {
-      showToast(`Error clearing setting: ${err.message}`, 'error');
+      showToast(`Error deleting ${label}: ${err.message}`, 'error');
     } finally {
       setDeletingKey(null);
     }
@@ -1761,7 +1775,7 @@ secrets:
                             onClick={() => deleteSetting(item.key)}
                             disabled={isDeleting}
                             className="p-2.5 rounded-lg text-rose-400 hover:bg-rose-500/10 border border-rose-500/20 transition-colors cursor-pointer"
-                            title="Remove database override and revert to .env"
+                            title={`Delete ${item.label || item.key}`}
                           >
                             {isDeleting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
                           </button>
