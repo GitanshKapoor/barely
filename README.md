@@ -44,7 +44,7 @@ You define the *test intent* and *assertions* in natural language — Barely's a
 - 🧩 **Human-Readable Element Abstraction:** Automatically translates low-level DOM IDs into clean, business-level UI labels (e.g. `Clicked "Google Search" button`, `Typed 'Gitansh Kapoor' into "Search" input field`) for non-technical stakeholders.
 - 🔄 **Live CI/CD Audit Timeline:** Real-time console log streaming, step-by-step DOM timelines, and one-click re-run & reconfigure modal.
 - 🗄️ **Zero-Disk Runtime Architecture:** 100% of runs, logs, screenshots, and cached action plans persist directly in PostgreSQL.
-- 🎫 **Automated Atlassian Jira Integration:** Auto-create rich Jira bug tickets on test failure with reproduction steps, error logs, and direct issue tracking links.
+- 🎫 **Automated Issue Tracking (Jira & GitHub):** Auto-create rich Jira bug tickets or GitHub issues on test failure with reproduction steps, error logs, and direct issue tracking links.
 - 🔔 **Enterprise Incident Notifications:** Real-time Slack and Microsoft Teams webhook alerts with structured failure cards, run status, and deep links.
 - 🔐 **Zero-Leak Enterprise Secrets Management:** Dynamic AES-256 Fernet encryption in PostgreSQL, zero-leak masking in UI/API, and seamless External Secrets (ESO) Kubernetes support.
 - 🌐 **Dynamic Multi-Provider AI Model Catalog:** Live dynamic model discovery and catalog sync across Anthropic Claude, Groq LPUs, OpenAI, and Google Gemini with smart provider-level key routing and auto-fallback.
@@ -56,7 +56,7 @@ You define the *test intent* and *assertions* in natural language — Barely's a
 - ✅ **Dynamic Multi-Provider AI Discovery:** Real-time model fetching and catalog filtering for Anthropic, Groq, OpenAI, and Gemini *(Delivered)*.
 - ✅ **Cloud-Native Kubernetes (K8s) & AWS ECS Integration:** Production-ready Helm charts, Kubernetes pod autoscalers (HPA), ephemeral job runner spawner, and AWS ECS Fargate Terraform task definitions *(Delivered)*.
 - 🤝 **Distributed Multi-Agent Fleet:** Coordinated fleet of parallel autonomous agents executing across sharded test suites.
-- 🐙 **GitHub Issues Auto-Creation:** Automated defect filing for GitHub Issues in addition to Jira.
+- ✅ **GitHub Issues Auto-Creation:** Automated defect filing for GitHub Issues in addition to Jira *(Delivered)*.
 
 ## 🚀 Getting Started
 

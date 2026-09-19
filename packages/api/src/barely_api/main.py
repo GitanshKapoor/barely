@@ -70,6 +70,7 @@ class RunRequest(BaseModel):
     tags: Optional[List[str]] = []
     isolated_env: Optional[bool] = None
     create_jira_ticket: Optional[bool] = None
+    create_github_issue: Optional[bool] = None
     notification_channel: Optional[str] = None
     context: Optional[str] = None
 
@@ -108,6 +109,13 @@ def list_runs():
                     r.create_jira_ticket
                     if getattr(r, "create_jira_ticket", None) is not None
                     else (get_setting("JIRA_AUTO_CREATE") or "").strip().lower() in ("true", "1", "yes")
+                ),
+                "github_issue_number": getattr(r, "github_issue_number", None),
+                "github_issue_url": getattr(r, "github_issue_url", None),
+                "create_github_issue": (
+                    r.create_github_issue
+                    if getattr(r, "create_github_issue", None) is not None
+                    else (get_setting("GITHUB_AUTO_CREATE") or "").strip().lower() in ("true", "1", "yes")
                 ),
                 "notification_channel": getattr(r, "notification_channel", None),
                 "isolated_env": bool(getattr(r, "isolated_env", False)),
@@ -204,6 +212,13 @@ def get_run(run_id: str):
                 r.create_jira_ticket
                 if getattr(r, "create_jira_ticket", None) is not None
                 else (get_setting("JIRA_AUTO_CREATE") or "").strip().lower() in ("true", "1", "yes")
+            ),
+            "github_issue_number": getattr(r, "github_issue_number", None),
+            "github_issue_url": getattr(r, "github_issue_url", None),
+            "create_github_issue": (
+                r.create_github_issue
+                if getattr(r, "create_github_issue", None) is not None
+                else (get_setting("GITHUB_AUTO_CREATE") or "").strip().lower() in ("true", "1", "yes")
             ),
             "notification_channel": getattr(r, "notification_channel", None),
             "isolated_env": bool(getattr(r, "isolated_env", False)),
@@ -314,6 +329,7 @@ def trigger_run(req: RunRequest):
             isolated_env=should_isolate,
             runner_pod=runner_pod_name,
             create_jira_ticket=req.create_jira_ticket,
+            create_github_issue=req.create_github_issue,
             notification_channel=req.notification_channel.strip().lower() if req.notification_channel else None,
             context=req.context.strip() if req.context and req.context.strip() else None,
             logs=initial_logs or None
@@ -520,7 +536,7 @@ def save_setting(req: SaveSettingRequest):
     secrets_mode = get_secrets_mode()
     if secrets_mode["mode"] == "helm" and key_clean in [
         "ANTHROPIC_API_KEY", "OPENAI_API_KEY", "GEMINI_API_KEY", "GROQ_API_KEY",
-        "JIRA_API_TOKEN", "SLACK_WEBHOOK_URL", "TEAMS_WEBHOOK_URL"
+        "JIRA_API_TOKEN", "GITHUB_TOKEN", "SLACK_WEBHOOK_URL", "TEAMS_WEBHOOK_URL"
     ]:
         raise HTTPException(
             status_code=403,
@@ -576,6 +592,7 @@ def remove_setting(key: str):
         "GROQ_API_KEY": "Groq API key",
         "OPENAI_API_KEY": "OpenAI API key",
         "GEMINI_API_KEY": "Google Gemini API key",
+        "GITHUB_TOKEN": "GitHub Personal Access Token",
         "DEFAULT_MODEL": "Default model configuration",
     }
     label = friendly_names.get(key_clean, f"Setting '{key_clean}'")
@@ -914,6 +931,77 @@ def create_run_jira_issue(run_id: str, req: Optional[CreateJiraIssueRequest] = N
     finally:
         db.close()
 
+class CreateGitHubIssueRequest(BaseModel):
+    repo: Optional[str] = None
+    labels: Optional[str] = None
+    title: Optional[str] = None
+
+@app.post("/api/runs/{run_id}/github")
+def create_run_github_issue(run_id: str, req: Optional[CreateGitHubIssueRequest] = None):
+    """
+    1-Click Manual GitHub Issue Creation from Run Details page.
+    Generates a Markdown reproduction report and files an issue in GitHub.
+    """
+    from barely_core.db import RunStep
+    from barely_core.integrations.github import GitHubClient
+    
+    db = SessionLocal()
+    try:
+        r = db.query(RunRecord).filter(RunRecord.id == run_id).first()
+        if not r:
+            raise HTTPException(status_code=404, detail="Run not found")
+            
+        if r.github_issue_url:
+            return {
+                "success": True,
+                "issue_number": r.github_issue_number,
+                "issue_url": r.github_issue_url,
+                "message": f"GitHub issue #{r.github_issue_number} already exists for this run."
+            }
+            
+        steps = db.query(RunStep).filter(RunStep.run_id == run_id).order_by(RunStep.step_index.asc()).all()
+        run_data = {
+            "id": r.id,
+            "name": (req.title if req and req.title else None) or r.name or r.id,
+            "start_url": r.start_url or "",
+            "device": r.device or "desktop",
+            "status": r.status or "completed",
+            "success": r.success,
+            "failure_reason": r.failure_reason or "Manual failure issue created from Barely UI",
+            "model": getattr(r, "model", None) or "Default Model",
+            "steps": [{"description": s.description, "thought": s.thought} for s in steps]
+        }
+        
+        github_client = GitHubClient()
+        if not github_client.is_configured:
+            raise HTTPException(
+                status_code=400,
+                detail="GitHub integration is not fully configured. Please configure your GitHub Personal Access Token and Target Repository in Settings."
+            )
+            
+        custom_repo = req.repo if req and req.repo else None
+        custom_labels = req.labels if req and req.labels else None
+        success, issue_num, issue_url, error = github_client.create_issue(
+            run_data,
+            repo=custom_repo,
+            labels=custom_labels
+        )
+        if not success or not issue_url:
+            raise HTTPException(status_code=400, detail=error or "Failed to create GitHub issue.")
+            
+        r.github_issue_number = issue_num
+        r.github_issue_url = issue_url
+        db.commit()
+        
+        return {
+            "success": True,
+            "issue_number": issue_num,
+            "issue_url": issue_url,
+            "message": f"Created GitHub issue #{issue_num} successfully!"
+        }
+    finally:
+        db.close()
+
 class SaveIntegrationsRequest(BaseModel):
     jira_host: Optional[str] = None
     jira_email: Optional[str] = None
@@ -921,6 +1009,10 @@ class SaveIntegrationsRequest(BaseModel):
     jira_project_key: Optional[str] = None
     jira_issue_type: Optional[str] = None
     jira_auto_create: Optional[bool] = None
+    github_token: Optional[str] = None
+    github_repo: Optional[str] = None
+    github_labels: Optional[str] = None
+    github_auto_create: Optional[bool] = None
     slack_webhook_url: Optional[str] = None
     slack_notify_on: Optional[str] = None
     teams_webhook_url: Optional[str] = None
@@ -950,6 +1042,7 @@ def save_integrations(req: SaveIntegrationsRequest):
     # Check if attempting to modify secret credentials in Helm mode
     has_secret_edits = any([
         req.jira_api_token is not None and req.jira_api_token.strip(),
+        req.github_token is not None and req.github_token.strip(),
         req.slack_webhook_url is not None and req.slack_webhook_url.strip(),
         req.teams_webhook_url is not None and req.teams_webhook_url.strip(),
     ])
@@ -972,6 +1065,16 @@ def save_integrations(req: SaveIntegrationsRequest):
         set_setting("JIRA_ISSUE_TYPE", req.jira_issue_type.strip(), is_secret=False)
     if req.jira_auto_create is not None:
         set_setting("JIRA_AUTO_CREATE", "true" if req.jira_auto_create else "false", is_secret=False)
+
+    # Save GitHub settings
+    if req.github_repo is not None:
+        set_setting("GITHUB_REPO", req.github_repo.strip(), is_secret=False)
+    if req.github_token is not None and req.github_token.strip():
+        set_setting("GITHUB_TOKEN", req.github_token.strip(), is_secret=True)
+    if req.github_labels is not None:
+        set_setting("GITHUB_LABELS", req.github_labels.strip(), is_secret=False)
+    if req.github_auto_create is not None:
+        set_setting("GITHUB_AUTO_CREATE", "true" if req.github_auto_create else "false", is_secret=False)
 
     # Save Slack settings
     if req.slack_webhook_url is not None and req.slack_webhook_url.strip():
@@ -1001,12 +1104,14 @@ class TestIntegrationRequest(BaseModel):
     jira_email: Optional[str] = None
     jira_api_token: Optional[str] = None
     jira_project_key: Optional[str] = None
+    github_token: Optional[str] = None
+    github_repo: Optional[str] = None
     slack_webhook_url: Optional[str] = None
     teams_webhook_url: Optional[str] = None
 
 @app.post("/api/integrations/test")
 def test_integration(req: TestIntegrationRequest):
-    """Verifies credentials and connectivity for Jira, Slack, or Teams."""
+    """Verifies credentials and connectivity for Jira, GitHub, Slack, or Teams."""
     provider = req.provider.strip().lower()
     
     if provider == "jira":
@@ -1020,6 +1125,15 @@ def test_integration(req: TestIntegrationRequest):
         )
         return {"success": success, "message": message}
         
+    elif provider in ("github", "gh"):
+        from barely_core.integrations.github import GitHubClient
+        client = GitHubClient()
+        success, message = client.test_connection(
+            token=req.github_token,
+            repo=req.github_repo
+        )
+        return {"success": success, "message": message}
+
     elif provider == "slack":
         from barely_core.integrations.slack import SlackClient
         client = SlackClient()
@@ -1033,12 +1147,12 @@ def test_integration(req: TestIntegrationRequest):
         return {"success": success, "message": message}
         
     else:
-        raise HTTPException(status_code=400, detail=f"Unknown provider '{provider}'. Must be 'jira', 'slack', or 'teams'.")
+        raise HTTPException(status_code=400, detail=f"Unknown provider '{provider}'. Must be 'jira', 'github', 'slack', or 'teams'.")
 
 @app.delete("/api/integrations/{provider}")
 def delete_integration(provider: str):
     """
-    Deletes enterprise integration configuration for Slack, Teams, or Jira.
+    Deletes enterprise integration configuration for Slack, Teams, Jira, or GitHub.
     Reverts status to unconfigured and wipes encrypted webhooks/tokens from the database.
     Enforces GitOps/Helm mode protection if active.
     """
@@ -1075,8 +1189,13 @@ def delete_integration(provider: str):
         delete_setting("JIRA_PROJECT_KEY")
         delete_setting("JIRA_ISSUE_TYPE")
         delete_setting("JIRA_AUTO_CREATE")
+    elif p in ("github", "gh"):
+        delete_setting("GITHUB_TOKEN")
+        delete_setting("GITHUB_REPO")
+        delete_setting("GITHUB_LABELS")
+        delete_setting("GITHUB_AUTO_CREATE")
     else:
-        raise HTTPException(status_code=400, detail=f"Unknown integration provider '{provider}'. Must be 'slack', 'teams', or 'jira'.")
+        raise HTTPException(status_code=400, detail=f"Unknown integration provider '{provider}'. Must be 'jira', 'github', 'slack', or 'teams'.")
 
     return {
         "success": True,

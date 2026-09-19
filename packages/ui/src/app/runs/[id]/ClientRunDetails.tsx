@@ -57,9 +57,12 @@ interface RunData {
   logs: string;
   jira_issue_key?: string | null;
   jira_issue_url?: string | null;
+  github_issue_number?: number | null;
+  github_issue_url?: string | null;
   isolated_env?: boolean;
   runner_pod?: string | null;
   create_jira_ticket?: boolean | null;
+  create_github_issue?: boolean | null;
   notification_channel?: string | null;
   steps: RunStep[];
 }
@@ -109,6 +112,8 @@ export default function ClientRunDetails({ id }: { id: string }) {
   const [cancelling, setCancelling] = useState(false);
   const [creatingJira, setCreatingJira] = useState(false);
   const [jiraMessage, setJiraMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [creatingGithub, setCreatingGithub] = useState(false);
+  const [githubMessage, setGithubMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
   const [copiedRunId, setCopiedRunId] = useState(false);
   const terminalBottomRef = useRef<HTMLDivElement>(null);
 
@@ -164,6 +169,30 @@ export default function ClientRunDetails({ id }: { id: string }) {
     }
   };
 
+  const handleCreateGithubIssue = async () => {
+    setCreatingGithub(true);
+    setGithubMessage(null);
+    try {
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+      const res = await fetch(`${apiUrl}/api/runs/${id}/github`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({})
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setGithubMessage({ type: 'success', text: `Created GitHub issue #${data.issue_number} successfully!` });
+        await fetchRun();
+      } else {
+        setGithubMessage({ type: 'error', text: data.detail || data.error || 'Failed to create GitHub issue.' });
+      }
+    } catch (e: any) {
+      setGithubMessage({ type: 'error', text: e.message || 'Error communicating with Barely API.' });
+    } finally {
+      setCreatingGithub(false);
+    }
+  };
+
   useEffect(() => {
     fetchRun();
   }, [id]);
@@ -171,12 +200,13 @@ export default function ClientRunDetails({ id }: { id: string }) {
   useEffect(() => {
     const isOngoing = !run || run.status === 'running' || run.status === 'pending' || run.status === 'queued';
     const isWaitingForJira = run?.status === 'completed' && !run.success && Boolean(run.create_jira_ticket) && !run.jira_issue_key;
+    const isWaitingForGithub = run?.status === 'completed' && !run.success && Boolean(run.create_github_issue) && !run.github_issue_number;
 
-    if (isOngoing || isWaitingForJira) {
+    if (isOngoing || isWaitingForJira || isWaitingForGithub) {
       const timer = setInterval(fetchRun, 2000);
       return () => clearInterval(timer);
     }
-  }, [run?.status, run?.success, run?.create_jira_ticket, run?.jira_issue_key, id]);
+  }, [run?.status, run?.success, run?.create_jira_ticket, run?.jira_issue_key, run?.create_github_issue, run?.github_issue_number, id]);
 
   useEffect(() => {
     if (activeTab === 'logs' && terminalBottomRef.current) {
@@ -404,6 +434,39 @@ export default function ClientRunDetails({ id }: { id: string }) {
             </button>
           ) : null}
 
+          {/* GitHub Integration Action: View Issue or 1-Click Create */}
+          {run.github_issue_number ? (
+            <a
+              href={run.github_issue_url || '#'}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800/80 hover:bg-slate-700 text-slate-200 hover:text-white border border-slate-700 text-xs font-semibold rounded-lg transition-all shadow-sm cursor-pointer whitespace-nowrap"
+              title={`Open Issue #${run.github_issue_number} on GitHub`}
+            >
+              <svg className="w-3.5 h-3.5 fill-current shrink-0" viewBox="0 0 24 24">
+                <path fillRule="evenodd" clipRule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z" />
+              </svg>
+              <span>GitHub: #{run.github_issue_number}</span>
+              <ExternalLink className="w-3 h-3 shrink-0 opacity-70" />
+            </a>
+          ) : run.status === 'completed' && !run.success ? (
+            <button
+              onClick={handleCreateGithubIssue}
+              disabled={creatingGithub}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-white border border-slate-700 text-xs font-semibold rounded-lg transition-all shadow-md shadow-slate-900/40 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer whitespace-nowrap"
+              title="File automated defect issue in GitHub Repository"
+            >
+              {creatingGithub ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <svg className="w-3.5 h-3.5 fill-current shrink-0" viewBox="0 0 24 24">
+                  <path fillRule="evenodd" clipRule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z" />
+                </svg>
+              )}
+              <span>{creatingGithub ? 'Filing Issue...' : 'File GitHub Issue'}</span>
+            </button>
+          ) : null}
+
           {/* Export PDF */}
           <button
             onClick={() => window.open(`http://localhost:8000/api/runs/${run.id}/report?print=true`, '_blank')}
@@ -439,6 +502,7 @@ export default function ClientRunDetails({ id }: { id: string }) {
               model: run.model,
               tags: run.tags || [],
               createJiraTicket: run.create_jira_ticket ?? undefined,
+              createGithubIssue: run.create_github_issue ?? undefined,
               notificationChannel: run.notification_channel ?? undefined
             }}
             onRunCreated={() => fetchRun()}
@@ -484,6 +548,31 @@ export default function ClientRunDetails({ id }: { id: string }) {
           </div>
           <button
             onClick={() => setJiraMessage(null)}
+            className="text-slate-400 hover:text-white text-xs p-1 rounded hover:bg-slate-800 transition-colors cursor-pointer"
+            aria-label="Dismiss message"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
+
+      {/* GitHub Notification Feedback */}
+      {githubMessage && (
+        <div className={`p-3 rounded-lg border text-xs flex items-center justify-between gap-2 ${
+          githubMessage.type === 'success' 
+            ? 'bg-emerald-950/30 border-emerald-500/30 text-emerald-300' 
+            : 'bg-rose-950/30 border-rose-500/30 text-rose-300'
+        }`}>
+          <div className="flex items-center gap-2">
+            {githubMessage.type === 'success' ? (
+              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+            ) : (
+              <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+            )}
+            <span>{githubMessage.text}</span>
+          </div>
+          <button
+            onClick={() => setGithubMessage(null)}
             className="text-slate-400 hover:text-white text-xs p-1 rounded hover:bg-slate-800 transition-colors cursor-pointer"
             aria-label="Dismiss message"
           >

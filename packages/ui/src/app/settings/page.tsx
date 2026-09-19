@@ -206,6 +206,19 @@ export default function SettingsPage() {
   const [deletingJira, setDeletingJira] = useState(false);
   const [confirmDeleteJira, setConfirmDeleteJira] = useState(false);
 
+  const [githubRepo, setGithubRepo] = useState(() => cachedIntegrationsData?.integrations?.github?.repo || '');
+  const [githubToken, setGithubToken] = useState('');
+  const [githubLabels, setGithubLabels] = useState(() => cachedIntegrationsData?.integrations?.github?.labels || 'bug, automated-test');
+  const [githubAutoCreate, setGithubAutoCreate] = useState(() => Boolean(cachedIntegrationsData?.integrations?.github?.auto_create));
+  const [githubConfigured, setGithubConfigured] = useState(() => Boolean(cachedIntegrationsData?.integrations?.github?.configured));
+  const [githubMaskedToken, setGithubMaskedToken] = useState(() => cachedIntegrationsData?.integrations?.github?.masked_token || '');
+  const [showGithubToken, setShowGithubToken] = useState(false);
+  const [testingGithub, setTestingGithub] = useState(false);
+  const [savingGithub, setSavingGithub] = useState(false);
+  const [githubTestResult, setGithubTestResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [deletingGithub, setDeletingGithub] = useState(false);
+  const [confirmDeleteGithub, setConfirmDeleteGithub] = useState(false);
+
   const [slackWebhookUrl, setSlackWebhookUrl] = useState('');
   const [slackNotifyOn, setSlackNotifyOn] = useState(() => cachedIntegrationsData?.integrations?.slack?.notify_on || 'failure_only');
   const [slackConfigured, setSlackConfigured] = useState(() => Boolean(cachedIntegrationsData?.integrations?.slack?.configured));
@@ -246,6 +259,7 @@ export default function SettingsPage() {
     model: true,
     execution: true,
     jira: true,
+    github: true,
     notifications: true,
     defaults: true,
     database: true,
@@ -262,6 +276,7 @@ export default function SettingsPage() {
       model: false,
       execution: false,
       jira: false,
+      github: false,
       notifications: false,
       defaults: false,
       database: false,
@@ -274,6 +289,7 @@ export default function SettingsPage() {
       model: true,
       execution: true,
       jira: true,
+      github: true,
       notifications: true,
       defaults: true,
       database: true,
@@ -363,6 +379,13 @@ export default function SettingsPage() {
           setJiraAutoCreate(Boolean(intg.jira.auto_create));
           setJiraConfigured(Boolean(intg.jira.configured));
           setJiraMaskedToken(intg.jira.masked_token || '');
+        }
+        if (intg?.github) {
+          setGithubRepo(intg.github.repo || '');
+          setGithubLabels(intg.github.labels || 'bug, automated-test');
+          setGithubAutoCreate(Boolean(intg.github.auto_create));
+          setGithubConfigured(Boolean(intg.github.configured));
+          setGithubMaskedToken(intg.github.masked_token || '');
         }
         if (intg?.slack) {
           setSlackNotifyOn(intg.slack.notify_on || 'failure_only');
@@ -615,6 +638,68 @@ export default function SettingsPage() {
     }
   };
 
+  const handleTestGithub = async () => {
+    setTestingGithub(true);
+    setGithubTestResult(null);
+    try {
+      const payload: any = {
+        provider: 'github',
+        github_repo: githubRepo.trim()
+      };
+      if (githubToken.trim()) {
+        payload.github_token = githubToken.trim();
+      }
+      const res = await fetch(`${apiUrl}/api/integrations/test`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+      setGithubTestResult({ success: data.success, message: data.message || (data.success ? 'GitHub connected successfully!' : 'Connection test failed') });
+      if (data.success) {
+        showToast(data.message || 'GitHub connection verified!', 'success');
+      } else {
+        showToast(data.message || 'GitHub verification failed', 'error');
+      }
+    } catch (e: any) {
+      setGithubTestResult({ success: false, message: e.message || 'Network error' });
+      showToast(`GitHub test error: ${e.message}`, 'error');
+    } finally {
+      setTestingGithub(false);
+    }
+  };
+
+  const handleSaveGithub = async () => {
+    setSavingGithub(true);
+    try {
+      const payload: any = {
+        github_repo: githubRepo.trim(),
+        github_labels: githubLabels.trim(),
+        github_auto_create: githubAutoCreate
+      };
+      if (githubToken.trim()) {
+        payload.github_token = githubToken.trim();
+      }
+      const res = await fetch(`${apiUrl}/api/integrations`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        showToast('GitHub configuration saved and encrypted securely!', 'success');
+        setGithubToken('');
+        await fetchSettings();
+      } else {
+        showToast(data.detail || data.error || 'Failed to save GitHub settings', 'error');
+      }
+    } catch (e: any) {
+      showToast(`Save error: ${e.message}`, 'error');
+    } finally {
+      setSavingGithub(false);
+    }
+  };
+
   const handleTestSlack = async () => {
     setTestingSlack(true);
     setSlackTestResult(null);
@@ -748,10 +833,11 @@ export default function SettingsPage() {
     }
   };
 
-  const handleDeleteIntegration = async (provider: 'slack' | 'teams' | 'jira') => {
+  const handleDeleteIntegration = async (provider: 'slack' | 'teams' | 'jira' | 'github') => {
     if (provider === 'slack') setDeletingSlack(true);
     else if (provider === 'teams') setDeletingTeams(true);
     else if (provider === 'jira') setDeletingJira(true);
+    else if (provider === 'github') setDeletingGithub(true);
 
     try {
       const res = await fetch(`${apiUrl}/api/integrations/${provider}`, {
@@ -789,6 +875,15 @@ export default function SettingsPage() {
         setJiraConfigured(false);
         setJiraTestResult(null);
         setConfirmDeleteJira(false);
+      } else if (provider === 'github') {
+        setGithubRepo('');
+        setGithubToken('');
+        setGithubMaskedToken('');
+        setGithubLabels('bug, automated-test');
+        setGithubAutoCreate(false);
+        setGithubConfigured(false);
+        setGithubTestResult(null);
+        setConfirmDeleteGithub(false);
       }
 
       await fetchSettings();
@@ -798,6 +893,7 @@ export default function SettingsPage() {
       if (provider === 'slack') setDeletingSlack(false);
       else if (provider === 'teams') setDeletingTeams(false);
       else if (provider === 'jira') setDeletingJira(false);
+      else if (provider === 'github') setDeletingGithub(false);
     }
   };
 
@@ -1008,7 +1104,7 @@ export default function SettingsPage() {
             { id: 'secrets', label: 'Secrets & Keys', icon: Key, color: 'text-amber-400' },
             { id: 'model', label: 'AI Model', icon: Cpu, color: 'text-purple-400' },
             { id: 'execution', label: 'Pod Execution', icon: ShieldCheck, color: 'text-emerald-400' },
-            { id: 'jira', label: 'Issue Tracking (Jira)', icon: Zap, color: 'text-[#2684ff]' },
+            { id: 'jira', label: 'Issue Tracking (Jira & GitHub)', icon: Zap, color: 'text-[#2684ff]' },
             { id: 'notifications', label: 'Alerts & Webhooks', icon: Bell, color: 'text-amber-400' },
             { id: 'defaults', label: 'Defaults', icon: Sliders, color: 'text-slate-400' },
             { id: 'database', label: 'Database', icon: Database, color: 'text-cyan-400' },
@@ -2909,6 +3005,207 @@ secrets:
                       >
                         {savingJira ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
                         <span>Save Jira Settings</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+          {/* Section 4B: GitHub Issues Integration */}
+          <div id="section-github" className={`rounded-xl border border-slate-800 bg-[#0a0f1d] shadow-xl overflow-hidden transition-all ${activeCategory === 'all' || activeCategory === 'jira' || activeCategory === 'github' ? '' : 'hidden'}`}>
+              {/* Collapsible Card Header */}
+              <div 
+                onClick={() => toggleSection('github')}
+                className="px-6 py-4 border-b border-slate-800 flex items-center justify-between gap-4 cursor-pointer hover:bg-slate-800/30 transition-colors select-none"
+              >
+                <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                  <div className="w-7 h-7 rounded-lg bg-slate-800 text-slate-200 flex items-center justify-center border border-slate-700 shrink-0">
+                    <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
+                      <path fillRule="evenodd" clipRule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"/>
+                    </svg>
+                  </div>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <h2 className="text-sm font-bold text-white whitespace-nowrap">GitHub Issues Integration</h2>
+                      <span className="px-2 py-0.2 rounded-full text-[10px] font-mono bg-slate-800 text-slate-300 border border-slate-700 font-semibold shrink-0">
+                        REST API v3 · Defect Sync
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-400 truncate sm:whitespace-normal">Automate defect issue creation in GitHub repository on test failure with full reproduction steps and logs</p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2.5 shrink-0 ml-auto">
+                  {githubConfigured ? (
+                    <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 flex items-center gap-1.5 shrink-0">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                      Connected ({githubRepo}) · Auto: {githubAutoCreate ? 'ON' : 'OFF'}
+                    </span>
+                  ) : (
+                    <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-slate-800 text-slate-400 border border-slate-700">
+                      Not Configured
+                    </span>
+                  )}
+
+                  <button
+                    type="button"
+                    aria-label={collapsedSections.github ? "Expand GitHub section" : "Collapse GitHub section"}
+                    className="p-1 rounded-lg text-slate-400 hover:text-white transition-transform"
+                  >
+                    {collapsedSections.github ? (
+                      <ChevronRight className="w-4 h-4 text-slate-400" />
+                    ) : (
+                      <ChevronDown className="w-4 h-4 text-[#2684ff]" />
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              {!collapsedSections.github && (
+                <div className="p-6 space-y-5">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-1 border-b border-slate-800/60">
+                    <span className="text-xs font-bold text-white uppercase tracking-wider">GitHub Repository &amp; Access Token</span>
+                    <span className="text-[11px] font-mono text-slate-500">Classic PAT or Fine-Grained Token</span>
+                  </div>
+
+                  {/* GitHub Form Grid */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 pt-1">
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-bold text-slate-300">Target Repository (owner/repo)</label>
+                      <input
+                        type="text"
+                        value={githubRepo}
+                        onChange={(e) => setGithubRepo(e.target.value)}
+                        placeholder="e.g. GitanshKapoor/barely"
+                        className="w-full bg-[#070b14] border border-slate-800 focus:border-[#0278ff] rounded-lg px-3 py-2 text-xs font-mono text-white outline-none placeholder:text-slate-600"
+                      />
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-bold text-slate-300">Issue Labels (comma-separated)</label>
+                      <input
+                        type="text"
+                        value={githubLabels}
+                        onChange={(e) => setGithubLabels(e.target.value)}
+                        placeholder="bug, automated-test"
+                        className="w-full bg-[#070b14] border border-slate-800 focus:border-[#0278ff] rounded-lg px-3 py-2 text-xs font-mono text-white outline-none placeholder:text-slate-600"
+                      />
+                    </div>
+
+                    <div className="space-y-1 md:col-span-2">
+                      <div className="flex items-center justify-between">
+                        <label className="text-[11px] font-bold text-slate-300">GitHub Personal Access Token</label>
+                        {githubMaskedToken && (
+                          <span className="text-[10px] font-mono text-slate-400">Current: {githubMaskedToken}</span>
+                        )}
+                      </div>
+                      <div className="relative">
+                        <input
+                          type={showGithubToken ? "text" : "password"}
+                          value={githubToken}
+                          onChange={(e) => setGithubToken(e.target.value)}
+                          placeholder={githubConfigured ? "Enter new token to update existing secret..." : "ghp_... or github_pat_..."}
+                          className="w-full bg-[#070b14] border border-slate-800 focus:border-[#0278ff] rounded-lg px-3 py-2 text-xs font-mono text-white outline-none placeholder:text-slate-600 pr-10"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowGithubToken(!showGithubToken)}
+                          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
+                        >
+                          {showGithubToken ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                        </button>
+                      </div>
+                      <p className="text-[10px] text-slate-400">Requires <code className="text-slate-300">repo</code> scope (classic) or <code className="text-slate-300">Issues: Read and write</code> permission (fine-grained).</p>
+                    </div>
+                  </div>
+
+                  {/* Auto-Create Toggle */}
+                  <div className="p-3 rounded-lg border border-slate-800 bg-[#070b14] flex items-center justify-between gap-4">
+                    <div>
+                      <div className="text-xs font-bold text-slate-200">Auto-File GitHub Issue on Test Failure</div>
+                      <div className="text-[11px] text-slate-400">Automatically open a defect issue in the target repository whenever an assertion fails or timeout occurs.</div>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer shrink-0">
+                      <input
+                        type="checkbox"
+                        checked={githubAutoCreate}
+                        onChange={(e) => setGithubAutoCreate(e.target.checked)}
+                        className="sr-only peer"
+                      />
+                      <div className="w-9 h-5 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#0278ff]"></div>
+                    </label>
+                  </div>
+
+                  {/* GitHub Test Result Banner */}
+                  {githubTestResult && (
+                    <div className={`p-3 rounded-lg border text-xs flex items-center gap-2 ${
+                      githubTestResult.success ? 'bg-emerald-950/40 border-emerald-800/60 text-emerald-300' : 'bg-rose-950/40 border-rose-800/60 text-rose-300'
+                    }`}>
+                      {githubTestResult.success ? <Check className="w-4 h-4 text-emerald-400 shrink-0" /> : <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />}
+                      <span className="flex-1 font-mono text-[11px]">{githubTestResult.message}</span>
+                    </div>
+                  )}
+
+                  {/* GitHub Actions */}
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pt-1">
+                    <div>
+                      {githubConfigured && (
+                        confirmDeleteGithub ? (
+                          <div className="flex items-center gap-2 bg-rose-950/40 border border-rose-800/60 rounded-lg px-2.5 py-1 text-xs">
+                            <span className="text-rose-300 text-[11px] font-medium">Delete GitHub integration?</span>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteIntegration('github')}
+                              disabled={deletingGithub}
+                              className="px-2 py-0.5 rounded text-[11px] font-semibold bg-rose-600 hover:bg-rose-500 text-white flex items-center gap-1 transition-colors cursor-pointer"
+                            >
+                              {deletingGithub ? <Loader2 className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3 h-3" />}
+                              Confirm
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setConfirmDeleteGithub(false)}
+                              disabled={deletingGithub}
+                              className="px-2 py-0.5 rounded text-[11px] font-semibold text-slate-400 hover:text-slate-200 transition-colors cursor-pointer"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => setConfirmDeleteGithub(true)}
+                            disabled={deletingGithub || savingGithub || testingGithub}
+                            className="px-3 py-1.5 rounded-lg text-xs font-semibold text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 border border-rose-500/20 flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                            title="Disconnect and delete GitHub integration"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                            <span>Disconnect Integration</span>
+                          </button>
+                        )
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-2.5 justify-end">
+                      <button
+                        type="button"
+                        onClick={handleTestGithub}
+                        disabled={testingGithub}
+                        className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 flex items-center gap-1.5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                      >
+                        {testingGithub ? <Loader2 className="w-3.5 h-3.5 animate-spin text-[#0278ff]" /> : <Zap className="w-3.5 h-3.5 text-amber-400" />}
+                        <span>Test Connection</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={handleSaveGithub}
+                        disabled={savingGithub}
+                        className="px-4 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-white border border-slate-700 shadow-md flex items-center gap-1.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                      >
+                        {savingGithub ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                        <span>Save GitHub Settings</span>
                       </button>
                     </div>
                   </div>

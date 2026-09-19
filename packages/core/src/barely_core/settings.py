@@ -24,6 +24,11 @@ KNOWN_SETTINGS = [
     {"key": "JIRA_PROJECT_KEY", "is_secret": False, "label": "Jira Project Key", "category": "jira", "placeholder": "QA"},
     {"key": "JIRA_ISSUE_TYPE", "is_secret": False, "label": "Jira Issue Type", "category": "jira", "placeholder": "Bug"},
     {"key": "JIRA_AUTO_CREATE", "is_secret": False, "label": "Auto-Create Jira Ticket on Failure", "category": "jira", "placeholder": "false"},
+    # GitHub Issues Integration
+    {"key": "GITHUB_TOKEN", "is_secret": True, "label": "GitHub Personal Access Token", "category": "github", "placeholder": "ghp_... or github_pat_..."},
+    {"key": "GITHUB_REPO", "is_secret": False, "label": "GitHub Target Repository", "category": "github", "placeholder": "owner/repo"},
+    {"key": "GITHUB_LABELS", "is_secret": False, "label": "GitHub Issue Labels", "category": "github", "placeholder": "bug, automated-test"},
+    {"key": "GITHUB_AUTO_CREATE", "is_secret": False, "label": "Auto-Create GitHub Issue on Failure", "category": "github", "placeholder": "false"},
     # Slack Incident Alerts
     {"key": "SLACK_WEBHOOK_URL", "is_secret": True, "label": "Slack Webhook URL", "category": "slack", "placeholder": "https://hooks.slack.com/services/..."},
     {"key": "SLACK_NOTIFY_ON", "is_secret": False, "label": "Slack Notification Trigger", "category": "slack", "placeholder": "failure_only"},
@@ -653,18 +658,21 @@ def list_supported_models() -> Dict[str, Any]:
 def get_integrations_summary() -> Dict[str, Any]:
     """
     Returns the status and non-sensitive configuration for enterprise integrations:
-    Atlassian Jira, Slack Webhooks, and Microsoft Teams Webhooks.
+    Atlassian Jira, GitHub Issues, Slack Webhooks, and Microsoft Teams Webhooks.
     Zero credential leakage: tokens and webhooks are securely masked.
     """
     from barely_core.integrations.jira import JiraClient
+    from barely_core.integrations.github import GitHubClient
     from barely_core.integrations.slack import SlackClient
     from barely_core.integrations.teams import TeamsClient
 
     jira_client = JiraClient()
+    github_client = GitHubClient()
     slack_client = SlackClient()
     teams_client = TeamsClient()
 
     jira_token = get_setting("JIRA_API_TOKEN")
+    github_token = get_setting("GITHUB_TOKEN")
     slack_url = get_setting("SLACK_WEBHOOK_URL")
     teams_url = get_setting("TEAMS_WEBHOOK_URL")
 
@@ -678,6 +686,14 @@ def get_integrations_summary() -> Dict[str, Any]:
             "auto_create": (get_setting("JIRA_AUTO_CREATE") or "false").strip().lower() in ("true", "1", "yes"),
             "has_token": bool(jira_token),
             "masked_token": mask_secret(jira_token) if jira_token else ""
+        },
+        "github": {
+            "configured": github_client.is_configured,
+            "repo": get_setting("GITHUB_REPO") or "",
+            "labels": get_setting("GITHUB_LABELS") or "bug, automated-test",
+            "auto_create": (get_setting("GITHUB_AUTO_CREATE") or "false").strip().lower() in ("true", "1", "yes"),
+            "has_token": bool(github_token),
+            "masked_token": mask_secret(github_token) if github_token else ""
         },
         "slack": {
             "configured": slack_client.is_configured,

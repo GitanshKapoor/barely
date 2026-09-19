@@ -18,6 +18,7 @@ export interface RunConfigData {
   tags?: string[];
   isolatedEnv?: boolean;
   createJiraTicket?: boolean;
+  createGithubIssue?: boolean;
   notificationChannel?: string;
 }
 
@@ -68,11 +69,15 @@ export default function NewRunForm({ initialData, triggerButton, onRunCreated }:
   const [tagInput, setTagInput] = useState('');
   const [toast, setToast] = useState<{ id: string; name: string } | null>(null);
 
-  // Enterprise Integrations (Jira, Slack, Teams)
+  // Enterprise Integrations (Jira, GitHub, Slack, Teams)
   const [jiraConfigured, setJiraConfigured] = useState(false);
   const [jiraProjectKey, setJiraProjectKey] = useState('QA');
   const [jiraAutoCreateDefault, setJiraAutoCreateDefault] = useState(false);
   const [createJiraTicket, setCreateJiraTicket] = useState(Boolean(initialData?.createJiraTicket));
+  const [githubConfigured, setGithubConfigured] = useState(false);
+  const [githubRepo, setGithubRepo] = useState('GitanshKapoor/barely');
+  const [githubAutoCreateDefault, setGithubAutoCreateDefault] = useState(false);
+  const [createGithubIssue, setCreateGithubIssue] = useState(Boolean(initialData?.createGithubIssue));
   const [slackConfigured, setSlackConfigured] = useState(false);
   const [teamsConfigured, setTeamsConfigured] = useState(false);
   const [defaultNotificationMechanism, setDefaultNotificationMechanism] = useState<string>('both');
@@ -134,6 +139,15 @@ export default function NewRunForm({ initialData, triggerButton, onRunCreated }:
               setCreateJiraTicket(autoCreate);
             }
           }
+          if (intg?.github) {
+            setGithubConfigured(Boolean(intg.github.configured));
+            setGithubRepo(intg.github.repo || 'GitanshKapoor/barely');
+            const autoCreate = Boolean(intg.github.auto_create);
+            setGithubAutoCreateDefault(autoCreate);
+            if (initialData?.createGithubIssue === undefined) {
+              setCreateGithubIssue(autoCreate);
+            }
+          }
           if (intg?.slack) {
             setSlackConfigured(Boolean(intg.slack.configured));
           }
@@ -173,6 +187,7 @@ export default function NewRunForm({ initialData, triggerButton, onRunCreated }:
         if (Array.isArray(draft.tags)) setTags(draft.tags);
         if (typeof draft.autoNavigate === 'boolean') setAutoNavigate(draft.autoNavigate);
         if (typeof draft.createJiraTicket === 'boolean') setCreateJiraTicket(draft.createJiraTicket);
+        if (typeof draft.createGithubIssue === 'boolean') setCreateGithubIssue(draft.createGithubIssue);
         if (typeof draft.notificationChannel === 'string') setNotificationChannel(draft.notificationChannel);
         setIsOpen(true);
         setHasRestoredDraft(true);
@@ -204,6 +219,7 @@ export default function NewRunForm({ initialData, triggerButton, onRunCreated }:
       tags,
       autoNavigate,
       createJiraTicket,
+      createGithubIssue,
       notificationChannel,
     };
     try {
@@ -214,7 +230,7 @@ export default function NewRunForm({ initialData, triggerButton, onRunCreated }:
   }, [
     isOpen, name, url, goalText, context, device, strictMode, useCache,
     isolatedEnv, model, selectedModelType, customModelSlug, tags,
-    autoNavigate, createJiraTicket, notificationChannel, initialData
+    autoNavigate, createJiraTicket, createGithubIssue, notificationChannel, initialData
   ]);
 
   // Prevent accidental reload when form has unsaved content
@@ -326,6 +342,9 @@ export default function NewRunForm({ initialData, triggerButton, onRunCreated }:
       if (initialData.createJiraTicket !== undefined) {
         setCreateJiraTicket(Boolean(initialData.createJiraTicket));
       }
+      if (initialData.createGithubIssue !== undefined) {
+        setCreateGithubIssue(Boolean(initialData.createGithubIssue));
+      }
       if (initialData.notificationChannel) {
         setNotificationChannel(initialData.notificationChannel);
       }
@@ -351,6 +370,7 @@ export default function NewRunForm({ initialData, triggerButton, onRunCreated }:
             if (Array.isArray(draft.tags)) setTags(draft.tags);
             if (typeof draft.autoNavigate === 'boolean') setAutoNavigate(draft.autoNavigate);
             if (typeof draft.createJiraTicket === 'boolean') setCreateJiraTicket(draft.createJiraTicket);
+            if (typeof draft.createGithubIssue === 'boolean') setCreateGithubIssue(draft.createGithubIssue);
             if (typeof draft.notificationChannel === 'string') setNotificationChannel(draft.notificationChannel);
             setHasRestoredDraft(true);
           }
@@ -375,6 +395,7 @@ export default function NewRunForm({ initialData, triggerButton, onRunCreated }:
         setTagInput('');
         setNotificationChannel('default');
         setCreateJiraTicket(jiraAutoCreateDefault);
+        setCreateGithubIssue(githubAutoCreateDefault);
         setHasRestoredDraft(false);
       }
     }
@@ -401,6 +422,7 @@ export default function NewRunForm({ initialData, triggerButton, onRunCreated }:
           tags,
           isolated_env: isK8sAvailable ? isolatedEnv : false,
           create_jira_ticket: createJiraTicket,
+          create_github_issue: createGithubIssue,
           notification_channel: notificationChannel
         })
       });
@@ -957,6 +979,54 @@ export default function NewRunForm({ initialData, triggerButton, onRunCreated }:
                       className="sr-only peer"
                     />
                     <div className="w-8 h-4 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-[#0052cc]"></div>
+                  </label>
+                </div>
+
+                {/* GitHub Issue Auto-Creation */}
+                <div className="flex items-center justify-between p-3 rounded-xl border border-slate-800 bg-[#070b14]/70">
+                  <div className="space-y-0.5 pr-2.5 text-left min-w-0 flex-1">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <svg className="w-3.5 h-3.5 fill-slate-200 shrink-0" viewBox="0 0 24 24">
+                        <path fillRule="evenodd" clipRule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"/>
+                      </svg>
+                      <span className="text-xs font-bold text-slate-200">Auto-Create GitHub Issue</span>
+                      <div className="relative group cursor-help inline-flex items-center">
+                        <Info className="w-3.5 h-3.5 text-slate-400 hover:text-[#0278ff] transition-colors" />
+                        <div className="absolute right-0 bottom-full mb-2 hidden group-hover:block w-72 p-3 rounded-lg bg-[#0d1322] border border-slate-700 shadow-2xl text-[11px] text-slate-300 leading-relaxed z-50 pointer-events-none text-left whitespace-normal font-sans font-normal">
+                          <p className="font-bold text-white mb-1">GitHub Defect Issue Auto-Filing</p>
+                          <p>
+                            When <strong className="text-[#0278ff]">Enabled</strong>: If this test fails or times out, Barely automatically files a defect issue in your target GitHub repository with reproduction steps, logs, and screenshots.
+                          </p>
+                        </div>
+                      </div>
+                      <span className={`text-[9px] font-mono font-bold px-1.5 py-0.2 rounded border shrink-0 ${
+                        !githubConfigured
+                          ? 'bg-slate-800/80 text-slate-500 border-slate-700'
+                          : createGithubIssue 
+                          ? 'bg-blue-500/15 text-[#0278ff] border-blue-500/30' 
+                          : 'bg-slate-800 text-slate-400 border-slate-700'
+                      }`}>
+                        {!githubConfigured ? 'Unconfigured' : createGithubIssue ? `Active (${githubRepo.split('/')[1] || githubRepo})` : 'Off'}
+                      </span>
+                    </div>
+                    <p className="text-[10px] text-slate-400 truncate">
+                      {!githubConfigured
+                        ? 'Configure GitHub repository & token in Settings to enable.'
+                        : createGithubIssue 
+                        ? `Auto-files issue to '${githubRepo}' on failure.` 
+                        : 'Manual 1-click filing is available in run audit.'}
+                    </p>
+                  </div>
+
+                  <label className={`relative inline-flex items-center ${!githubConfigured ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'} shrink-0 ml-2`}>
+                    <input
+                      type="checkbox"
+                      disabled={!githubConfigured}
+                      checked={githubConfigured && createGithubIssue}
+                      onChange={(e) => githubConfigured && setCreateGithubIssue(e.target.checked)}
+                      className="sr-only peer"
+                    />
+                    <div className="w-8 h-4 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-[#0278ff]"></div>
                   </label>
                 </div>
 

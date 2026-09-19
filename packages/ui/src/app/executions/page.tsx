@@ -389,6 +389,30 @@ export default function ExecutionsPage() {
                           <span>Isolated Pod</span>
                         </span>
                       )}
+                      {run.jira_issue_key && (
+                        <a
+                          href={run.jira_issue_url || '#'}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          className="inline-flex items-center gap-1 text-[9px] font-mono font-bold text-[#2684ff] bg-[#0052cc]/15 border border-[#0052cc]/30 px-1.5 py-0.5 rounded hover:bg-[#0052cc]/25 transition-colors"
+                          title={`Jira Issue: ${run.jira_issue_key}`}
+                        >
+                          <span>{run.jira_issue_key}</span>
+                        </a>
+                      )}
+                      {run.github_issue_number && (
+                        <a
+                          href={run.github_issue_url || '#'}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          className="inline-flex items-center gap-1 text-[9px] font-mono font-bold text-slate-300 bg-slate-800 border border-slate-700 px-1.5 py-0.5 rounded hover:bg-slate-700 transition-colors"
+                          title={`GitHub Issue #${run.github_issue_number}`}
+                        >
+                          <span>#{run.github_issue_number}</span>
+                        </a>
+                      )}
                     </div>
                     {run.tags && run.tags.length > 0 && (
                       <div className="flex items-center gap-1 mt-1.5 pl-6 flex-wrap">
@@ -483,6 +507,7 @@ export default function ExecutionsPage() {
                           model: run.model,
                           tags: run.tags || [],
                           createJiraTicket: run.create_jira_ticket ?? undefined,
+                          createGithubIssue: run.create_github_issue ?? undefined,
                           notificationChannel: run.notification_channel ?? undefined
                         }}
                         onRunCreated={() => fetchRuns()}
