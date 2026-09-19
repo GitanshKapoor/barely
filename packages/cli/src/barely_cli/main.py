@@ -1,4 +1,5 @@
 import os
+import sys
 import typer
 from pathlib import Path
 from typing import Optional
@@ -7,8 +8,18 @@ from dotenv import load_dotenv
 from barely_core.parser.goal_parser import GoalParser
 from barely_core.browser.engine import BrowserEngine
 from barely_core.agent.loop import AgentLoop
+from barely_cli.secrets import secret_app
 
 app = typer.Typer(help="Barely - Declarative AI-driven end-to-end testing.")
+app.add_typer(secret_app, name="secret")
+
+@app.command()
+def doctor():
+    """Diagnose local environment, Playwright installation, and AI API keys."""
+    from barely_cli.doctor import run_doctor
+    healthy = run_doctor()
+    if not healthy:
+        raise typer.Exit(1)
 
 @app.command()
 def init():
@@ -52,8 +63,34 @@ def run(
     start_url = url or "https://example.com"
     selected_model = model or os.getenv("BARELY_MODEL") or "anthropic/claude-3-7-sonnet"
 
+    # Auto-detect headless mode on Linux if no display is attached (e.g. EC2, CI, SSH)
+    if not headless and sys.platform.startswith("linux"):
+        if not (os.getenv("DISPLAY") or os.getenv("WAYLAND_DISPLAY")):
+            typer.secho("ℹ️  Headless environment detected (no $DISPLAY). Auto-enabling --headless mode.", fg=typer.colors.BLUE)
+            headless = True
+
+    # Pre-flight API Key Validation
+    from barely_core.settings import resolve_model_api_key, get_model_provider
+    resolved_key = resolve_model_api_key(selected_model)
+    if not resolved_key:
+        prov = get_model_provider(selected_model).upper()
+        typer.secho(f"❌ Error: No API key configured for model '{selected_model}'.", fg=typer.colors.RED, bold=True)
+        typer.echo(f"👉 Please set {prov}_API_KEY in your .env file or environment.")
+        typer.echo("💡 Tip: Run 'barely doctor' to inspect your environment.")
+        raise typer.Exit(1)
+
     typer.echo(f"🤖 Booting Barely AI Agent (model: {selected_model})...")
-    engine = BrowserEngine(headless=headless)
+    try:
+        engine = BrowserEngine(headless=headless)
+    except Exception as e:
+        err_msg = str(e)
+        if "Executable doesn't exist" in err_msg or "playwright install" in err_msg.lower():
+            typer.secho("❌ Error: Playwright Chromium browser binary is not installed.", fg=typer.colors.RED, bold=True)
+            cmd = "python3 -m playwright install --with-deps chromium" if sys.platform.startswith("linux") else "playwright install chromium"
+            typer.echo(f"👉 Fix: Run '{cmd}' to install browser dependencies.")
+            raise typer.Exit(1)
+        raise e
+
     agent = AgentLoop(engine=engine, model=selected_model)
     
     try:
