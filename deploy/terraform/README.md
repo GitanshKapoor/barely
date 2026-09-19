@@ -39,10 +39,14 @@ flowchart TD
         end
     end
 
+    subgraph ExternalTargets["External SaaS & Tested Domains"]
+        ExternalAPIs["OpenAI / Anthropic / Tested Domains"]
+    end
+
     User -->|HTTPS :443| ALB
     ALB -->|Route /* :3000| ECSUi
     ALB -->|Route /api/* :8000| ECSApi
-    ECSUi -->|Internal :8000 (api.barely.internal)| ECSApi
+    ECSUi -->|Internal API :8000| ECSApi
     ECSApi -->|SQL :5432| RDS
     ECSWorker -->|SQL :5432| RDS
     ECSApi -.->|Task Execution Role| SM
@@ -52,7 +56,7 @@ flowchart TD
     ECSUi -.-> CW
     ECSApi -->|NAT Gateway :443| NAT
     ECSWorker -->|NAT Gateway :80, :443| NAT
-    NAT -->|HTTPS :443| ExternalAPIs["OpenAI / Anthropic / Tested Domains"]
+    NAT -->|HTTPS :443| ExternalAPIs
 ```
 
 ---
