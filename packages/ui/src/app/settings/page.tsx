@@ -30,9 +30,51 @@ import {
   ChevronDown,
   ChevronRight,
   ChevronsUpDown,
-  Sliders
+  Sliders,
+  Layers,
+  Server,
+  Box,
+  Ban,
+  Cloud
 } from 'lucide-react';
 import { formatModelName } from '../../utils/models';
+
+interface ModelOption {
+  id: string;
+  name: string;
+  provider: string;
+  supports_vision?: boolean;
+  recommended?: boolean;
+  context_window?: string;
+  description?: string;
+  dynamic?: boolean;
+  enabled?: boolean;
+  configured?: boolean;
+}
+
+interface ProviderSyncStatus {
+  configured: boolean;
+  dynamic: boolean;
+  count?: number;
+  error?: string;
+}
+
+// In-memory module cache to guarantee instantaneous 0ms page loads on repeat navigations
+let cachedSettingsData: SettingsResponse | null = null;
+let cachedIntegrationsData: any = null;
+let cachedModelsData: { models?: ModelOption[]; sync_status?: Record<string, ProviderSyncStatus>; default_model?: string } | null = null;
+
+// Hydrate from sessionStorage on browser initial load to prevent cold skeleton flashes
+if (typeof window !== 'undefined') {
+  try {
+    const s = sessionStorage.getItem('barely_settings_cache');
+    if (s && !cachedSettingsData) cachedSettingsData = JSON.parse(s);
+    const i = sessionStorage.getItem('barely_integrations_cache');
+    if (i && !cachedIntegrationsData) cachedIntegrationsData = JSON.parse(i);
+    const m = sessionStorage.getItem('barely_models_cache');
+    if (m && !cachedModelsData) cachedModelsData = JSON.parse(m);
+  } catch {}
+}
 
 interface SettingItem {
   key: string;
@@ -90,7 +132,7 @@ interface SettingsResponse {
 const PROVIDER_INFO: Record<string, { provider: string; model: string; desc: string }> = {
   ANTHROPIC_API_KEY: {
     provider: 'anthropic',
-    model: 'anthropic/claude-sonnet-4-5',
+    model: 'anthropic/claude-3-7-sonnet',
     desc: 'Recommended for precise multi-modal vision & autonomous browser reasoning'
   },
   OPENAI_API_KEY: {
@@ -105,7 +147,7 @@ const PROVIDER_INFO: Record<string, { provider: string; model: string; desc: str
   },
   GEMINI_API_KEY: {
     provider: 'gemini',
-    model: 'gemini/gemini-1.5-pro',
+    model: 'gemini/gemini-2.0-flash',
     desc: 'Massive context window & rapid multimodal web inspection'
   }
 };
@@ -113,17 +155,27 @@ const PROVIDER_INFO: Record<string, { provider: string; model: string; desc: str
 export default function SettingsPage() {
   const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
-  const [settings, setSettings] = useState<SettingItem[]>([]);
-  const [dbStatus, setDbStatus] = useState<DatabaseStatus | null>(null);
-  const [deployment, setDeployment] = useState<DeploymentInfo | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [settings, setSettings] = useState<SettingItem[]>(() => cachedSettingsData?.settings || []);
+  const [dbStatus, setDbStatus] = useState<DatabaseStatus | null>(() => cachedSettingsData?.database || null);
+  const [deployment, setDeployment] = useState<DeploymentInfo | null>(() => cachedSettingsData?.deployment || null);
+  const [loading, setLoading] = useState(() => !cachedSettingsData);
   const [refreshing, setRefreshing] = useState(false);
 
   // Model configuration states
-  const [modelNameInput, setModelNameInput] = useState<string>('');
+  const [modelNameInput, setModelNameInput] = useState<string>(() => {
+    const defaultModelSetting = cachedSettingsData?.settings?.find(s => s.key === 'DEFAULT_MODEL');
+    return defaultModelSetting?.masked_value || 'anthropic/claude-3-7-sonnet';
+  });
+  const [availableModels, setAvailableModels] = useState<ModelOption[]>(() => cachedModelsData?.models || []);
+  const [syncStatus, setSyncStatus] = useState<Record<string, ProviderSyncStatus>>(() => cachedModelsData?.sync_status || {});
+  const [selectedModelType, setSelectedModelType] = useState<string>('preset');
+  const [customModelSlug, setCustomModelSlug] = useState<string>('');
   const [testingModel, setTestingModel] = useState<boolean>(false);
   const [savingModel, setSavingModel] = useState<boolean>(false);
+  const [deletingModel, setDeletingModel] = useState<boolean>(false);
+  const [confirmDeleteModel, setConfirmDeleteModel] = useState<boolean>(false);
   const [modelTestResult, setModelTestResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [modelSaveError, setModelSaveError] = useState<string | null>(null);
   const [isEditModelModalOpen, setIsEditModelModalOpen] = useState<boolean>(false);
 
   // Enterprise ESO Guide state
@@ -139,58 +191,78 @@ export default function SettingsPage() {
   const [deletingKey, setDeletingKey] = useState<string | null>(null);
 
   // Enterprise Integrations States
-  const [jiraHost, setJiraHost] = useState('');
-  const [jiraEmail, setJiraEmail] = useState('');
+  const [jiraHost, setJiraHost] = useState(() => cachedIntegrationsData?.integrations?.jira?.host || '');
+  const [jiraEmail, setJiraEmail] = useState(() => cachedIntegrationsData?.integrations?.jira?.email || '');
   const [jiraToken, setJiraToken] = useState('');
-  const [jiraProjectKey, setJiraProjectKey] = useState('QA');
-  const [jiraIssueType, setJiraIssueType] = useState('Bug');
-  const [jiraAutoCreate, setJiraAutoCreate] = useState(false);
-  const [jiraConfigured, setJiraConfigured] = useState(false);
-  const [jiraMaskedToken, setJiraMaskedToken] = useState('');
+  const [jiraProjectKey, setJiraProjectKey] = useState(() => cachedIntegrationsData?.integrations?.jira?.project_key || 'QA');
+  const [jiraIssueType, setJiraIssueType] = useState(() => cachedIntegrationsData?.integrations?.jira?.issue_type || 'Bug');
+  const [jiraAutoCreate, setJiraAutoCreate] = useState(() => Boolean(cachedIntegrationsData?.integrations?.jira?.auto_create));
+  const [jiraConfigured, setJiraConfigured] = useState(() => Boolean(cachedIntegrationsData?.integrations?.jira?.configured));
+  const [jiraMaskedToken, setJiraMaskedToken] = useState(() => cachedIntegrationsData?.integrations?.jira?.masked_token || '');
   const [showJiraToken, setShowJiraToken] = useState(false);
   const [testingJira, setTestingJira] = useState(false);
   const [savingJira, setSavingJira] = useState(false);
   const [jiraTestResult, setJiraTestResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [deletingJira, setDeletingJira] = useState(false);
+  const [confirmDeleteJira, setConfirmDeleteJira] = useState(false);
+
+  const [githubRepo, setGithubRepo] = useState(() => cachedIntegrationsData?.integrations?.github?.repo || '');
+  const [githubToken, setGithubToken] = useState('');
+  const [githubLabels, setGithubLabels] = useState(() => cachedIntegrationsData?.integrations?.github?.labels || 'bug, automated-test');
+  const [githubAutoCreate, setGithubAutoCreate] = useState(() => Boolean(cachedIntegrationsData?.integrations?.github?.auto_create));
+  const [githubConfigured, setGithubConfigured] = useState(() => Boolean(cachedIntegrationsData?.integrations?.github?.configured));
+  const [githubMaskedToken, setGithubMaskedToken] = useState(() => cachedIntegrationsData?.integrations?.github?.masked_token || '');
+  const [showGithubToken, setShowGithubToken] = useState(false);
+  const [testingGithub, setTestingGithub] = useState(false);
+  const [savingGithub, setSavingGithub] = useState(false);
+  const [githubTestResult, setGithubTestResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [deletingGithub, setDeletingGithub] = useState(false);
+  const [confirmDeleteGithub, setConfirmDeleteGithub] = useState(false);
 
   const [slackWebhookUrl, setSlackWebhookUrl] = useState('');
-  const [slackNotifyOn, setSlackNotifyOn] = useState('failure_only');
-  const [slackConfigured, setSlackConfigured] = useState(false);
-  const [slackMaskedWebhook, setSlackMaskedWebhook] = useState('');
+  const [slackNotifyOn, setSlackNotifyOn] = useState(() => cachedIntegrationsData?.integrations?.slack?.notify_on || 'failure_only');
+  const [slackConfigured, setSlackConfigured] = useState(() => Boolean(cachedIntegrationsData?.integrations?.slack?.configured));
+  const [slackMaskedWebhook, setSlackMaskedWebhook] = useState(() => cachedIntegrationsData?.integrations?.slack?.masked_webhook || '');
   const [showSlackWebhook, setShowSlackWebhook] = useState(false);
   const [testingSlack, setTestingSlack] = useState(false);
   const [savingSlack, setSavingSlack] = useState(false);
   const [slackTestResult, setSlackTestResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [deletingSlack, setDeletingSlack] = useState(false);
+  const [confirmDeleteSlack, setConfirmDeleteSlack] = useState(false);
 
   const [teamsWebhookUrl, setTeamsWebhookUrl] = useState('');
-  const [teamsNotifyOn, setTeamsNotifyOn] = useState('failure_only');
-  const [teamsConfigured, setTeamsConfigured] = useState(false);
-  const [teamsMaskedWebhook, setTeamsMaskedWebhook] = useState('');
+  const [teamsNotifyOn, setTeamsNotifyOn] = useState(() => cachedIntegrationsData?.integrations?.teams?.notify_on || 'failure_only');
+  const [teamsConfigured, setTeamsConfigured] = useState(() => Boolean(cachedIntegrationsData?.integrations?.teams?.configured));
+  const [teamsMaskedWebhook, setTeamsMaskedWebhook] = useState(() => cachedIntegrationsData?.integrations?.teams?.masked_webhook || '');
   const [showTeamsWebhook, setShowTeamsWebhook] = useState(false);
   const [testingTeams, setTestingTeams] = useState(false);
   const [savingTeams, setSavingTeams] = useState(false);
   const [teamsTestResult, setTeamsTestResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [deletingTeams, setDeletingTeams] = useState(false);
+  const [confirmDeleteTeams, setConfirmDeleteTeams] = useState(false);
 
   // General Notification Defaults
-  const [defaultNotificationMechanism, setDefaultNotificationMechanism] = useState<'both' | 'slack' | 'teams' | 'none'>('both');
+  const [defaultNotificationMechanism, setDefaultNotificationMechanism] = useState<'both' | 'slack' | 'teams' | 'none'>(() => cachedIntegrationsData?.integrations?.default_notification_mechanism || 'both');
   const [savingDefaultMechanism, setSavingDefaultMechanism] = useState(false);
 
   // Execution Engine & Pod Isolation States
-  const [executionMode, setExecutionMode] = useState<'worker_pool' | 'k8s_job'>('worker_pool');
-  const [maxParallelPods, setMaxParallelPods] = useState<number>(10);
+  const [executionMode, setExecutionMode] = useState<'worker_pool' | 'k8s_job'>(() => cachedSettingsData?.execution_engine?.mode || 'worker_pool');
+  const [maxParallelPods, setMaxParallelPods] = useState<number>(() => cachedSettingsData?.execution_engine?.max_parallel_pods || 10);
   const [savingEngine, setSavingEngine] = useState(false);
-  const [engineClusterStatus, setEngineClusterStatus] = useState<any>(null);
-  const [isK8sAvailable, setIsK8sAvailable] = useState(false);
+  const [engineClusterStatus, setEngineClusterStatus] = useState<any>(() => cachedSettingsData?.execution_engine?.cluster || null);
+  const [isK8sAvailable, setIsK8sAvailable] = useState<boolean>(() => Boolean(cachedSettingsData?.execution_engine?.is_k8s_available));
   const [showConcurrencyInfo, setShowConcurrencyInfo] = useState(false);
 
-  // Section Collapse and Category Navigation States
+  // Section Collapse and Category Navigation States (default to collapsed)
   const [collapsedSections, setCollapsedSections] = useState<Record<string, boolean>>({
-    secrets: false,
-    model: false,
-    execution: false,
-    jira: false,
-    notifications: false,
-    defaults: false,
-    database: false,
+    secrets: true,
+    model: true,
+    execution: true,
+    jira: true,
+    github: true,
+    notifications: true,
+    defaults: true,
+    database: true,
   });
   const [activeCategory, setActiveCategory] = useState<string>('all');
 
@@ -204,6 +276,7 @@ export default function SettingsPage() {
       model: false,
       execution: false,
       jira: false,
+      github: false,
       notifications: false,
       defaults: false,
       database: false,
@@ -216,6 +289,7 @@ export default function SettingsPage() {
       model: true,
       execution: true,
       jira: true,
+      github: true,
       notifications: true,
       defaults: true,
       database: true,
@@ -242,9 +316,26 @@ export default function SettingsPage() {
   const fetchSettings = React.useCallback(async (isRefresh = false) => {
     if (isRefresh) setRefreshing(true);
     try {
-      const res = await fetch(`${apiUrl}/api/settings`);
+      const [res, intgRes, modelsRes] = await Promise.all([
+        fetch(`${apiUrl}/api/settings`),
+        fetch(`${apiUrl}/api/integrations`).catch(ie => {
+          console.error('Failed to load integrations:', ie);
+          return null;
+        }),
+        fetch(`${apiUrl}/api/models`).catch(me => {
+          console.error('Failed to load models:', me);
+          return null;
+        })
+      ]);
+
       if (!res.ok) throw new Error(`API Error: ${res.statusText}`);
       const data: SettingsResponse = await res.json();
+      cachedSettingsData = data;
+      if (typeof window !== 'undefined') {
+        try {
+          sessionStorage.setItem('barely_settings_cache', JSON.stringify(data));
+        } catch {}
+      }
       setSettings(data.settings);
       setDbStatus(data.database);
       setDeployment(data.deployment || null);
@@ -254,37 +345,61 @@ export default function SettingsPage() {
         setModelNameInput(prev => prev ? prev : defaultModelSetting.masked_value);
       }
 
-      // Fetch enterprise integrations configuration
-      try {
-        const intgRes = await fetch(`${apiUrl}/api/integrations`);
-        if (intgRes.ok) {
-          const intgData = await intgRes.json();
-          const intg = intgData.integrations;
-          if (intg?.jira) {
-            setJiraHost(intg.jira.host || '');
-            setJiraEmail(intg.jira.email || '');
-            setJiraProjectKey(intg.jira.project_key || 'QA');
-            setJiraIssueType(intg.jira.issue_type || 'Bug');
-            setJiraAutoCreate(Boolean(intg.jira.auto_create));
-            setJiraConfigured(Boolean(intg.jira.configured));
-            setJiraMaskedToken(intg.jira.masked_token || '');
-          }
-          if (intg?.slack) {
-            setSlackNotifyOn(intg.slack.notify_on || 'failure_only');
-            setSlackConfigured(Boolean(intg.slack.configured));
-            setSlackMaskedWebhook(intg.slack.masked_webhook || '');
-          }
-          if (intg?.teams) {
-            setTeamsNotifyOn(intg.teams.notify_on || 'failure_only');
-            setTeamsConfigured(Boolean(intg.teams.configured));
-            setTeamsMaskedWebhook(intg.teams.masked_webhook || '');
-          }
-          if (intg?.default_notification_mechanism) {
-            setDefaultNotificationMechanism(intg.default_notification_mechanism as any);
-          }
+      if (modelsRes && modelsRes.ok) {
+        const modelsData = await modelsRes.json();
+        cachedModelsData = modelsData;
+        if (typeof window !== 'undefined') {
+          try {
+            sessionStorage.setItem('barely_models_cache', JSON.stringify(modelsData));
+          } catch {}
         }
-      } catch (ie) {
-        console.error('Failed to load integrations:', ie);
+        if (modelsData.models && Array.isArray(modelsData.models)) {
+          setAvailableModels(modelsData.models);
+        }
+        if (modelsData.sync_status) {
+          setSyncStatus(modelsData.sync_status);
+        }
+      }
+
+      // Process enterprise integrations configuration
+      if (intgRes && intgRes.ok) {
+        const intgData = await intgRes.json();
+        cachedIntegrationsData = intgData;
+        if (typeof window !== 'undefined') {
+          try {
+            sessionStorage.setItem('barely_integrations_cache', JSON.stringify(intgData));
+          } catch {}
+        }
+        const intg = intgData.integrations;
+        if (intg?.jira) {
+          setJiraHost(intg.jira.host || '');
+          setJiraEmail(intg.jira.email || '');
+          setJiraProjectKey(intg.jira.project_key || 'QA');
+          setJiraIssueType(intg.jira.issue_type || 'Bug');
+          setJiraAutoCreate(Boolean(intg.jira.auto_create));
+          setJiraConfigured(Boolean(intg.jira.configured));
+          setJiraMaskedToken(intg.jira.masked_token || '');
+        }
+        if (intg?.github) {
+          setGithubRepo(intg.github.repo || '');
+          setGithubLabels(intg.github.labels || 'bug, automated-test');
+          setGithubAutoCreate(Boolean(intg.github.auto_create));
+          setGithubConfigured(Boolean(intg.github.configured));
+          setGithubMaskedToken(intg.github.masked_token || '');
+        }
+        if (intg?.slack) {
+          setSlackNotifyOn(intg.slack.notify_on || 'failure_only');
+          setSlackConfigured(Boolean(intg.slack.configured));
+          setSlackMaskedWebhook(intg.slack.masked_webhook || '');
+        }
+        if (intg?.teams) {
+          setTeamsNotifyOn(intg.teams.notify_on || 'failure_only');
+          setTeamsConfigured(Boolean(intg.teams.configured));
+          setTeamsMaskedWebhook(intg.teams.masked_webhook || '');
+        }
+        if (intg?.default_notification_mechanism) {
+          setDefaultNotificationMechanism(intg.default_notification_mechanism as any);
+        }
       }
 
       if (data.execution_engine) {
@@ -344,10 +459,27 @@ export default function SettingsPage() {
     setTestingModel(true);
     setModelTestResult(null);
     try {
+      let keyToPass: string | undefined = undefined;
+      const lower = target.toLowerCase();
+      if (lower.startsWith('anthropic') || lower.includes('claude')) {
+        keyToPass = inputValues['ANTHROPIC_API_KEY']?.trim();
+      } else if (lower.startsWith('openai') || lower.includes('gpt') || lower.startsWith('o1') || lower.startsWith('o3')) {
+        keyToPass = inputValues['OPENAI_API_KEY']?.trim();
+      } else if (lower.startsWith('groq') || lower.includes('llama') || lower.includes('mixtral') || lower.includes('deepseek')) {
+        keyToPass = inputValues['GROQ_API_KEY']?.trim();
+      } else if (lower.startsWith('gemini')) {
+        keyToPass = inputValues['GEMINI_API_KEY']?.trim();
+      }
+
+      const payload: any = { model: target };
+      if (keyToPass) {
+        payload.api_key = keyToPass;
+      }
+
       const res = await fetch(`${apiUrl}/api/settings/test-model`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ model: target })
+        body: JSON.stringify(payload)
       });
       const data = await res.json();
       if (data.success) {
@@ -368,10 +500,12 @@ export default function SettingsPage() {
   const handleSaveModel = async () => {
     const target = modelNameInput.trim();
     if (!target) {
+      setModelSaveError('Please enter a model name');
       showToast('Please enter a model name', 'error');
       return;
     }
     setSavingModel(true);
+    setModelSaveError(null);
     try {
       const res = await fetch(`${apiUrl}/api/settings`, {
         method: 'POST',
@@ -380,16 +514,61 @@ export default function SettingsPage() {
       });
       if (!res.ok) {
         const err = await res.json();
-        throw new Error(err.detail || 'Failed to save model');
+        const msg = err.detail || 'Failed to save model';
+        setModelSaveError(msg);
+        showToast(msg, 'error');
+        return;
       }
       showToast(`Default AI model updated to '${formatModelName(target)}'`, 'success');
       setIsEditModelModalOpen(false);
       setModelTestResult(null);
+      setModelSaveError(null);
       await fetchSettings();
     } catch (err: any) {
-      showToast(`Error saving model: ${err.message}`, 'error');
+      const msg = err.message || 'Error saving model';
+      setModelSaveError(msg);
+      showToast(`Error saving model: ${msg}`, 'error');
     } finally {
       setSavingModel(false);
+    }
+  };
+
+  const openEditModelModal = () => {
+    const current = activeModel;
+    setModelNameInput(current);
+    const existsInPresets = availableModels.some(m => m.id === current);
+    if (existsInPresets) {
+      setSelectedModelType(current);
+      setCustomModelSlug('');
+    } else {
+      setSelectedModelType('custom');
+      setCustomModelSlug(current);
+    }
+    setModelTestResult(null);
+    setModelSaveError(null);
+    setIsEditModelModalOpen(true);
+  };
+
+  const handleDeleteModelConfig = async () => {
+    setDeletingModel(true);
+    try {
+      const res = await fetch(`${apiUrl}/api/settings/DEFAULT_MODEL`, {
+        method: 'DELETE'
+      });
+      if (!res.ok && res.status !== 404) {
+        throw new Error('Failed to delete model configuration');
+      }
+      showToast('Model configuration deleted. Reset to system default.', 'success');
+      setModelNameInput('anthropic/claude-3-7-sonnet');
+      setSelectedModelType('anthropic/claude-3-7-sonnet');
+      setCustomModelSlug('');
+      setIsEditModelModalOpen(false);
+      setConfirmDeleteModel(false);
+      await fetchSettings();
+    } catch (err: any) {
+      showToast(`Error deleting model config: ${err.message}`, 'error');
+    } finally {
+      setDeletingModel(false);
     }
   };
 
@@ -456,6 +635,68 @@ export default function SettingsPage() {
       showToast(`Save error: ${e.message}`, 'error');
     } finally {
       setSavingJira(false);
+    }
+  };
+
+  const handleTestGithub = async () => {
+    setTestingGithub(true);
+    setGithubTestResult(null);
+    try {
+      const payload: any = {
+        provider: 'github',
+        github_repo: githubRepo.trim()
+      };
+      if (githubToken.trim()) {
+        payload.github_token = githubToken.trim();
+      }
+      const res = await fetch(`${apiUrl}/api/integrations/test`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+      setGithubTestResult({ success: data.success, message: data.message || (data.success ? 'GitHub connected successfully!' : 'Connection test failed') });
+      if (data.success) {
+        showToast(data.message || 'GitHub connection verified!', 'success');
+      } else {
+        showToast(data.message || 'GitHub verification failed', 'error');
+      }
+    } catch (e: any) {
+      setGithubTestResult({ success: false, message: e.message || 'Network error' });
+      showToast(`GitHub test error: ${e.message}`, 'error');
+    } finally {
+      setTestingGithub(false);
+    }
+  };
+
+  const handleSaveGithub = async () => {
+    setSavingGithub(true);
+    try {
+      const payload: any = {
+        github_repo: githubRepo.trim(),
+        github_labels: githubLabels.trim(),
+        github_auto_create: githubAutoCreate
+      };
+      if (githubToken.trim()) {
+        payload.github_token = githubToken.trim();
+      }
+      const res = await fetch(`${apiUrl}/api/integrations`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        showToast('GitHub configuration saved and encrypted securely!', 'success');
+        setGithubToken('');
+        await fetchSettings();
+      } else {
+        showToast(data.detail || data.error || 'Failed to save GitHub settings', 'error');
+      }
+    } catch (e: any) {
+      showToast(`Save error: ${e.message}`, 'error');
+    } finally {
+      setSavingGithub(false);
     }
   };
 
@@ -592,6 +833,70 @@ export default function SettingsPage() {
     }
   };
 
+  const handleDeleteIntegration = async (provider: 'slack' | 'teams' | 'jira' | 'github') => {
+    if (provider === 'slack') setDeletingSlack(true);
+    else if (provider === 'teams') setDeletingTeams(true);
+    else if (provider === 'jira') setDeletingJira(true);
+    else if (provider === 'github') setDeletingGithub(true);
+
+    try {
+      const res = await fetch(`${apiUrl}/api/integrations/${provider}`, {
+        method: 'DELETE',
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.detail || data.error || `Failed to delete ${provider} integration`);
+      }
+
+      showToast(data.message || `${provider.toUpperCase()} integration removed`, 'success');
+
+      if (provider === 'slack') {
+        setSlackWebhookUrl('');
+        setSlackMaskedWebhook('');
+        setSlackConfigured(false);
+        setSlackNotifyOn('failure_only');
+        setSlackTestResult(null);
+        setConfirmDeleteSlack(false);
+      } else if (provider === 'teams') {
+        setTeamsWebhookUrl('');
+        setTeamsMaskedWebhook('');
+        setTeamsConfigured(false);
+        setTeamsNotifyOn('failure_only');
+        setTeamsTestResult(null);
+        setConfirmDeleteTeams(false);
+      } else if (provider === 'jira') {
+        setJiraHost('');
+        setJiraEmail('');
+        setJiraToken('');
+        setJiraMaskedToken('');
+        setJiraProjectKey('QA');
+        setJiraIssueType('Bug');
+        setJiraAutoCreate(false);
+        setJiraConfigured(false);
+        setJiraTestResult(null);
+        setConfirmDeleteJira(false);
+      } else if (provider === 'github') {
+        setGithubRepo('');
+        setGithubToken('');
+        setGithubMaskedToken('');
+        setGithubLabels('bug, automated-test');
+        setGithubAutoCreate(false);
+        setGithubConfigured(false);
+        setGithubTestResult(null);
+        setConfirmDeleteGithub(false);
+      }
+
+      await fetchSettings();
+    } catch (e: any) {
+      showToast(e.message, 'error');
+    } finally {
+      if (provider === 'slack') setDeletingSlack(false);
+      else if (provider === 'teams') setDeletingTeams(false);
+      else if (provider === 'jira') setDeletingJira(false);
+      else if (provider === 'github') setDeletingGithub(false);
+    }
+  };
+
   useEffect(() => {
     fetchSettings();
   }, [fetchSettings]);
@@ -604,6 +909,17 @@ export default function SettingsPage() {
     setShowPlaintext(prev => ({ ...prev, [key]: !prev[key] }));
   };
 
+  const getFriendlyKeyLabel = (key: string): string => {
+    const friendlyNames: Record<string, string> = {
+      ANTHROPIC_API_KEY: 'Anthropic API key',
+      GROQ_API_KEY: 'Groq API key',
+      OPENAI_API_KEY: 'OpenAI API key',
+      GEMINI_API_KEY: 'Google Gemini API key',
+      DEFAULT_MODEL: 'Default model configuration',
+    };
+    return friendlyNames[key] || settings.find(s => s.key === key)?.label || key;
+  };
+
   const saveSetting = async (key: string) => {
     const val = inputValues[key];
     if (val === undefined || val.trim() === '') {
@@ -612,6 +928,7 @@ export default function SettingsPage() {
     }
 
     setSavingKey(key);
+    const label = getFriendlyKeyLabel(key);
     try {
       const res = await fetch(`${apiUrl}/api/settings`, {
         method: 'POST',
@@ -624,11 +941,11 @@ export default function SettingsPage() {
         throw new Error(err.detail || 'Save failed');
       }
 
-      showToast(`Setting '${key}' saved and encrypted securely in PostgreSQL!`, 'success');
+      showToast(`${label} saved successfully!`, 'success');
       setInputValues(prev => ({ ...prev, [key]: '' }));
       await fetchSettings();
     } catch (err: any) {
-      showToast(`Error saving setting: ${err.message}`, 'error');
+      showToast(`Error saving ${label}: ${err.message}`, 'error');
     } finally {
       setSavingKey(null);
     }
@@ -636,16 +953,18 @@ export default function SettingsPage() {
 
   const deleteSetting = async (key: string) => {
     setDeletingKey(key);
+    const label = getFriendlyKeyLabel(key);
     try {
       const res = await fetch(`${apiUrl}/api/settings/${encodeURIComponent(key)}`, {
         method: 'DELETE'
       });
-      if (!res.ok) throw new Error('Failed to delete setting');
-      showToast(`Database override for '${key}' removed. Falling back to environment.`, 'info');
+      const data = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(data?.detail || data?.error || 'Failed to delete key');
+      showToast(data?.message || `${label} deleted successfully`, 'success');
       setInputValues(prev => ({ ...prev, [key]: '' }));
       await fetchSettings();
     } catch (err: any) {
-      showToast(`Error clearing setting: ${err.message}`, 'error');
+      showToast(`Error deleting ${label}: ${err.message}`, 'error');
     } finally {
       setDeletingKey(null);
     }
@@ -659,6 +978,9 @@ export default function SettingsPage() {
     try {
       const tempVal = inputValues[keyName]?.trim();
       const payload: any = { provider: info.provider };
+      if (info.model) {
+        payload.model = info.model;
+      }
       if (tempVal) {
         payload.key = tempVal;
       }
@@ -684,7 +1006,10 @@ export default function SettingsPage() {
 
   const apiKeys = settings.filter(s => s.category === 'api_keys');
   const defaultSettings = settings.filter(s => s.category === 'defaults');
-  const activeModel = settings.find(s => s.key === 'DEFAULT_MODEL')?.masked_value || 'anthropic/claude-sonnet-4-5';
+  const defaultModelSetting = settings.find(s => s.key === 'DEFAULT_MODEL');
+  const activeModel = defaultModelSetting?.masked_value || 'anthropic/claude-3-7-sonnet';
+  const activeModelObj = availableModels.find(m => m.id === activeModel);
+  const isModelOverridden = defaultModelSetting?.source === 'database' || activeModel !== 'anthropic/claude-3-7-sonnet';
 
   return (
     <div className="max-w-4xl mx-auto space-y-6 pb-12">
@@ -746,7 +1071,7 @@ export default function SettingsPage() {
                   ? 'bg-cyan-500/15 text-cyan-300 border-cyan-500/30'
                   : 'bg-emerald-500/10 text-emerald-400 border-emerald-500/25'
               }`}>
-                {deployment?.is_kubernetes ? '⎈ Kubernetes Managed' : 'AES-256 Authenticated'}
+                {deployment?.is_kubernetes ? 'Kubernetes Managed' : 'AES-256 Authenticated'}
               </span>
             </p>
             <p className="text-slate-400 leading-relaxed max-w-2xl">
@@ -767,92 +1092,109 @@ export default function SettingsPage() {
         </button>
       </div>
 
+      {/* Sticky Section Menu & Collapse All / Expand All Bar (Always rendered instantly) */}
+      <div className="sticky top-16 z-20 -mx-1 px-3 py-2 bg-[#070b14]/95 backdrop-blur-md border border-slate-800 rounded-xl flex items-center justify-between gap-2.5 overflow-x-auto shadow-2xl">
+        <div className="flex items-center gap-1.5 shrink-0">
+          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mr-1 flex items-center gap-1">
+            <Sliders className="w-3 h-3 text-[#0278ff]" />
+            <span className="hidden sm:inline">Sections:</span>
+          </span>
+          {[
+            { id: 'all', label: 'All', icon: Layers },
+            { id: 'secrets', label: 'Secrets & Keys', icon: Key, color: 'text-amber-400' },
+            { id: 'model', label: 'AI Model', icon: Cpu, color: 'text-purple-400' },
+            { id: 'execution', label: 'Pod Execution', icon: ShieldCheck, color: 'text-emerald-400' },
+            { id: 'jira', label: 'Issue Tracking (Jira & GitHub)', icon: Zap, color: 'text-[#2684ff]' },
+            { id: 'notifications', label: 'Alerts & Webhooks', icon: Bell, color: 'text-amber-400' },
+            { id: 'defaults', label: 'Defaults', icon: Sliders, color: 'text-slate-400' },
+            { id: 'database', label: 'Database', icon: Database, color: 'text-cyan-400' },
+          ].map(cat => {
+            const Icon = cat.icon;
+            return (
+              <button
+                key={cat.id}
+                type="button"
+                onClick={() => {
+                  setActiveCategory(cat.id);
+                  if (cat.id !== 'all') {
+                    setCollapsedSections(prev => ({ ...prev, [cat.id]: false }));
+                  }
+                }}
+                className={`px-2.5 py-1 rounded-lg text-xs font-semibold whitespace-nowrap transition-all cursor-pointer flex items-center gap-1.5 ${
+                  activeCategory === cat.id
+                    ? 'bg-[#0278ff] text-white shadow-sm shadow-blue-500/25'
+                    : 'bg-slate-900/80 hover:bg-slate-800 text-slate-400 hover:text-slate-200 border border-slate-800'
+                }`}
+              >
+                <Icon className={`w-3.5 h-3.5 shrink-0 ${activeCategory === cat.id ? 'text-white' : cat.color || 'text-slate-400'}`} />
+                <span>{cat.label}</span>
+              </button>
+            );
+          })}
+        </div>
+
+        <button
+          type="button"
+          onClick={allCollapsed ? expandAllSections : collapseAllSections}
+          className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 flex items-center gap-1.5 transition-colors shrink-0 cursor-pointer shadow-sm ml-auto"
+          title={allCollapsed ? "Expand all sections" : "Collapse all sections"}
+        >
+          <ChevronsUpDown className="w-3.5 h-3.5 text-[#0278ff]" />
+          <span>{allCollapsed ? 'Expand All' : 'Collapse All'}</span>
+        </button>
+      </div>
+
       {loading ? (
-        <div className="p-12 rounded-xl bg-[#0a0f1d] border border-slate-800 text-center flex flex-col items-center justify-center gap-3">
-          <Loader2 className="w-6 h-6 text-[#0278ff] animate-spin" />
-          <p className="text-xs text-slate-400">Loading encrypted platform settings...</p>
+        <div className="space-y-4 pt-1">
+          {[
+            { label: 'Secrets & API Keys Management', icon: Key, color: 'text-amber-400' },
+            { label: 'Default AI Model Configuration', icon: Cpu, color: 'text-purple-400' },
+            { label: 'Execution Engine & Pod Concurrency', icon: ShieldCheck, color: 'text-emerald-400' },
+            { label: 'Atlassian Jira Cloud Integration', icon: Zap, color: 'text-[#2684ff]' },
+            { label: 'Incident Notifications (Slack & Teams)', icon: Bell, color: 'text-amber-400' },
+            { label: 'Default Test Configurations', icon: Sliders, color: 'text-slate-400' },
+            { label: 'Database & Storage Status', icon: Database, color: 'text-cyan-400' },
+          ].map(skeleton => {
+            const Icon = skeleton.icon;
+            return (
+              <div key={skeleton.label} className="rounded-xl border border-slate-800/80 bg-[#0a0f1d] px-6 py-4 flex items-center justify-between animate-pulse">
+                <div className="flex items-center gap-2.5">
+                  <Icon className={`w-4 h-4 ${skeleton.color} opacity-70`} />
+                  <span className="text-sm font-semibold text-slate-400">{skeleton.label}</span>
+                </div>
+                <div className="w-4 h-4 rounded bg-slate-800/60"></div>
+              </div>
+            );
+          })}
         </div>
       ) : (
         <div className="space-y-6">
 
-          {/* Sticky Section Menu & Collapse All / Expand All Bar */}
-          <div className="sticky top-16 z-20 -mx-1 px-3 py-2 bg-[#070b14]/95 backdrop-blur-md border border-slate-800 rounded-xl flex items-center justify-between gap-2.5 overflow-x-auto shadow-2xl">
-            <div className="flex items-center gap-1.5 shrink-0">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mr-1 flex items-center gap-1">
-                <Sliders className="w-3 h-3 text-[#0278ff]" />
-                <span className="hidden sm:inline">Sections:</span>
-              </span>
-              {[
-                { id: 'all', label: 'All' },
-                { id: 'secrets', label: '🔑 Secrets & Keys' },
-                { id: 'model', label: '🧠 AI Model' },
-                { id: 'execution', label: '🛡️ Pod Execution' },
-                { id: 'jira', label: '📋 Issue Tracking (Jira)' },
-                { id: 'notifications', label: '🔔 Alerts & Webhooks' },
-                { id: 'defaults', label: '⚙️ Defaults' },
-                { id: 'database', label: '🗄️ Database' },
-              ].map(cat => (
-                <button
-                  key={cat.id}
-                  type="button"
-                  onClick={() => {
-                    setActiveCategory(cat.id);
-                    if (cat.id !== 'all') {
-                      setCollapsedSections(prev => ({ ...prev, [cat.id]: false }));
-                      setTimeout(() => {
-                        const el = document.getElementById(`section-${cat.id}`);
-                        if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                      }, 50);
-                    }
-                  }}
-                  className={`px-2.5 py-1 rounded-lg text-xs font-semibold whitespace-nowrap transition-all cursor-pointer ${
-                    activeCategory === cat.id
-                      ? 'bg-[#0278ff] text-white shadow-sm shadow-blue-500/25'
-                      : 'bg-slate-900/80 hover:bg-slate-800 text-slate-400 hover:text-slate-200 border border-slate-800'
-                  }`}
-                >
-                  {cat.label}
-                </button>
-              ))}
-            </div>
-
-            <button
-              type="button"
-              onClick={allCollapsed ? expandAllSections : collapseAllSections}
-              className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 flex items-center gap-1.5 transition-colors shrink-0 cursor-pointer shadow-sm ml-auto"
-              title={allCollapsed ? "Expand all sections" : "Collapse all sections"}
-            >
-              <ChevronsUpDown className="w-3.5 h-3.5 text-[#0278ff]" />
-              <span>{allCollapsed ? 'Expand All' : 'Collapse All'}</span>
-            </button>
-          </div>
-
           {/* Section 1: Secrets & API Keys Management */}
-          {(activeCategory === 'all' || activeCategory === 'secrets') && (
-            <div id="section-secrets" className="rounded-xl border border-slate-800 bg-[#0a0f1d] shadow-xl overflow-hidden transition-all">
+          <div id="section-secrets" className={`rounded-xl border border-slate-800 bg-[#0a0f1d] shadow-xl overflow-hidden transition-all ${activeCategory === 'all' || activeCategory === 'secrets' ? '' : 'hidden'}`}>
               {/* Collapsible Card Header */}
               <div 
                 onClick={() => toggleSection('secrets')}
-                className="px-6 py-4 border-b border-slate-800 flex items-center justify-between cursor-pointer hover:bg-slate-800/30 transition-colors select-none"
+                className="px-6 py-4 border-b border-slate-800 flex items-center justify-between gap-4 cursor-pointer hover:bg-slate-800/30 transition-colors select-none"
               >
-                <div className="flex items-center gap-2.5">
-                  <div className="w-7 h-7 rounded-lg bg-blue-500/10 text-blue-400 flex items-center justify-center border border-blue-500/20">
+                <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                  <div className="w-7 h-7 rounded-lg bg-blue-500/10 text-blue-400 flex items-center justify-center border border-blue-500/20 shrink-0">
                     <Key className="w-4 h-4" />
                   </div>
-                  <div>
+                  <div className="min-w-0">
                     <div className="flex items-center gap-2">
-                      <h2 className="text-sm font-bold text-white">Secrets &amp; API Keys Management</h2>
-                      <span className="px-2 py-0.5 rounded-full font-mono text-[10px] font-semibold bg-blue-500/10 text-blue-300 border border-blue-500/25">
+                      <h2 className="text-sm font-bold text-white whitespace-nowrap">Secrets &amp; API Keys Management</h2>
+                      <span className="px-2 py-0.5 rounded-full font-mono text-[10px] font-semibold bg-blue-500/10 text-blue-300 border border-blue-500/25 shrink-0">
                         Zero-Config Auto-Detect
                       </span>
                     </div>
-                    <p className="text-xs text-slate-400">Configure runtime credentials, cloud secrets sync, and LLM provider keys</p>
+                    <p className="text-xs text-slate-400 truncate sm:whitespace-normal">Configure runtime credentials, cloud secrets sync, and LLM provider keys</p>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2.5 shrink-0 ml-auto">
                   {collapsedSections.secrets && (
-                    <span className="text-[11px] font-mono text-slate-400 bg-slate-900 px-2.5 py-1 rounded-full border border-slate-800 hidden sm:inline-flex items-center gap-1.5">
+                    <span className="text-[11px] font-mono text-slate-400 bg-slate-900 px-2.5 py-1 rounded-full border border-slate-800 hidden sm:inline-flex items-center gap-1.5 shrink-0">
                       <span className={`w-1.5 h-1.5 rounded-full ${apiKeys.some(k => k.is_configured) ? 'bg-emerald-400' : 'bg-slate-500'}`} />
                       {apiKeys.filter(k => k.is_configured).length} / {apiKeys.length} Configured
                     </span>
@@ -951,7 +1293,8 @@ export default function SettingsPage() {
                                       : 'border-transparent text-slate-400 hover:text-slate-200'
                                   }`}
                                 >
-                                  <span>🟧 AWS Secrets Manager</span>
+                                  <span className="w-2 h-2 rounded-full bg-amber-400"></span>
+                                  <span>AWS Secrets Manager</span>
                                 </button>
                                 <button
                                   type="button"
@@ -962,7 +1305,8 @@ export default function SettingsPage() {
                                       : 'border-transparent text-slate-400 hover:text-slate-200'
                                   }`}
                                 >
-                                  <span>🟦 Azure Key Vault</span>
+                                  <span className="w-2 h-2 rounded-full bg-blue-400"></span>
+                                  <span>Azure Key Vault</span>
                                 </button>
                                 <button
                                   type="button"
@@ -973,7 +1317,8 @@ export default function SettingsPage() {
                                       : 'border-transparent text-slate-400 hover:text-slate-200'
                                   }`}
                                 >
-                                  <span>🗝️ HashiCorp Vault</span>
+                                  <span className="w-2 h-2 rounded-full bg-indigo-400"></span>
+                                  <span>HashiCorp Vault</span>
                                 </button>
                                 <button
                                   type="button"
@@ -984,7 +1329,8 @@ export default function SettingsPage() {
                                       : 'border-transparent text-slate-400 hover:text-slate-200'
                                   }`}
                                 >
-                                  <span>☁️ GCP Secret Manager</span>
+                                  <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
+                                  <span>GCP Secret Manager</span>
                                 </button>
                               </div>
 
@@ -1525,7 +1871,7 @@ secrets:
                             onClick={() => deleteSetting(item.key)}
                             disabled={isDeleting}
                             className="p-2.5 rounded-lg text-rose-400 hover:bg-rose-500/10 border border-rose-500/20 transition-colors cursor-pointer"
-                            title="Remove database override and revert to .env"
+                            title={`Delete ${item.label || item.key}`}
                           >
                             {isDeleting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
                           </button>
@@ -1540,32 +1886,30 @@ secrets:
         </div>
       )}
     </div>
-  )}
 
           {/* Section 2: AI Agent Model Configuration */}
-          {(activeCategory === 'all' || activeCategory === 'model') && (
-            <div id="section-model" className="rounded-xl border border-slate-800 bg-[#0a0f1d] shadow-xl overflow-hidden transition-all">
+          <div id="section-model" className={`rounded-xl border border-slate-800 bg-[#0a0f1d] shadow-xl overflow-hidden transition-all ${activeCategory === 'all' || activeCategory === 'model' ? '' : 'hidden'}`}>
               {/* Collapsible Card Header */}
               <div 
                 onClick={() => toggleSection('model')}
-                className="px-6 py-4 border-b border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3 cursor-pointer hover:bg-slate-800/30 transition-colors select-none"
+                className="px-6 py-4 border-b border-slate-800 flex items-center justify-between gap-4 cursor-pointer hover:bg-slate-800/30 transition-colors select-none"
               >
-                <div className="flex items-center gap-2.5">
-                  <div className="w-7 h-7 rounded-lg bg-purple-500/10 text-purple-400 flex items-center justify-center border border-purple-500/20">
+                <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                  <div className="w-7 h-7 rounded-lg bg-purple-500/10 text-purple-400 flex items-center justify-center border border-purple-500/20 shrink-0">
                     <Cpu className="w-4 h-4" />
                   </div>
-                  <div>
+                  <div className="min-w-0">
                     <div className="flex items-center gap-2">
-                      <h2 className="text-sm font-bold text-white">AI Agent Model</h2>
-                      <span className="px-2 py-0.2 rounded-full text-[10px] font-mono font-bold bg-purple-500/15 text-purple-300 border border-purple-500/30">
+                      <h2 className="text-sm font-bold text-white whitespace-nowrap">AI Agent Model</h2>
+                      <span className="px-2 py-0.2 rounded-full text-[10px] font-mono font-bold bg-purple-500/15 text-purple-300 border border-purple-500/30 shrink-0">
                         Multi-Modal LLM
                       </span>
                     </div>
-                    <p className="text-xs text-slate-400">Foundation LLM used for test planning and DOM interaction</p>
+                    <p className="text-xs text-slate-400 truncate sm:whitespace-normal">Foundation LLM used for test planning and DOM interaction</p>
                   </div>
                 </div>
                 
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2.5 shrink-0 ml-auto">
                   {/* Current Default Badge with Pencil Edit Icon */}
                   <div className="flex items-center gap-2 bg-[#070b14] border border-purple-500/30 px-3 py-1.5 rounded-lg shadow-sm">
                     <span className="text-[11px] text-slate-400 font-medium hidden sm:inline">Active Default:</span>
@@ -1577,15 +1921,31 @@ secrets:
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation();
-                        setModelNameInput(activeModel);
-                        setModelTestResult(null);
-                        setIsEditModelModalOpen(true);
+                        openEditModelModal();
                       }}
                       className="p-1 rounded hover:bg-slate-800 text-slate-400 hover:text-purple-300 transition-colors ml-0.5 cursor-pointer"
                       title="Edit Default Model"
                     >
                       <Pencil className="w-3 h-3" />
                     </button>
+                    {isModelOverridden && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteModelConfig();
+                        }}
+                        disabled={deletingModel}
+                        className="p-1 rounded hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 transition-colors ml-0.5 cursor-pointer disabled:opacity-50"
+                        title="Delete model configuration and reset to default"
+                      >
+                        {deletingModel ? (
+                          <Loader2 className="w-3 h-3 animate-spin text-rose-400" />
+                        ) : (
+                          <Trash2 className="w-3 h-3" />
+                        )}
+                      </button>
+                    )}
                   </div>
 
                   <button
@@ -1603,10 +1963,11 @@ secrets:
               </div>
 
               {!collapsedSections.model && (
-                <div className="p-6">
+                <div className="p-6 space-y-6">
+                  {/* Active Default Model Card */}
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 rounded-xl bg-[#070b14] border border-slate-800/80">
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2.5">
+                    <div className="space-y-1.5">
+                      <div className="flex items-center gap-2.5 flex-wrap">
                         <span className="text-base font-bold text-white tracking-tight">
                           {formatModelName(activeModel)}
                         </span>
@@ -1614,33 +1975,153 @@ secrets:
                           <span className="w-1.5 h-1.5 rounded-full bg-purple-400"></span>
                           Default Model
                         </span>
+                        {activeModelObj?.dynamic && (
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-semibold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 flex items-center gap-1">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                            Live Dynamic
+                          </span>
+                        )}
+                        {activeModelObj?.context_window && (
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-medium bg-slate-800 text-slate-300 border border-slate-700">
+                            {activeModelObj.context_window} Context
+                          </span>
+                        )}
                       </div>
                       <p className="text-xs text-slate-400">
-                        Default multi-modal foundation model used across all test executions.
+                        {activeModelObj?.description || "Default multi-modal foundation model used across all test executions."}
                       </p>
                       <p className="text-[11px] font-mono text-slate-500 pt-0.5">
                         API Slug: <span className="text-slate-400">{activeModel}</span>
                       </p>
                     </div>
 
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setModelNameInput(activeModel);
-                        setModelTestResult(null);
-                        setIsEditModelModalOpen(true);
-                      }}
-                      className="px-3.5 py-2 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 hover:border-purple-500/40 flex items-center gap-2 transition-all shadow-sm shrink-0 self-start sm:self-auto cursor-pointer"
-                      title="Edit Default AI Model"
-                    >
-                      <Pencil className="w-3.5 h-3.5 text-purple-400" />
-                      <span>Edit Model</span>
-                    </button>
+                    <div className="flex items-center gap-2 flex-wrap shrink-0 self-start sm:self-auto">
+                      {isModelOverridden && (
+                        confirmDeleteModel ? (
+                          <div className="flex items-center gap-2 bg-rose-950/40 border border-rose-800/60 rounded-lg px-2.5 py-1 text-xs">
+                            <span className="text-rose-300 text-[11px] font-medium">Delete config?</span>
+                            <button
+                              type="button"
+                              onClick={handleDeleteModelConfig}
+                              disabled={deletingModel}
+                              className="px-2 py-0.5 rounded text-[11px] font-semibold bg-rose-600 hover:bg-rose-500 text-white flex items-center gap-1 transition-colors cursor-pointer"
+                            >
+                              {deletingModel ? <Loader2 className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3 h-3" />}
+                              Confirm
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setConfirmDeleteModel(false)}
+                              disabled={deletingModel}
+                              className="px-2 py-0.5 rounded text-[11px] font-semibold text-slate-400 hover:text-slate-200 transition-colors cursor-pointer"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => setConfirmDeleteModel(true)}
+                            disabled={deletingModel || savingModel}
+                            className="px-3 py-2 rounded-lg text-xs font-semibold text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 border border-rose-500/20 hover:border-rose-500/40 flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50"
+                            title="Delete model configuration and reset to default"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                            <span>Delete Config</span>
+                          </button>
+                        )
+                      )}
+                      <button
+                        type="button"
+                        onClick={openEditModelModal}
+                        className="px-3.5 py-2 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 hover:border-purple-500/40 flex items-center gap-2 transition-all shadow-sm cursor-pointer"
+                        title="Edit Default AI Model"
+                      >
+                        <Pencil className="w-3.5 h-3.5 text-purple-400" />
+                        <span>Edit Model</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Provider Discovery & Live Sync Status Cards */}
+                  <div className="space-y-3">
+                    <div>
+                      <h3 className="text-xs font-bold text-slate-300 uppercase tracking-wider">
+                        Provider Discovery &amp; Live Sync
+                      </h3>
+                      <p className="text-[11px] text-slate-500">
+                        Automatically discovers newly supported models and filters out non-chat / deprecated models in real time when API keys are configured.
+                      </p>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                      {[
+                        { id: 'anthropic', name: 'Anthropic Claude', keyName: 'ANTHROPIC_API_KEY' },
+                        { id: 'groq', name: 'Groq LPUs', keyName: 'GROQ_API_KEY' },
+                        { id: 'openai', name: 'OpenAI', keyName: 'OPENAI_API_KEY' },
+                        { id: 'gemini', name: 'Google Gemini', keyName: 'GEMINI_API_KEY' },
+                      ].map(p => {
+                        const status = syncStatus[p.id];
+                        const isDyn = Boolean(status?.dynamic);
+                        const isConfigured = Boolean(status?.configured);
+                        const count = status?.count || (isConfigured ? availableModels.filter(m => m.provider === p.id && m.configured !== false).length : 0);
+
+                        return (
+                          <div key={p.id} className="p-3.5 rounded-xl bg-[#070b14] border border-slate-800/80 flex flex-col justify-between gap-3">
+                            <div className="space-y-1">
+                              <div className="flex items-center justify-between">
+                                <span className="text-xs font-bold text-slate-200">{p.name}</span>
+                                {isDyn ? (
+                                  <span className="flex items-center gap-1 text-[10px] font-mono font-semibold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-md border border-emerald-500/20">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                                    Live
+                                  </span>
+                                ) : isConfigured ? (
+                                  <span className="flex items-center gap-1 text-[10px] font-mono font-medium text-cyan-400 bg-cyan-500/10 px-2 py-0.5 rounded-md border border-cyan-500/20">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-cyan-400"></span>
+                                    Active
+                                  </span>
+                                ) : (
+                                  <span className="flex items-center gap-1 text-[10px] font-mono text-slate-500 bg-slate-800/60 px-2 py-0.5 rounded-md border border-slate-700/50">
+                                    Offline
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-[11px] text-slate-400">
+                                {isDyn 
+                                  ? `${count} active models discovered` 
+                                  : isConfigured 
+                                  ? `${count} models (catalog)` 
+                                  : 'API key not configured'}
+                              </p>
+                            </div>
+
+                            <div className="pt-2 border-t border-slate-800/60 flex items-center justify-between text-[10px]">
+                              <span className="text-slate-500 font-mono">
+                                {isConfigured ? 'Sync: Enabled' : 'Key missing'}
+                              </span>
+                              {!isConfigured && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setCollapsedSections(prev => ({ ...prev, secrets: false }));
+                                    const el = document.getElementById('section-secrets');
+                                    if (el) el.scrollIntoView({ behavior: 'smooth' });
+                                  }}
+                                  className="text-[#0278ff] hover:underline font-medium cursor-pointer flex items-center gap-0.5"
+                                >
+                                  Configure ↗
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                 </div>
               )}
             </div>
-          )}
 
           {/* Edit Model Popup Modal */}
           {isEditModelModalOpen && (
@@ -1650,10 +2131,11 @@ secrets:
                 if (e.target === e.currentTarget) {
                   setIsEditModelModalOpen(false);
                   setModelTestResult(null);
+                  setModelSaveError(null);
                 }
               }}
             >
-              <div className="bg-[#0a0f1d] border border-slate-800 rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden animate-in zoom-in-95 duration-150 text-left">
+              <div className="bg-[#0a0f1d] border border-slate-800 rounded-2xl w-full max-w-xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-150 text-left">
                 {/* Modal Header */}
                 <div className="px-6 py-4 border-b border-slate-800 flex items-center justify-between">
                   <div className="flex items-center gap-2.5">
@@ -1662,7 +2144,7 @@ secrets:
                     </div>
                     <div>
                       <h3 className="text-sm font-bold text-white">Configure AI Agent Model</h3>
-                      <p className="text-[11px] text-slate-400">Set the default model and verify connectivity with a 1-token test</p>
+                      <p className="text-[11px] text-slate-400">Select an active foundation model or specify a custom endpoint slug</p>
                     </div>
                   </div>
                   <button
@@ -1670,6 +2152,7 @@ secrets:
                     onClick={() => {
                       setIsEditModelModalOpen(false);
                       setModelTestResult(null);
+                      setModelSaveError(null);
                     }}
                     className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
                   >
@@ -1678,30 +2161,151 @@ secrets:
                 </div>
 
                 {/* Modal Body */}
-                <div className="p-6 space-y-4">
-                  {/* Display Name Live Preview */}
-                  <div className="p-3 rounded-lg bg-[#070b14] border border-slate-800 flex items-center justify-between">
-                    <span className="text-xs text-slate-400 font-medium">Display Name:</span>
-                    <span className="text-xs font-bold text-purple-300 flex items-center gap-1.5">
-                      <span className="w-1.5 h-1.5 rounded-full bg-purple-400"></span>
-                      {formatModelName(modelNameInput.trim() || activeModel)}
-                    </span>
-                  </div>
-
-                  {/* Model Identifier input */}
+                <div className="p-6 space-y-4 max-h-[80vh] overflow-y-auto">
+                  {/* Model Selection Mode / Dropdown */}
                   <div className="space-y-1.5">
                     <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider">
-                      Model Identifier (API Slug)
+                      Select AI Model
                     </label>
-                    <input
-                      type="text"
-                      value={modelNameInput}
-                      onChange={(e) => setModelNameInput(e.target.value)}
-                      placeholder="e.g. anthropic/claude-sonnet-4-5 or groq/llama-3.3-70b-versatile"
-                      className="w-full bg-[#070b14] border border-slate-800 focus:border-[#0278ff] focus:ring-1 focus:ring-[#0278ff] rounded-lg px-3.5 py-2.5 text-xs font-mono text-white placeholder:text-slate-600 outline-none transition-all"
-                      autoFocus
-                    />
+                    <div className="relative">
+                      <select
+                        value={selectedModelType}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setSelectedModelType(val);
+                          if (val !== 'custom') {
+                            setModelNameInput(val);
+                          } else {
+                            setModelNameInput(customModelSlug || '');
+                          }
+                          setModelTestResult(null);
+                          setModelSaveError(null);
+                        }}
+                        className="w-full bg-[#070b14] border border-slate-800 focus:border-[#0278ff] focus:ring-1 focus:ring-[#0278ff] rounded-lg px-3.5 py-2.5 text-xs text-white outline-none transition-all appearance-none cursor-pointer"
+                      >
+                        {availableModels.filter(m => m.provider === 'anthropic' && m.enabled !== false && m.configured !== false).length > 0 && (
+                          <optgroup label="Anthropic (High Reasoning)">
+                            {availableModels
+                              .filter(m => m.provider === 'anthropic' && m.enabled !== false && m.configured !== false)
+                              .map(m => (
+                                <option key={m.id} value={m.id}>
+                                  {m.name} {m.recommended ? '★ (Recommended)' : ''}
+                                </option>
+                              ))}
+                          </optgroup>
+                        )}
+
+                        {availableModels.filter(m => m.provider === 'openai' && m.enabled !== false && m.configured !== false).length > 0 && (
+                          <optgroup label="OpenAI (Vision Grounding)">
+                            {availableModels
+                              .filter(m => m.provider === 'openai' && m.enabled !== false && m.configured !== false)
+                              .map(m => (
+                                <option key={m.id} value={m.id}>
+                                  {m.name} {m.recommended ? '★ (Recommended)' : ''}
+                                </option>
+                              ))}
+                          </optgroup>
+                        )}
+
+                        {availableModels.filter(m => m.provider === 'gemini' && m.enabled !== false && m.configured !== false).length > 0 && (
+                          <optgroup label="Google Gemini (Long Context & Vision)">
+                            {availableModels
+                              .filter(m => m.provider === 'gemini' && m.enabled !== false && m.configured !== false)
+                              .map(m => (
+                                <option key={m.id} value={m.id}>
+                                  {m.name} {m.recommended ? '★ (Recommended)' : ''}
+                                </option>
+                              ))}
+                          </optgroup>
+                        )}
+
+                        {availableModels.filter(m => m.provider === 'groq' && m.enabled !== false && m.configured !== false).length > 0 && (
+                          <optgroup label="Groq (High-Speed LPU)">
+                            {availableModels
+                              .filter(m => m.provider === 'groq' && m.enabled !== false && m.configured !== false)
+                              .map(m => (
+                                <option key={m.id} value={m.id}>
+                                  {m.name} {m.recommended ? '★ (Recommended)' : ''}
+                                </option>
+                              ))}
+                          </optgroup>
+                        )}
+
+                        <optgroup label="Custom / Self-Hosted">
+                          <option value="custom">✎ Custom Model Identifier...</option>
+                        </optgroup>
+                      </select>
+
+                      <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-slate-500">
+                        <ChevronDown className="w-4 h-4" />
+                      </div>
+                    </div>
                   </div>
+
+                  {/* Custom Model Input if custom is chosen */}
+                  {selectedModelType === 'custom' && (
+                    <div className="space-y-1.5 animate-in fade-in slide-in-from-top-1">
+                      <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider">
+                        Custom Model Identifier (API Slug)
+                      </label>
+                      <input
+                        type="text"
+                        value={customModelSlug}
+                        onChange={(e) => {
+                          setCustomModelSlug(e.target.value);
+                          setModelNameInput(e.target.value);
+                        }}
+                        placeholder="e.g. anthropic/claude-3-7-sonnet or groq/llama-3.3-70b-versatile"
+                        className="w-full bg-[#070b14] border border-slate-800 focus:border-[#0278ff] focus:ring-1 focus:ring-[#0278ff] rounded-lg px-3.5 py-2.5 text-xs font-mono text-white placeholder:text-slate-600 outline-none transition-all"
+                        autoFocus
+                      />
+                    </div>
+                  )}
+
+                  {/* Selected Model Details Preview */}
+                  {(() => {
+                    const selObj = availableModels.find(m => m.id === modelNameInput.trim());
+                    return (
+                      <div className="p-3.5 rounded-xl bg-[#070b14] border border-slate-800 space-y-2">
+                        <div className="flex items-center justify-between flex-wrap gap-2">
+                          <span className="text-xs text-slate-400 font-medium">Display Name:</span>
+                          <span className="text-xs font-bold text-purple-300 flex items-center gap-1.5">
+                            <span className="w-1.5 h-1.5 rounded-full bg-purple-400"></span>
+                            {formatModelName(modelNameInput.trim() || activeModel)}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between flex-wrap gap-2 text-[11px] font-mono text-slate-500 pt-1 border-t border-slate-800/60">
+                          <span>Target Slug:</span>
+                          <span className="text-slate-300 font-semibold">{modelNameInput.trim() || '—'}</span>
+                        </div>
+                        {selObj && (
+                          <div className="flex items-center gap-1.5 flex-wrap pt-1 text-[10px] font-mono">
+                            <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700">
+                              {selObj.provider.toUpperCase()}
+                            </span>
+                            {selObj.context_window && (
+                              <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-300 border border-slate-700">
+                                {selObj.context_window} Context
+                              </span>
+                            )}
+                            <span className={`px-2 py-0.5 rounded border ${
+                              selObj.supports_vision 
+                                ? 'bg-purple-500/10 text-purple-300 border-purple-500/30' 
+                                : 'bg-blue-500/10 text-blue-300 border-blue-500/30'
+                            }`}>
+                              {selObj.supports_vision ? '👁 Multimodal Vision' : '⚡ Text Reasoning'}
+                            </span>
+                            {selObj.dynamic && (
+                              <span className="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 flex items-center gap-1">
+                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                                Live Dynamic
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
 
                   {/* 1-Token Test Action */}
                   <div className="flex items-center justify-between pt-1">
@@ -1724,17 +2328,35 @@ secrets:
 
                   {/* Test Result Feedback */}
                   {modelTestResult && (
-                    <div className={`p-3 rounded-lg border text-xs flex items-center gap-2 ${
+                    <div className={`p-3.5 rounded-xl border text-xs ${
                       modelTestResult.success 
-                        ? 'bg-emerald-950/30 border-emerald-500/30 text-emerald-300' 
-                        : 'bg-rose-950/30 border-rose-500/30 text-rose-300'
+                        ? 'bg-emerald-950/40 border-emerald-500/40 text-emerald-300' 
+                        : 'bg-rose-950/40 border-rose-500/40 text-rose-300'
                     }`}>
-                      {modelTestResult.success ? (
-                        <Check className="w-4 h-4 text-emerald-400 shrink-0" />
-                      ) : (
+                      <div className="flex items-center gap-2 font-semibold text-xs">
+                        {modelTestResult.success ? (
+                          <Check className="w-4 h-4 text-emerald-400 shrink-0" />
+                        ) : (
+                          <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
+                        )}
+                        <span>{modelTestResult.success ? '1-Token Verification Succeeded' : 'Model Verification Error'}</span>
+                      </div>
+                      <div className="mt-2 font-mono text-[11px] leading-relaxed break-words text-slate-200 bg-black/40 p-2.5 rounded-lg border border-white/5">
+                        {modelTestResult.message}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Save Error Feedback */}
+                  {modelSaveError && (
+                    <div className="p-3.5 rounded-xl border border-rose-500/40 bg-rose-950/40 text-rose-300 text-xs">
+                      <div className="flex items-center gap-2 font-semibold text-rose-200">
                         <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />
-                      )}
-                      <span className="font-mono text-[11px] break-all">{modelTestResult.message}</span>
+                        <span>Failed to Save Model</span>
+                      </div>
+                      <div className="mt-2 font-mono text-[11px] leading-relaxed break-words text-slate-200 bg-black/40 p-2.5 rounded-lg border border-white/5">
+                        {modelSaveError}
+                      </div>
                     </div>
                   )}
 
@@ -1742,21 +2364,21 @@ secrets:
                   <div className="pt-2 border-t border-slate-800/60 flex items-center gap-2 text-[11px] text-slate-400 flex-wrap">
                     <span className="font-semibold text-slate-500">Model docs:</span>
                     <a
-                      href="https://console.groq.com/docs/models"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-[#0278ff] hover:underline flex items-center gap-0.5"
-                    >
-                      Groq Models <ExternalLink className="w-2.5 h-2.5" />
-                    </a>
-                    <span className="text-slate-700">·</span>
-                    <a
                       href="https://docs.anthropic.com/en/docs/about-claude/models"
                       target="_blank"
                       rel="noopener noreferrer"
                       className="text-[#0278ff] hover:underline flex items-center gap-0.5"
                     >
-                      Claude Models <ExternalLink className="w-2.5 h-2.5" />
+                      Claude <ExternalLink className="w-2.5 h-2.5" />
+                    </a>
+                    <span className="text-slate-700">·</span>
+                    <a
+                      href="https://console.groq.com/docs/models"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-[#0278ff] hover:underline flex items-center gap-0.5"
+                    >
+                      Groq <ExternalLink className="w-2.5 h-2.5" />
                     </a>
                     <span className="text-slate-700">·</span>
                     <a
@@ -1765,7 +2387,7 @@ secrets:
                       rel="noopener noreferrer"
                       className="text-[#0278ff] hover:underline flex items-center gap-0.5"
                     >
-                      OpenAI Models <ExternalLink className="w-2.5 h-2.5" />
+                      OpenAI <ExternalLink className="w-2.5 h-2.5" />
                     </a>
                     <span className="text-slate-700">·</span>
                     <a
@@ -1774,85 +2396,98 @@ secrets:
                       rel="noopener noreferrer"
                       className="text-[#0278ff] hover:underline flex items-center gap-0.5"
                     >
-                      Gemini Models <ExternalLink className="w-2.5 h-2.5" />
+                      Gemini <ExternalLink className="w-2.5 h-2.5" />
                     </a>
                   </div>
                 </div>
 
                 {/* Modal Footer */}
-                <div className="px-6 py-4 border-t border-slate-800 bg-slate-900/40 flex items-center justify-end gap-2.5">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsEditModelModalOpen(false);
-                      setModelTestResult(null);
-                    }}
-                    disabled={savingModel}
-                    className="px-4 py-2 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition-colors cursor-pointer"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleSaveModel}
-                    disabled={savingModel || !modelNameInput.trim()}
-                    className="px-4 py-2 rounded-lg text-xs font-semibold bg-[#0278ff] hover:bg-[#0062d6] text-white shadow-md disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5 cursor-pointer transition-all"
-                  >
-                    {savingModel ? (
-                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    ) : (
-                      <Check className="w-3.5 h-3.5" />
+                <div className="px-6 py-4 border-t border-slate-800 bg-slate-900/40 flex items-center justify-between gap-2.5">
+                  <div>
+                    {isModelOverridden && (
+                      <button
+                        type="button"
+                        onClick={handleDeleteModelConfig}
+                        disabled={savingModel || deletingModel}
+                        className="px-3 py-2 rounded-lg text-xs font-semibold text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 border border-rose-500/20 hover:border-rose-500/40 flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50"
+                        title="Delete custom model configuration and reset to platform default"
+                      >
+                        {deletingModel ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <Trash2 className="w-3.5 h-3.5" />
+                        )}
+                        <span>Delete Config</span>
+                      </button>
                     )}
-                    <span>Set as Default</span>
-                  </button>
+                  </div>
+                  <div className="flex items-center gap-2.5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsEditModelModalOpen(false);
+                        setModelTestResult(null);
+                        setModelSaveError(null);
+                      }}
+                      disabled={savingModel || deletingModel}
+                      className="px-4 py-2 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition-colors cursor-pointer"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleSaveModel}
+                      disabled={savingModel || deletingModel || !modelNameInput.trim()}
+                      className="px-4 py-2 rounded-lg text-xs font-semibold bg-[#0278ff] hover:bg-[#0062d6] text-white shadow-md disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5 cursor-pointer transition-all"
+                    >
+                      {savingModel ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <Check className="w-3.5 h-3.5" />
+                      )}
+                      <span>Set as Default</span>
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
           )}
 
           {/* Section 3: Execution Engine & Ephemeral Pod Isolation */}
-          {(activeCategory === 'all' || activeCategory === 'execution') && (
-            <div id="section-execution" className="rounded-xl border border-slate-800 bg-[#0a0f1d] shadow-xl overflow-hidden transition-all">
+          <div id="section-execution" className={`rounded-xl border border-slate-800 bg-[#0a0f1d] shadow-xl overflow-hidden transition-all ${activeCategory === 'all' || activeCategory === 'execution' ? '' : 'hidden'}`}>
               {/* Collapsible Card Header */}
               <div 
                 onClick={() => toggleSection('execution')}
-                className="px-6 py-4 border-b border-slate-800 flex items-center justify-between cursor-pointer hover:bg-slate-800/30 transition-colors select-none flex-wrap gap-2"
+                className="px-6 py-4 border-b border-slate-800 flex items-center justify-between gap-4 cursor-pointer hover:bg-slate-800/30 transition-colors select-none"
               >
-                <div className="flex items-center gap-2.5">
+                <div className="flex items-center gap-2.5 min-w-0 flex-1">
                   <div className="w-7 h-7 rounded-lg bg-emerald-500/10 text-emerald-400 flex items-center justify-center border border-emerald-500/20 shrink-0">
                     <ShieldCheck className="w-4 h-4" />
                   </div>
-                  <div>
+                  <div className="min-w-0">
                     <div className="flex items-center gap-2">
-                      <h2 className="text-sm font-bold text-white">Execution Engine &amp; Ephemeral Pod Isolation</h2>
-                      <span className="px-2 py-0.2 rounded-full text-[10px] font-mono bg-emerald-500/10 text-emerald-300 border border-emerald-500/20 font-semibold">
+                      <h2 className="text-sm font-bold text-white whitespace-nowrap">Execution Engine &amp; Ephemeral Pod Isolation</h2>
+                      <span className="px-2 py-0.2 rounded-full text-[10px] font-mono bg-emerald-500/10 text-emerald-300 border border-emerald-500/20 font-semibold shrink-0">
                         CNCF Restricted PSS
                       </span>
                     </div>
-                    <p className="text-xs text-slate-400">
+                    <p className="text-xs text-slate-400 truncate sm:whitespace-normal">
                       Configure test execution boundaries: persistent shared daemon pool vs. single-use non-root Kubernetes pods
                     </p>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-3">
-                  {/* Cluster Status Chip */}
+                <div className="flex items-center gap-2.5 shrink-0 ml-auto">
+                  {/* Unified Active Status Pill */}
                   {isK8sAvailable ? (
-                    <span className="px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 hidden sm:flex items-center gap-1.5">
-                      <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                      K8s Ready
+                    <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 flex items-center gap-1.5">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                      <span>{executionMode === 'k8s_job' ? `K8s Pods (Max: ${maxParallelPods || 10})` : 'Worker Pool (K8s Ready)'}</span>
                     </span>
                   ) : (
-                    <span className="px-3 py-1 rounded-full text-xs font-semibold bg-amber-500/15 text-amber-300 border border-amber-500/30 hidden sm:flex items-center gap-1.5" title="Runs outside Kubernetes will automatically fall back to persistent daemon worker pool.">
-                      <span className="w-2 h-2 rounded-full bg-amber-400" />
-                      Docker Fallback
-                    </span>
-                  )}
-
-                  {collapsedSections.execution && (
-                    <span className="text-[11px] font-mono text-slate-400 bg-slate-900 px-2.5 py-1 rounded-full border border-slate-800 hidden sm:inline-flex items-center gap-1.5">
-                      <span className={`w-1.5 h-1.5 rounded-full ${executionMode === 'k8s_job' ? 'bg-cyan-400' : 'bg-slate-400'}`} />
-                      {executionMode === 'k8s_job' ? `⎈ K8s Pods (Max: ${maxParallelPods})` : 'Worker Pool'}
+                    <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-500/15 text-amber-300 border border-amber-500/30 flex items-center gap-1.5" title="Running in Docker Compose mode. Tests execute in persistent daemon worker pool.">
+                      <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+                      <span>Docker Fallback · Worker Pool</span>
                     </span>
                   )}
 
@@ -1891,7 +2526,7 @@ secrets:
                           <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm ${
                             executionMode === 'worker_pool' ? 'bg-[#0278ff]/20 text-[#0278ff]' : 'bg-slate-800 text-slate-400'
                           }`}>
-                            ⚙️
+                            <Server className="w-4 h-4" />
                           </div>
                           <div>
                             <h4 className="text-sm font-bold text-white flex items-center gap-1.5">
@@ -1917,9 +2552,18 @@ secrets:
                       </p>
 
                       <div className="mt-4 pt-3 border-t border-slate-800/60 flex flex-wrap gap-2 text-[10px] font-mono text-slate-400">
-                        <span className="px-2 py-0.5 rounded bg-slate-900 border border-slate-800">⚡ Sub-second Startup</span>
-                        <span className="px-2 py-0.5 rounded bg-slate-900 border border-slate-800">📦 Low CPU/RAM Overhead</span>
-                        <span className="px-2 py-0.5 rounded bg-slate-900 border border-slate-800">🔄 Shared Process Tree</span>
+                        <span className="px-2 py-0.5 rounded bg-slate-900 border border-slate-800 inline-flex items-center gap-1.5">
+                          <Zap className="w-3 h-3 text-amber-400" />
+                          Sub-second Startup
+                        </span>
+                        <span className="px-2 py-0.5 rounded bg-slate-900 border border-slate-800 inline-flex items-center gap-1.5">
+                          <Box className="w-3 h-3 text-slate-400" />
+                          Low CPU/RAM Overhead
+                        </span>
+                        <span className="px-2 py-0.5 rounded bg-slate-900 border border-slate-800 inline-flex items-center gap-1.5">
+                          <RefreshCw className="w-3 h-3 text-blue-400" />
+                          Shared Process Tree
+                        </span>
                       </div>
                     </div>
 
@@ -1946,7 +2590,7 @@ secrets:
                           <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm ${
                             executionMode === 'k8s_job' ? 'bg-emerald-500/20 text-emerald-400' : 'bg-slate-800 text-slate-400'
                           }`}>
-                            🛡️
+                            <ShieldCheck className="w-4 h-4" />
                           </div>
                           <div>
                             <h4 className="text-sm font-bold text-white flex items-center gap-1.5">
@@ -1974,9 +2618,18 @@ secrets:
                       </p>
 
                       <div className="mt-4 pt-3 border-t border-slate-800/60 flex flex-wrap gap-2 text-[10px] font-mono text-emerald-300">
-                        <span className="px-2 py-0.5 rounded bg-emerald-950/40 border border-emerald-500/30">🔒 Non-Root (UID 10001)</span>
-                        <span className="px-2 py-0.5 rounded bg-emerald-950/40 border border-emerald-500/30">🚫 drop: ALL</span>
-                        <span className="px-2 py-0.5 rounded bg-emerald-950/40 border border-emerald-500/30">⚡ /dev/shm 1Gi</span>
+                        <span className="px-2 py-0.5 rounded bg-emerald-950/40 border border-emerald-500/30 inline-flex items-center gap-1.5">
+                          <Lock className="w-3 h-3 text-emerald-400" />
+                          Non-Root (UID 10001)
+                        </span>
+                        <span className="px-2 py-0.5 rounded bg-emerald-950/40 border border-emerald-500/30 inline-flex items-center gap-1.5">
+                          <Ban className="w-3 h-3 text-emerald-400" />
+                          drop: ALL
+                        </span>
+                        <span className="px-2 py-0.5 rounded bg-emerald-950/40 border border-emerald-500/30 inline-flex items-center gap-1.5">
+                          <Zap className="w-3 h-3 text-emerald-400" />
+                          /dev/shm 1Gi
+                        </span>
                       </div>
                     </div>
                   </div>
@@ -1986,7 +2639,7 @@ secrets:
                     <div className="space-y-1">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="text-xs font-bold text-white flex items-center gap-1.5">
-                          <span>⚡</span>
+                          <Zap className="w-3.5 h-3.5 text-amber-400" />
                           <span>Max Concurrent {isK8sAvailable ? 'Runner Pods' : 'Workers'}: {maxParallelPods || 10}</span>
                         </span>
                         <span className="px-2 py-0.5 rounded-full text-[10px] font-mono bg-cyan-500/10 text-cyan-300 border border-cyan-500/25 font-semibold">
@@ -2064,7 +2717,7 @@ secrets:
                   <div className="p-4 rounded-xl bg-slate-950/60 border border-slate-800 space-y-3">
                     <div className="flex items-center justify-between">
                       <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
-                        <span>🛡️</span>
+                        <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
                         <span>Pod Security Standards &amp; Isolation Guarantees</span>
                       </h4>
                       <span className="text-[10px] font-mono text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/25">
@@ -2120,36 +2773,34 @@ secrets:
                 </div>
               )}
             </div>
-          )}
 
           {/* Section 4: Issue Tracking & Defect Management (Jira Cloud) */}
-          {(activeCategory === 'all' || activeCategory === 'jira') && (
-            <div id="section-jira" className="rounded-xl border border-slate-800 bg-[#0a0f1d] shadow-xl overflow-hidden transition-all">
+          <div id="section-jira" className={`rounded-xl border border-slate-800 bg-[#0a0f1d] shadow-xl overflow-hidden transition-all ${activeCategory === 'all' || activeCategory === 'jira' ? '' : 'hidden'}`}>
               {/* Collapsible Card Header */}
               <div 
                 onClick={() => toggleSection('jira')}
-                className="px-6 py-4 border-b border-slate-800 flex items-center justify-between cursor-pointer hover:bg-slate-800/30 transition-colors select-none flex-wrap gap-2"
+                className="px-6 py-4 border-b border-slate-800 flex items-center justify-between gap-4 cursor-pointer hover:bg-slate-800/30 transition-colors select-none"
               >
-                <div className="flex items-center gap-2.5">
+                <div className="flex items-center gap-2.5 min-w-0 flex-1">
                   <div className="w-7 h-7 rounded-lg bg-[#0052cc]/15 text-[#2684ff] flex items-center justify-center border border-[#0052cc]/30 shrink-0">
                     <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
                       <path d="M11.53 2c0 2.4 1.97 4.35 4.35 4.35h1.78v1.7c0 2.4 1.94 4.34 4.34 4.35V2.84A.84.84 0 0 0 21.16 2H11.53zM5.77 7.76c0 2.4 1.96 4.34 4.34 4.34h1.78v1.7c0 2.4 1.94 4.35 4.35 4.35V8.6a.84.84 0 0 0-.84-.84H5.77zm-5.77 5.76c0 2.4 1.95 4.34 4.34 4.34h1.79v1.7c0 2.4 1.94 4.35 4.34 4.35V14.36a.84.84 0 0 0-.84-.84H0z"/>
                     </svg>
                   </div>
-                  <div>
+                  <div className="min-w-0">
                     <div className="flex items-center gap-2">
-                      <h2 className="text-sm font-bold text-white">Issue Tracking &amp; Defect Management</h2>
-                      <span className="px-2 py-0.2 rounded-full text-[10px] font-mono bg-[#0052cc]/15 text-blue-300 border border-[#0052cc]/30 font-semibold">
+                      <h2 className="text-sm font-bold text-white whitespace-nowrap">Issue Tracking &amp; Defect Management</h2>
+                      <span className="px-2 py-0.2 rounded-full text-[10px] font-mono bg-[#0052cc]/15 text-blue-300 border border-[#0052cc]/30 font-semibold shrink-0">
                         Atlassian Jira Cloud
                       </span>
                     </div>
-                    <p className="text-xs text-slate-400">Automate bug ticket creation in Atlassian Jira Cloud upon test failures with full reproduction steps</p>
+                    <p className="text-xs text-slate-400 truncate sm:whitespace-normal">Automate bug ticket creation in Atlassian Jira Cloud upon test failures with full reproduction steps</p>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2.5 shrink-0 ml-auto">
                   {jiraConfigured ? (
-                    <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 flex items-center gap-1.5">
+                    <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 flex items-center gap-1.5 shrink-0">
                       <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
                       Connected ({jiraProjectKey}) · Auto: {jiraAutoCreate ? 'ON' : 'OFF'}
                     </span>
@@ -2296,56 +2947,295 @@ secrets:
                   )}
 
                   {/* Jira Actions */}
-                  <div className="flex items-center justify-end gap-2.5 pt-1">
-                    <button
-                      type="button"
-                      onClick={handleTestJira}
-                      disabled={testingJira}
-                      className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 flex items-center gap-1.5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
-                    >
-                      {testingJira ? <Loader2 className="w-3.5 h-3.5 animate-spin text-[#0278ff]" /> : <Zap className="w-3.5 h-3.5 text-amber-400" />}
-                      <span>Test Connection</span>
-                    </button>
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pt-1">
+                    <div>
+                      {jiraConfigured && (
+                        confirmDeleteJira ? (
+                          <div className="flex items-center gap-2 bg-rose-950/40 border border-rose-800/60 rounded-lg px-2.5 py-1 text-xs">
+                            <span className="text-rose-300 text-[11px] font-medium">Delete Jira integration?</span>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteIntegration('jira')}
+                              disabled={deletingJira}
+                              className="px-2 py-0.5 rounded text-[11px] font-semibold bg-rose-600 hover:bg-rose-500 text-white flex items-center gap-1 transition-colors cursor-pointer"
+                            >
+                              {deletingJira ? <Loader2 className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3 h-3" />}
+                              Confirm
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setConfirmDeleteJira(false)}
+                              disabled={deletingJira}
+                              className="px-2 py-0.5 rounded text-[11px] font-semibold text-slate-400 hover:text-slate-200 transition-colors cursor-pointer"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => setConfirmDeleteJira(true)}
+                            disabled={deletingJira || savingJira || testingJira}
+                            className="px-3 py-1.5 rounded-lg text-xs font-semibold text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 border border-rose-500/20 flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                            title="Disconnect and delete Jira integration"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                            <span>Disconnect Integration</span>
+                          </button>
+                        )
+                      )}
+                    </div>
 
-                    <button
-                      type="button"
-                      onClick={handleSaveJira}
-                      disabled={savingJira}
-                      className="px-4 py-1.5 rounded-lg text-xs font-semibold bg-[#0052cc] hover:bg-[#0047b3] text-white shadow-md shadow-blue-900/30 flex items-center gap-1.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
-                    >
-                      {savingJira ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
-                      <span>Save Jira Settings</span>
-                    </button>
+                    <div className="flex items-center gap-2.5 justify-end">
+                      <button
+                        type="button"
+                        onClick={handleTestJira}
+                        disabled={testingJira}
+                        className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 flex items-center gap-1.5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                      >
+                        {testingJira ? <Loader2 className="w-3.5 h-3.5 animate-spin text-[#0278ff]" /> : <Zap className="w-3.5 h-3.5 text-amber-400" />}
+                        <span>Test Connection</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={handleSaveJira}
+                        disabled={savingJira}
+                        className="px-4 py-1.5 rounded-lg text-xs font-semibold bg-[#0052cc] hover:bg-[#0047b3] text-white shadow-md shadow-blue-900/30 flex items-center gap-1.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                      >
+                        {savingJira ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                        <span>Save Jira Settings</span>
+                      </button>
+                    </div>
                   </div>
                 </div>
               )}
             </div>
-          )}
 
-          {/* Section 5: Incident Alerts & Webhook Notifications (Slack & Microsoft Teams) */}
-          {(activeCategory === 'all' || activeCategory === 'notifications') && (
-            <div id="section-notifications" className="rounded-xl border border-slate-800 bg-[#0a0f1d] shadow-xl overflow-hidden transition-all">
+          {/* Section 4B: GitHub Issues Integration */}
+          <div id="section-github" className={`rounded-xl border border-slate-800 bg-[#0a0f1d] shadow-xl overflow-hidden transition-all ${activeCategory === 'all' || activeCategory === 'jira' || activeCategory === 'github' ? '' : 'hidden'}`}>
               {/* Collapsible Card Header */}
               <div 
-                onClick={() => toggleSection('notifications')}
-                className="px-6 py-4 border-b border-slate-800 flex items-center justify-between cursor-pointer hover:bg-slate-800/30 transition-colors select-none flex-wrap gap-2"
+                onClick={() => toggleSection('github')}
+                className="px-6 py-4 border-b border-slate-800 flex items-center justify-between gap-4 cursor-pointer hover:bg-slate-800/30 transition-colors select-none"
               >
-                <div className="flex items-center gap-2.5">
-                  <div className="w-7 h-7 rounded-lg bg-amber-500/10 text-amber-400 flex items-center justify-center border border-amber-500/20 shrink-0">
-                    <Bell className="w-4 h-4" />
+                <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                  <div className="w-7 h-7 rounded-lg bg-slate-800 text-slate-200 flex items-center justify-center border border-slate-700 shrink-0">
+                    <svg className="w-4 h-4 fill-current" viewBox="0 0 24 24">
+                      <path fillRule="evenodd" clipRule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"/>
+                    </svg>
                   </div>
-                  <div>
+                  <div className="min-w-0">
                     <div className="flex items-center gap-2">
-                      <h2 className="text-sm font-bold text-white">Incident Alerts &amp; Webhook Notifications</h2>
-                      <span className="px-2 py-0.2 rounded-full text-[10px] font-mono bg-amber-500/10 text-amber-300 border border-amber-500/20 font-semibold">
-                        Slack · Microsoft Teams
+                      <h2 className="text-sm font-bold text-white whitespace-nowrap">GitHub Issues Integration</h2>
+                      <span className="px-2 py-0.2 rounded-full text-[10px] font-mono bg-slate-800 text-slate-300 border border-slate-700 font-semibold shrink-0">
+                        REST API v3 · Defect Sync
                       </span>
                     </div>
-                    <p className="text-xs text-slate-400">Stream real-time test failure alerts, Block Kit cards, and Adaptive Cards to team channels</p>
+                    <p className="text-xs text-slate-400 truncate sm:whitespace-normal">Automate defect issue creation in GitHub repository on test failure with full reproduction steps and logs</p>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2.5 shrink-0 ml-auto">
+                  {githubConfigured ? (
+                    <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 flex items-center gap-1.5 shrink-0">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                      Connected ({githubRepo}) · Auto: {githubAutoCreate ? 'ON' : 'OFF'}
+                    </span>
+                  ) : (
+                    <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-slate-800 text-slate-400 border border-slate-700">
+                      Not Configured
+                    </span>
+                  )}
+
+                  <button
+                    type="button"
+                    aria-label={collapsedSections.github ? "Expand GitHub section" : "Collapse GitHub section"}
+                    className="p-1 rounded-lg text-slate-400 hover:text-white transition-transform"
+                  >
+                    {collapsedSections.github ? (
+                      <ChevronRight className="w-4 h-4 text-slate-400" />
+                    ) : (
+                      <ChevronDown className="w-4 h-4 text-[#2684ff]" />
+                    )}
+                  </button>
+                </div>
+              </div>
+
+              {!collapsedSections.github && (
+                <div className="p-6 space-y-5">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-1 border-b border-slate-800/60">
+                    <span className="text-xs font-bold text-white uppercase tracking-wider">GitHub Repository &amp; Access Token</span>
+                    <span className="text-[11px] font-mono text-slate-500">Classic PAT or Fine-Grained Token</span>
+                  </div>
+
+                  {/* GitHub Form Grid */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 pt-1">
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-bold text-slate-300">Target Repository (owner/repo)</label>
+                      <input
+                        type="text"
+                        value={githubRepo}
+                        onChange={(e) => setGithubRepo(e.target.value)}
+                        placeholder="e.g. GitanshKapoor/barely"
+                        className="w-full bg-[#070b14] border border-slate-800 focus:border-[#0278ff] rounded-lg px-3 py-2 text-xs font-mono text-white outline-none placeholder:text-slate-600"
+                      />
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-bold text-slate-300">Issue Labels (comma-separated)</label>
+                      <input
+                        type="text"
+                        value={githubLabels}
+                        onChange={(e) => setGithubLabels(e.target.value)}
+                        placeholder="bug, automated-test"
+                        className="w-full bg-[#070b14] border border-slate-800 focus:border-[#0278ff] rounded-lg px-3 py-2 text-xs font-mono text-white outline-none placeholder:text-slate-600"
+                      />
+                    </div>
+
+                    <div className="space-y-1 md:col-span-2">
+                      <div className="flex items-center justify-between">
+                        <label className="text-[11px] font-bold text-slate-300">GitHub Personal Access Token</label>
+                        {githubMaskedToken && (
+                          <span className="text-[10px] font-mono text-slate-400">Current: {githubMaskedToken}</span>
+                        )}
+                      </div>
+                      <div className="relative">
+                        <input
+                          type={showGithubToken ? "text" : "password"}
+                          value={githubToken}
+                          onChange={(e) => setGithubToken(e.target.value)}
+                          placeholder={githubConfigured ? "Enter new token to update existing secret..." : "ghp_... or github_pat_..."}
+                          className="w-full bg-[#070b14] border border-slate-800 focus:border-[#0278ff] rounded-lg px-3 py-2 text-xs font-mono text-white outline-none placeholder:text-slate-600 pr-10"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowGithubToken(!showGithubToken)}
+                          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-white"
+                        >
+                          {showGithubToken ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                        </button>
+                      </div>
+                      <p className="text-[10px] text-slate-400">Requires <code className="text-slate-300">repo</code> scope (classic) or <code className="text-slate-300">Issues: Read and write</code> permission (fine-grained).</p>
+                    </div>
+                  </div>
+
+                  {/* Auto-Create Toggle */}
+                  <div className="p-3 rounded-lg border border-slate-800 bg-[#070b14] flex items-center justify-between gap-4">
+                    <div>
+                      <div className="text-xs font-bold text-slate-200">Auto-File GitHub Issue on Test Failure</div>
+                      <div className="text-[11px] text-slate-400">Automatically open a defect issue in the target repository whenever an assertion fails or timeout occurs.</div>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer shrink-0">
+                      <input
+                        type="checkbox"
+                        checked={githubAutoCreate}
+                        onChange={(e) => setGithubAutoCreate(e.target.checked)}
+                        className="sr-only peer"
+                      />
+                      <div className="w-9 h-5 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#0278ff]"></div>
+                    </label>
+                  </div>
+
+                  {/* GitHub Test Result Banner */}
+                  {githubTestResult && (
+                    <div className={`p-3 rounded-lg border text-xs flex items-center gap-2 ${
+                      githubTestResult.success ? 'bg-emerald-950/40 border-emerald-800/60 text-emerald-300' : 'bg-rose-950/40 border-rose-800/60 text-rose-300'
+                    }`}>
+                      {githubTestResult.success ? <Check className="w-4 h-4 text-emerald-400 shrink-0" /> : <AlertCircle className="w-4 h-4 text-rose-400 shrink-0" />}
+                      <span className="flex-1 font-mono text-[11px]">{githubTestResult.message}</span>
+                    </div>
+                  )}
+
+                  {/* GitHub Actions */}
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pt-1">
+                    <div>
+                      {githubConfigured && (
+                        confirmDeleteGithub ? (
+                          <div className="flex items-center gap-2 bg-rose-950/40 border border-rose-800/60 rounded-lg px-2.5 py-1 text-xs">
+                            <span className="text-rose-300 text-[11px] font-medium">Delete GitHub integration?</span>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteIntegration('github')}
+                              disabled={deletingGithub}
+                              className="px-2 py-0.5 rounded text-[11px] font-semibold bg-rose-600 hover:bg-rose-500 text-white flex items-center gap-1 transition-colors cursor-pointer"
+                            >
+                              {deletingGithub ? <Loader2 className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3 h-3" />}
+                              Confirm
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setConfirmDeleteGithub(false)}
+                              disabled={deletingGithub}
+                              className="px-2 py-0.5 rounded text-[11px] font-semibold text-slate-400 hover:text-slate-200 transition-colors cursor-pointer"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => setConfirmDeleteGithub(true)}
+                            disabled={deletingGithub || savingGithub || testingGithub}
+                            className="px-3 py-1.5 rounded-lg text-xs font-semibold text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 border border-rose-500/20 flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                            title="Disconnect and delete GitHub integration"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                            <span>Disconnect Integration</span>
+                          </button>
+                        )
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-2.5 justify-end">
+                      <button
+                        type="button"
+                        onClick={handleTestGithub}
+                        disabled={testingGithub}
+                        className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 flex items-center gap-1.5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                      >
+                        {testingGithub ? <Loader2 className="w-3.5 h-3.5 animate-spin text-[#0278ff]" /> : <Zap className="w-3.5 h-3.5 text-amber-400" />}
+                        <span>Test Connection</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={handleSaveGithub}
+                        disabled={savingGithub}
+                        className="px-4 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-white border border-slate-700 shadow-md flex items-center gap-1.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                      >
+                        {savingGithub ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                        <span>Save GitHub Settings</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+          {/* Section 5: Incident Alerts & Webhook Notifications (Slack & Microsoft Teams) */}
+          <div id="section-notifications" className={`rounded-xl border border-slate-800 bg-[#0a0f1d] shadow-xl overflow-hidden transition-all ${activeCategory === 'all' || activeCategory === 'notifications' ? '' : 'hidden'}`}>
+              {/* Collapsible Card Header */}
+              <div 
+                onClick={() => toggleSection('notifications')}
+                className="px-6 py-4 border-b border-slate-800 flex items-center justify-between gap-4 cursor-pointer hover:bg-slate-800/30 transition-colors select-none"
+              >
+                <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                  <div className="w-7 h-7 rounded-lg bg-amber-500/10 text-amber-400 flex items-center justify-center border border-amber-500/20 shrink-0">
+                    <Bell className="w-4 h-4" />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <h2 className="text-sm font-bold text-white whitespace-nowrap">Incident Alerts &amp; Webhook Notifications</h2>
+                      <span className="px-2 py-0.2 rounded-full text-[10px] font-mono bg-amber-500/10 text-amber-300 border border-amber-500/20 font-semibold shrink-0">
+                        Slack · Microsoft Teams
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-400 truncate sm:whitespace-normal">Stream real-time test failure alerts, Block Kit cards, and Adaptive Cards to team channels</p>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2.5 shrink-0 ml-auto">
                   <div className="hidden sm:flex items-center gap-2 text-xs font-mono">
                     <span className={`px-2 py-0.5 rounded-full border ${slackConfigured ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30' : 'bg-slate-900 text-slate-500 border-slate-800'}`}>
                       Slack: {slackConfigured ? 'Active' : 'Off'}
@@ -2373,12 +3263,12 @@ secrets:
                 <div className="p-6 space-y-6">
                   {/* Default Notification Mechanism Card */}
                   <div className="rounded-xl border border-slate-800/80 bg-[#070b14]/70 p-5 space-y-4 shadow-sm hover:border-slate-700/80 transition-colors">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                      <div className="flex items-center gap-2.5">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                      <div className="flex items-center gap-2.5 min-w-0 flex-1">
                         <div className="w-8 h-8 rounded-lg bg-amber-500/15 text-amber-400 flex items-center justify-center border border-amber-500/30 shrink-0">
                           <Sliders className="w-4 h-4" />
                         </div>
-                        <div>
+                        <div className="min-w-0 flex-1">
                           <h3 className="text-sm font-bold text-white flex items-center gap-2">
                             Default Notification Channel
                             <span className="text-[10px] font-mono text-slate-500 font-normal">Platform Default</span>
@@ -2389,9 +3279,35 @@ secrets:
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-2">
-                        <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-500/10 text-amber-300 border border-amber-500/20 font-mono">
-                          Active: {defaultNotificationMechanism === 'both' ? 'Both (Slack & Teams)' : defaultNotificationMechanism === 'slack' ? 'Slack Only' : defaultNotificationMechanism === 'teams' ? 'Teams Only' : 'Muted'}
+                      <div className="flex items-center gap-2 shrink-0 ml-auto whitespace-nowrap">
+                        <span className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold whitespace-nowrap border shadow-sm transition-all ${
+                          defaultNotificationMechanism === 'teams'
+                            ? 'bg-[#505ac9]/15 text-[#8b95f6] border-[#505ac9]/40'
+                            : defaultNotificationMechanism === 'slack'
+                            ? 'bg-[#E01E5A]/15 text-[#f5567b] border-[#E01E5A]/40'
+                            : defaultNotificationMechanism === 'both'
+                            ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
+                            : 'bg-slate-800/80 text-slate-400 border-slate-700/80'
+                        }`}>
+                          <span className={`w-2 h-2 rounded-full shrink-0 ${
+                            defaultNotificationMechanism === 'teams'
+                              ? 'bg-[#7b83eb] shadow-[0_0_8px_rgba(123,131,235,0.7)]'
+                              : defaultNotificationMechanism === 'slack'
+                              ? 'bg-[#E01E5A] shadow-[0_0_8px_rgba(224,30,90,0.7)]'
+                              : defaultNotificationMechanism === 'both'
+                              ? 'bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.7)] animate-pulse'
+                              : 'bg-slate-500'
+                          }`} />
+                          <span className="text-[11px] font-medium text-slate-400">Active:</span>
+                          <span className="font-semibold text-white">
+                            {defaultNotificationMechanism === 'both' 
+                              ? 'Both (Slack & Teams)' 
+                              : defaultNotificationMechanism === 'slack' 
+                              ? 'Slack Only' 
+                              : defaultNotificationMechanism === 'teams' 
+                              ? 'Teams Only' 
+                              : 'Muted'}
+                          </span>
                         </span>
                       </div>
                     </div>
@@ -2402,22 +3318,30 @@ secrets:
                           id: 'both',
                           label: 'Both Slack & Teams',
                           desc: 'Broadcast incidents to both Slack & Teams channels',
-                          badge: 'Recommended'
+                          badge: 'Recommended',
+                          activeClass: 'bg-emerald-500/15 border-emerald-500/60 shadow-md shadow-emerald-950/20 text-white',
+                          activeText: 'text-emerald-400'
                         },
                         {
                           id: 'slack',
                           label: 'Slack Only',
-                          desc: 'Dispatch interactive Block Kit cards to Slack only'
+                          desc: 'Dispatch interactive Block Kit cards to Slack only',
+                          activeClass: 'bg-[#E01E5A]/15 border-[#E01E5A]/60 shadow-md shadow-rose-950/20 text-white',
+                          activeText: 'text-[#f5567b]'
                         },
                         {
                           id: 'teams',
                           label: 'Teams Only',
-                          desc: 'Post rich Adaptive Cards to Microsoft Teams only'
+                          desc: 'Post rich Adaptive Cards to Microsoft Teams only',
+                          activeClass: 'bg-[#505ac9]/15 border-[#505ac9]/60 shadow-md shadow-indigo-950/20 text-white',
+                          activeText: 'text-[#8b95f6]'
                         },
                         {
                           id: 'none',
                           label: 'Muted / None',
-                          desc: 'Suppress automated webhook channel alerts by default'
+                          desc: 'Suppress automated webhook channel alerts by default',
+                          activeClass: 'bg-slate-800/60 border-slate-700 shadow-md text-white',
+                          activeText: 'text-slate-300'
                         }
                       ].map((opt) => {
                         const isSelected = defaultNotificationMechanism === opt.id;
@@ -2429,18 +3353,18 @@ secrets:
                             disabled={savingDefaultMechanism}
                             className={`p-3 rounded-lg border text-left transition-all cursor-pointer flex flex-col justify-between ${
                               isSelected
-                                ? 'bg-amber-500/15 border-amber-500/60 shadow-md shadow-amber-950/20 text-white'
+                                ? opt.activeClass
                                 : 'bg-[#0a0f1d] border-slate-800 hover:border-slate-700 text-slate-400 hover:text-slate-200'
                             }`}
                           >
                             <div className="space-y-1">
                               <div className="flex items-center justify-between">
-                                <span className={`text-xs font-bold flex items-center gap-1.5 ${isSelected ? 'text-amber-300' : 'text-slate-200'}`}>
+                                <span className={`text-xs font-bold flex items-center gap-1.5 ${isSelected ? 'text-white' : 'text-slate-200'}`}>
                                   {opt.id === 'none' && <BellOff className="w-3.5 h-3.5 text-slate-500 shrink-0" />}
                                   {opt.label}
                                 </span>
                                 {opt.badge && (
-                                  <span className="px-1.5 py-0.2 rounded text-[9px] font-semibold bg-amber-500/20 text-amber-300 border border-amber-500/30">
+                                  <span className="px-1.5 py-0.2 rounded text-[9px] font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
                                     {opt.badge}
                                   </span>
                                 )}
@@ -2449,7 +3373,7 @@ secrets:
                             </div>
                             <div className="pt-2 flex items-center justify-end">
                               {isSelected ? (
-                                <span className="text-[10px] font-mono font-bold text-amber-400 flex items-center gap-1">
+                                <span className={`text-[10px] font-bold flex items-center gap-1 ${opt.activeText}`}>
                                   <Check className="w-3 h-3" /> Default Active
                                 </span>
                               ) : (
@@ -2484,10 +3408,20 @@ secrets:
 
                       <div className="flex items-center gap-2">
                         {slackConfigured ? (
-                          <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 flex items-center gap-1.5">
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                            Connected
-                          </span>
+                          <>
+                            <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 flex items-center gap-1.5">
+                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                              Connected
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => setConfirmDeleteSlack(true)}
+                              className="p-1 rounded text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 transition-colors cursor-pointer"
+                              title="Delete Slack integration"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </>
                         ) : (
                           <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-slate-800 text-slate-400 border border-slate-700">
                             Not Configured
@@ -2555,26 +3489,66 @@ secrets:
                     )}
 
                     {/* Slack Actions Footer */}
-                    <div className="pt-3 border-t border-slate-800/60 flex items-center justify-end gap-2.5">
-                      <button
-                        type="button"
-                        onClick={handleTestSlack}
-                        disabled={testingSlack}
-                        className="px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 flex items-center gap-1.5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
-                      >
-                        {testingSlack ? <Loader2 className="w-3.5 h-3.5 animate-spin text-[#0278ff]" /> : <Send className="w-3.5 h-3.5 text-amber-400" />}
-                        <span>Send Test Card</span>
-                      </button>
+                    <div className="pt-3 border-t border-slate-800/60 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                      <div>
+                        {slackConfigured && (
+                          confirmDeleteSlack ? (
+                            <div className="flex items-center gap-2 bg-rose-950/40 border border-rose-800/60 rounded-lg px-2.5 py-1 text-xs">
+                              <span className="text-rose-300 text-[11px] font-medium">Delete Slack integration?</span>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteIntegration('slack')}
+                                disabled={deletingSlack}
+                                className="px-2 py-0.5 rounded text-[11px] font-semibold bg-rose-600 hover:bg-rose-500 text-white flex items-center gap-1 transition-colors cursor-pointer"
+                              >
+                                {deletingSlack ? <Loader2 className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3 h-3" />}
+                                Confirm Delete
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setConfirmDeleteSlack(false)}
+                                disabled={deletingSlack}
+                                className="px-2 py-0.5 rounded text-[11px] font-semibold text-slate-400 hover:text-slate-200 transition-colors cursor-pointer"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => setConfirmDeleteSlack(true)}
+                              disabled={deletingSlack || savingSlack || testingSlack}
+                              className="px-3 py-1.5 rounded-lg text-xs font-semibold text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 border border-rose-500/20 flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                              title="Delete Slack webhook configuration"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                              <span>Delete Integration</span>
+                            </button>
+                          )
+                        )}
+                      </div>
 
-                      <button
-                        type="button"
-                        onClick={handleSaveSlack}
-                        disabled={savingSlack}
-                        className="px-4 py-1.5 rounded-lg text-xs font-semibold bg-[#0278ff] hover:bg-[#0062d6] text-white shadow-md shadow-blue-500/20 flex items-center gap-1.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
-                      >
-                        {savingSlack ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
-                        <span>Save Slack Settings</span>
-                      </button>
+                      <div className="flex items-center gap-2.5 justify-end">
+                        <button
+                          type="button"
+                          onClick={handleTestSlack}
+                          disabled={testingSlack}
+                          className="px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 flex items-center gap-1.5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                        >
+                          {testingSlack ? <Loader2 className="w-3.5 h-3.5 animate-spin text-[#0278ff]" /> : <Send className="w-3.5 h-3.5 text-amber-400" />}
+                          <span>Send Test Card</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={handleSaveSlack}
+                          disabled={savingSlack}
+                          className="px-4 py-1.5 rounded-lg text-xs font-semibold bg-[#0278ff] hover:bg-[#0062d6] text-white shadow-md shadow-blue-500/20 flex items-center gap-1.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                        >
+                          {savingSlack ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                          <span>Save Slack Settings</span>
+                        </button>
+                      </div>
                     </div>
                   </div>
 
@@ -2598,10 +3572,20 @@ secrets:
 
                       <div className="flex items-center gap-2">
                         {teamsConfigured ? (
-                          <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 flex items-center gap-1.5">
-                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                            Connected
-                          </span>
+                          <>
+                            <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 flex items-center gap-1.5">
+                              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                              Connected
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => setConfirmDeleteTeams(true)}
+                              className="p-1 rounded text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 transition-colors cursor-pointer"
+                              title="Delete Teams integration"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </>
                         ) : (
                           <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-slate-800 text-slate-400 border border-slate-700">
                             Not Configured
@@ -2669,60 +3653,98 @@ secrets:
                     )}
 
                     {/* Teams Actions Footer */}
-                    <div className="pt-3 border-t border-slate-800/60 flex items-center justify-end gap-2.5">
-                      <button
-                        type="button"
-                        onClick={handleTestTeams}
-                        disabled={testingTeams}
-                        className="px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 flex items-center gap-1.5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
-                      >
-                        {testingTeams ? <Loader2 className="w-3.5 h-3.5 animate-spin text-[#0278ff]" /> : <Send className="w-3.5 h-3.5 text-amber-400" />}
-                        <span>Send Test Card</span>
-                      </button>
+                    <div className="pt-3 border-t border-slate-800/60 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                      <div>
+                        {teamsConfigured && (
+                          confirmDeleteTeams ? (
+                            <div className="flex items-center gap-2 bg-rose-950/40 border border-rose-800/60 rounded-lg px-2.5 py-1 text-xs">
+                              <span className="text-rose-300 text-[11px] font-medium">Delete Teams integration?</span>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteIntegration('teams')}
+                                disabled={deletingTeams}
+                                className="px-2 py-0.5 rounded text-[11px] font-semibold bg-rose-600 hover:bg-rose-500 text-white flex items-center gap-1 transition-colors cursor-pointer"
+                              >
+                                {deletingTeams ? <Loader2 className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3 h-3" />}
+                                Confirm Delete
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setConfirmDeleteTeams(false)}
+                                disabled={deletingTeams}
+                                className="px-2 py-0.5 rounded text-[11px] font-semibold text-slate-400 hover:text-slate-200 transition-colors cursor-pointer"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => setConfirmDeleteTeams(true)}
+                              disabled={deletingTeams || savingTeams || testingTeams}
+                              className="px-3 py-1.5 rounded-lg text-xs font-semibold text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 border border-rose-500/20 flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                              title="Delete Microsoft Teams webhook configuration"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                              <span>Delete Integration</span>
+                            </button>
+                          )
+                        )}
+                      </div>
 
-                      <button
-                        type="button"
-                        onClick={handleSaveTeams}
-                        disabled={savingTeams}
-                        className="px-4 py-1.5 rounded-lg text-xs font-semibold bg-[#0278ff] hover:bg-[#0062d6] text-white shadow-md shadow-blue-500/20 flex items-center gap-1.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
-                      >
-                        {savingTeams ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
-                        <span>Save Teams Settings</span>
-                      </button>
+                      <div className="flex items-center gap-2.5 justify-end">
+                        <button
+                          type="button"
+                          onClick={handleTestTeams}
+                          disabled={testingTeams}
+                          className="px-3.5 py-1.5 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 flex items-center gap-1.5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                        >
+                          {testingTeams ? <Loader2 className="w-3.5 h-3.5 animate-spin text-[#0278ff]" /> : <Send className="w-3.5 h-3.5 text-amber-400" />}
+                          <span>Send Test Card</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={handleSaveTeams}
+                          disabled={savingTeams}
+                          className="px-4 py-1.5 rounded-lg text-xs font-semibold bg-[#0278ff] hover:bg-[#0062d6] text-white shadow-md shadow-blue-500/20 flex items-center gap-1.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                        >
+                          {savingTeams ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                          <span>Save Teams Settings</span>
+                        </button>
+                      </div>
                     </div>
                   </div>
 
                 </div>
               )}
             </div>
-          )}
 
           {/* Section 6: Agent Defaults */}
-          {(activeCategory === 'all' || activeCategory === 'defaults') && (
-            <div id="section-defaults" className="rounded-xl border border-slate-800 bg-[#0a0f1d] shadow-xl overflow-hidden transition-all">
+          <div id="section-defaults" className={`rounded-xl border border-slate-800 bg-[#0a0f1d] shadow-xl overflow-hidden transition-all ${activeCategory === 'all' || activeCategory === 'defaults' ? '' : 'hidden'}`}>
               {/* Collapsible Card Header */}
               <div 
                 onClick={() => toggleSection('defaults')}
-                className="px-6 py-4 border-b border-slate-800 flex items-center justify-between cursor-pointer hover:bg-slate-800/30 transition-colors select-none flex-wrap gap-2"
+                className="px-6 py-4 border-b border-slate-800 flex items-center justify-between gap-4 cursor-pointer hover:bg-slate-800/30 transition-colors select-none"
               >
-                <div className="flex items-center gap-2.5">
-                  <div className="w-7 h-7 rounded-lg bg-blue-500/10 text-blue-400 flex items-center justify-center border border-blue-500/20">
+                <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                  <div className="w-7 h-7 rounded-lg bg-blue-500/10 text-blue-400 flex items-center justify-center border border-blue-500/20 shrink-0">
                     <Globe className="w-4 h-4" />
                   </div>
-                  <div>
+                  <div className="min-w-0">
                     <div className="flex items-center gap-2">
-                      <h2 className="text-sm font-bold text-white">Agent Defaults &amp; Execution Guardrails</h2>
-                      <span className="px-2 py-0.2 rounded-full text-[10px] font-mono bg-blue-500/10 text-blue-300 border border-blue-500/20 font-semibold">
+                      <h2 className="text-sm font-bold text-white whitespace-nowrap">Agent Defaults &amp; Execution Guardrails</h2>
+                      <span className="px-2 py-0.2 rounded-full text-[10px] font-mono bg-blue-500/10 text-blue-300 border border-blue-500/20 font-semibold shrink-0">
                         Global Policy
                       </span>
                     </div>
-                    <p className="text-xs text-slate-400">Default runtime parameters and timeouts applied to new test executions</p>
+                    <p className="text-xs text-slate-400 truncate sm:whitespace-normal">Default runtime parameters and timeouts applied to new test executions</p>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-3">
+                <div className="flex items-center gap-2.5 shrink-0 ml-auto">
                   {collapsedSections.defaults && (
-                    <span className="text-[11px] font-mono text-slate-400 bg-slate-900 px-2.5 py-1 rounded-full border border-slate-800 hidden sm:inline-flex items-center gap-1.5">
+                    <span className="text-[11px] font-mono text-slate-400 bg-slate-900 px-2.5 py-1 rounded-full border border-slate-800 hidden sm:inline-flex items-center gap-1.5 shrink-0">
                       {defaultSettings.length} Parameters Configured
                     </span>
                   )}
@@ -2778,37 +3800,35 @@ secrets:
                 </div>
               )}
             </div>
-          )}
 
           {/* Section 7: Database Connection Status */}
-          {(activeCategory === 'all' || activeCategory === 'database') && (
-            <div id="section-database" className="rounded-xl border border-slate-800 bg-[#0a0f1d] shadow-xl overflow-hidden transition-all">
+          <div id="section-database" className={`rounded-xl border border-slate-800 bg-[#0a0f1d] shadow-xl overflow-hidden transition-all ${activeCategory === 'all' || activeCategory === 'database' ? '' : 'hidden'}`}>
               {/* Collapsible Card Header */}
               <div 
                 onClick={() => toggleSection('database')}
-                className="px-6 py-4 border-b border-slate-800 flex items-center justify-between cursor-pointer hover:bg-slate-800/30 transition-colors select-none flex-wrap gap-2"
+                className="px-6 py-4 border-b border-slate-800 flex items-center justify-between gap-4 cursor-pointer hover:bg-slate-800/30 transition-colors select-none"
               >
-                <div className="flex items-center gap-2.5">
+                <div className="flex items-center gap-2.5 min-w-0 flex-1">
                   <div className="w-7 h-7 rounded-lg bg-emerald-500/10 text-emerald-400 flex items-center justify-center border border-emerald-500/20 shrink-0">
                     <Database className="w-4 h-4" />
                   </div>
-                  <div>
+                  <div className="min-w-0">
                     <div className="flex items-center gap-2">
-                      <h2 className="text-sm font-bold text-white">Database Connection &amp; Telemetry</h2>
-                      <span className="text-[10px] font-mono text-slate-500 hidden sm:inline">
+                      <h2 className="text-sm font-bold text-white whitespace-nowrap">Database Connection &amp; Telemetry</h2>
+                      <span className="text-[10px] font-mono text-slate-500 hidden sm:inline shrink-0">
                         {dbStatus?.chip || 'PostgreSQL 15 (TLS)'}
                       </span>
                     </div>
-                    <p className="text-xs text-slate-400">
+                    <p className="text-xs text-slate-400 truncate sm:whitespace-normal">
                       {dbStatus?.subtext || 'PostgreSQL state storage & telemetry'}
                     </p>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-3">
-                  <div className="flex items-center gap-2 self-start sm:self-auto">
+                <div className="flex items-center gap-2.5 shrink-0 ml-auto">
+                  <div className="flex items-center gap-2 shrink-0">
                     {/* Dynamic Provider Badge */}
-                    <span className={`px-2.5 py-1 rounded-full text-xs font-semibold font-mono border flex items-center gap-1.5 transition-all ${
+                    <span className={`px-2.5 py-1 rounded-full text-xs font-semibold font-mono border flex items-center gap-1.5 transition-all shrink-0 ${
                       dbStatus?.storage_type === 'gcp'
                         ? 'bg-sky-500/15 text-sky-300 border-sky-500/30'
                         : dbStatus?.storage_type === 'aws'
@@ -2819,23 +3839,23 @@ secrets:
                         ? 'bg-emerald-500/15 text-emerald-300 border-emerald-500/30'
                         : 'bg-indigo-500/15 text-indigo-300 border-indigo-500/30'
                     }`}>
-                      {dbStatus?.storage_type === 'gcp' && <span>☁️</span>}
-                      {dbStatus?.storage_type === 'aws' && <span>🟧</span>}
-                      {dbStatus?.storage_type === 'azure' && <span>🟦</span>}
-                      {(dbStatus?.storage_type === 'supabase' || dbStatus?.storage_type === 'neon') && <span>⚡</span>}
-                      {dbStatus?.storage_type === 'docker' && <span>🐳</span>}
-                      {!['gcp', 'aws', 'azure', 'supabase', 'neon', 'docker'].includes(dbStatus?.storage_type || '') && <span>☁️</span>}
+                      {dbStatus?.storage_type === 'gcp' && <Cloud className="w-3.5 h-3.5 text-sky-400" />}
+                      {dbStatus?.storage_type === 'aws' && <span className="w-2 h-2 rounded-full bg-amber-400" />}
+                      {dbStatus?.storage_type === 'azure' && <span className="w-2 h-2 rounded-full bg-blue-400" />}
+                      {(dbStatus?.storage_type === 'supabase' || dbStatus?.storage_type === 'neon') && <Zap className="w-3.5 h-3.5 text-emerald-400" />}
+                      {dbStatus?.storage_type === 'docker' && <Server className="w-3.5 h-3.5 text-indigo-400" />}
+                      {!['gcp', 'aws', 'azure', 'supabase', 'neon', 'docker'].includes(dbStatus?.storage_type || '') && <Database className="w-3.5 h-3.5 text-indigo-400" />}
                       <span>{dbStatus?.provider_name || 'Docker (Local)'}</span>
                     </span>
 
                     {/* Live Connection Status Badge */}
                     {dbStatus?.is_connected ? (
-                      <span className="px-3 py-1 rounded-full text-xs font-semibold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 flex items-center gap-1.5 shrink-0">
+                      <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 flex items-center gap-1.5 shrink-0">
                         <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
                         Connected
                       </span>
                     ) : (
-                      <span className="px-3 py-1 rounded-full text-xs font-semibold bg-rose-500/15 text-rose-400 border border-rose-500/30 flex items-center gap-1.5 shrink-0">
+                      <span className="px-2.5 py-1 rounded-full text-xs font-semibold bg-rose-500/15 text-rose-400 border border-rose-500/30 flex items-center gap-1.5 shrink-0">
                         <span className="w-2 h-2 rounded-full bg-rose-400" />
                         Disconnected
                       </span>
@@ -2877,7 +3897,6 @@ secrets:
                 </div>
               )}
             </div>
-          )}
 
         </div>
       )}

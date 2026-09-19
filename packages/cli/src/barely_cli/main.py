@@ -35,7 +35,7 @@ def run(
     goal: str = typer.Argument(..., help="Path to the goal markdown file"),
     url: Optional[str] = typer.Option(None, "--url", help="Override the starting URL"),
     context: Optional[str] = typer.Option(None, "--context", "-c", help="Application & domain context (credentials, test rules, sandbox notes)"),
-    model: Optional[str] = typer.Option(None, "--model", "-m", help="AI model to use (default: anthropic/claude-sonnet-4-5)"),
+    model: Optional[str] = typer.Option(None, "--model", "-m", help="AI model to use (default: anthropic/claude-3-7-sonnet)"),
     headless: bool = typer.Option(False, "--headless", help="Run browser in headless mode")
 ):
     load_dotenv()
@@ -50,7 +50,7 @@ def run(
         parsed_goal.context = context
 
     start_url = url or "https://example.com"
-    selected_model = model or os.getenv("BARELY_MODEL") or "anthropic/claude-sonnet-4-5"
+    selected_model = model or os.getenv("BARELY_MODEL") or "anthropic/claude-3-7-sonnet"
 
     typer.echo(f"🤖 Booting Barely AI Agent (model: {selected_model})...")
     engine = BrowserEngine(headless=headless)

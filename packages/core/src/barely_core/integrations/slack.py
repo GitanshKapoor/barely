@@ -93,6 +93,8 @@ class SlackClient:
         failure_reason = run_data.get("failure_reason")
         jira_key = run_data.get("jira_issue_key")
         jira_url = run_data.get("jira_issue_url")
+        github_number = run_data.get("github_issue_number")
+        github_url = run_data.get("github_issue_url")
         steps_count = len(run_data.get("steps", []))
 
         web_base = (base_report_url or get_setting("BARELY_WEB_URL") or "http://localhost:3000").rstrip("/")
@@ -150,6 +152,18 @@ class SlackClient:
                     {
                         "type": "mrkdwn",
                         "text": f"🎫 *Jira Issue:* <{jira_url}|{jira_key}>"
+                    }
+                ]
+            })
+
+        # Add GitHub Issue link context if issue was created
+        if github_number and github_url:
+            blocks.append({
+                "type": "context",
+                "elements": [
+                    {
+                        "type": "mrkdwn",
+                        "text": f"🐙 *GitHub Issue:* <{github_url}|#{github_number}>"
                     }
                 ]
             })

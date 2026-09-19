@@ -35,6 +35,9 @@ class RunRecord(Base):
     isolated_env = Column(Boolean, default=False)
     runner_pod = Column(String, nullable=True)
     create_jira_ticket = Column(Boolean, nullable=True)
+    github_issue_number = Column(Integer, nullable=True)
+    github_issue_url = Column(Text, nullable=True)
+    create_github_issue = Column(Boolean, nullable=True)
     notification_channel = Column(String, nullable=True)
     context = Column(Text, nullable=True)
     
@@ -76,6 +79,9 @@ def init_db():
             conn.execute(text("ALTER TABLE runs ADD COLUMN IF NOT EXISTS runner_pod VARCHAR(255);"))
             conn.execute(text("ALTER TABLE runs ADD COLUMN IF NOT EXISTS notification_channel VARCHAR(64);"))
             conn.execute(text("ALTER TABLE runs ADD COLUMN IF NOT EXISTS create_jira_ticket BOOLEAN;"))
+            conn.execute(text("ALTER TABLE runs ADD COLUMN IF NOT EXISTS github_issue_number INTEGER;"))
+            conn.execute(text("ALTER TABLE runs ADD COLUMN IF NOT EXISTS github_issue_url TEXT;"))
+            conn.execute(text("ALTER TABLE runs ADD COLUMN IF NOT EXISTS create_github_issue BOOLEAN;"))
             conn.commit()
     except Exception:
         pass

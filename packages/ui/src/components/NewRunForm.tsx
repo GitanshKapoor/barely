@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
-import { Play, Globe, Smartphone, Monitor, Tablet, X, Info, Tag, ArrowRight, Loader2, Cpu, ChevronDown, Bell } from 'lucide-react';
+import { Play, Globe, Smartphone, Monitor, Tablet, X, Info, Tag, ArrowRight, Loader2, Cpu, ChevronDown, Bell, Eye, ShieldCheck, Trash2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { formatModelName } from '../utils/models';
 
@@ -18,6 +18,7 @@ export interface RunConfigData {
   tags?: string[];
   isolatedEnv?: boolean;
   createJiraTicket?: boolean;
+  createGithubIssue?: boolean;
   notificationChannel?: string;
 }
 
@@ -31,6 +32,7 @@ interface ModelOption {
   description?: string;
   is_default?: boolean;
   enabled?: boolean;
+  configured?: boolean;
 }
 
 interface NewRunFormProps {
@@ -40,12 +42,14 @@ interface NewRunFormProps {
 }
 
 const emptySubscribe = () => () => {};
+const DRAFT_STORAGE_KEY = 'barely_active_new_run_draft';
 
 export default function NewRunForm({ initialData, triggerButton, onRunCreated }: NewRunFormProps) {
   const mounted = useSyncExternalStore(emptySubscribe, () => true, () => false);
   const [loading, setLoading] = useState(false);
   const [transitioning, setTransitioning] = useState(false);
   const [isOpen, setIsOpen] = useState(false);
+  const [hasRestoredDraft, setHasRestoredDraft] = useState(false);
   const [name, setName] = useState(initialData?.name || '');
   const [url, setUrl] = useState(initialData?.url || 'https://');
   const [goalText, setGoalText] = useState(initialData?.goalText || '');
@@ -55,7 +59,7 @@ export default function NewRunForm({ initialData, triggerButton, onRunCreated }:
   const [useCache, setUseCache] = useState(Boolean(initialData?.useCache));
   const [isolatedEnv, setIsolatedEnv] = useState(Boolean(initialData?.isolatedEnv));
   const [model, setModel] = useState(initialData?.model || '');
-  const [defaultModelName, setDefaultModelName] = useState<string>('anthropic/claude-sonnet-4-5');
+  const [defaultModelName, setDefaultModelName] = useState<string>('anthropic/claude-3-7-sonnet');
   const [availableModels, setAvailableModels] = useState<ModelOption[]>([]);
   const [selectedModelType, setSelectedModelType] = useState<string>('default');
   const [customModelSlug, setCustomModelSlug] = useState<string>('');
@@ -65,16 +69,36 @@ export default function NewRunForm({ initialData, triggerButton, onRunCreated }:
   const [tagInput, setTagInput] = useState('');
   const [toast, setToast] = useState<{ id: string; name: string } | null>(null);
 
-  // Enterprise Integrations (Jira, Slack, Teams)
+  // Enterprise Integrations (Jira, GitHub, Slack, Teams)
   const [jiraConfigured, setJiraConfigured] = useState(false);
   const [jiraProjectKey, setJiraProjectKey] = useState('QA');
+  const [jiraAutoCreateDefault, setJiraAutoCreateDefault] = useState(false);
   const [createJiraTicket, setCreateJiraTicket] = useState(Boolean(initialData?.createJiraTicket));
+  const [githubConfigured, setGithubConfigured] = useState(false);
+  const [githubRepo, setGithubRepo] = useState('GitanshKapoor/barely');
+  const [githubAutoCreateDefault, setGithubAutoCreateDefault] = useState(false);
+  const [createGithubIssue, setCreateGithubIssue] = useState(Boolean(initialData?.createGithubIssue));
   const [slackConfigured, setSlackConfigured] = useState(false);
   const [teamsConfigured, setTeamsConfigured] = useState(false);
   const [defaultNotificationMechanism, setDefaultNotificationMechanism] = useState<string>('both');
   const [notificationChannel, setNotificationChannel] = useState<string>(initialData?.notificationChannel || 'default');
 
   const router = useRouter();
+
+  const clearDraft = () => {
+    if (typeof window === 'undefined') return;
+    try {
+      sessionStorage.removeItem(DRAFT_STORAGE_KEY);
+    } catch {
+      // ignore
+    }
+    setHasRestoredDraft(false);
+  };
+
+  const handleClose = () => {
+    clearDraft();
+    setIsOpen(false);
+  };
 
   useEffect(() => {
     const fetchConfiguration = async () => {
@@ -109,8 +133,19 @@ export default function NewRunForm({ initialData, triggerButton, onRunCreated }:
           if (intg?.jira) {
             setJiraConfigured(Boolean(intg.jira.configured));
             setJiraProjectKey(intg.jira.project_key || 'QA');
+            const autoCreate = Boolean(intg.jira.auto_create);
+            setJiraAutoCreateDefault(autoCreate);
             if (initialData?.createJiraTicket === undefined) {
-              setCreateJiraTicket(Boolean(intg.jira.auto_create));
+              setCreateJiraTicket(autoCreate);
+            }
+          }
+          if (intg?.github) {
+            setGithubConfigured(Boolean(intg.github.configured));
+            setGithubRepo(intg.github.repo || 'GitanshKapoor/barely');
+            const autoCreate = Boolean(intg.github.auto_create);
+            setGithubAutoCreateDefault(autoCreate);
+            if (initialData?.createGithubIssue === undefined) {
+              setCreateGithubIssue(autoCreate);
             }
           }
           if (intg?.slack) {
@@ -130,10 +165,91 @@ export default function NewRunForm({ initialData, triggerButton, onRunCreated }:
     fetchConfiguration();
   }, [initialData]);
 
+  // Auto-restore draft on page reload if user was configuring a test
+  useEffect(() => {
+    if (typeof window === 'undefined' || initialData) return;
+    try {
+      const raw = sessionStorage.getItem(DRAFT_STORAGE_KEY);
+      if (!raw) return;
+      const draft = JSON.parse(raw);
+      if (draft && draft.isPrimary && draft.isOpen) {
+        if (typeof draft.name === 'string') setName(draft.name);
+        if (typeof draft.url === 'string') setUrl(draft.url);
+        if (typeof draft.goalText === 'string') setGoalText(draft.goalText);
+        if (typeof draft.context === 'string') setContext(draft.context);
+        if (typeof draft.device === 'string') setDevice(draft.device);
+        if (typeof draft.strictMode === 'boolean') setStrictMode(draft.strictMode);
+        if (typeof draft.useCache === 'boolean') setUseCache(draft.useCache);
+        if (typeof draft.isolatedEnv === 'boolean') setIsolatedEnv(draft.isolatedEnv);
+        if (typeof draft.model === 'string') setModel(draft.model);
+        if (typeof draft.selectedModelType === 'string') setSelectedModelType(draft.selectedModelType);
+        if (typeof draft.customModelSlug === 'string') setCustomModelSlug(draft.customModelSlug);
+        if (Array.isArray(draft.tags)) setTags(draft.tags);
+        if (typeof draft.autoNavigate === 'boolean') setAutoNavigate(draft.autoNavigate);
+        if (typeof draft.createJiraTicket === 'boolean') setCreateJiraTicket(draft.createJiraTicket);
+        if (typeof draft.createGithubIssue === 'boolean') setCreateGithubIssue(draft.createGithubIssue);
+        if (typeof draft.notificationChannel === 'string') setNotificationChannel(draft.notificationChannel);
+        setIsOpen(true);
+        setHasRestoredDraft(true);
+      }
+    } catch {
+      // ignore parse errors
+    }
+  }, [initialData]);
+
+  // Auto-save draft whenever form fields change while modal is open
+  useEffect(() => {
+    if (typeof window === 'undefined' || initialData) return;
+    if (!isOpen) return;
+
+    const draftData = {
+      isPrimary: true,
+      isOpen: true,
+      name,
+      url,
+      goalText,
+      context,
+      device,
+      strictMode,
+      useCache,
+      isolatedEnv,
+      model,
+      selectedModelType,
+      customModelSlug,
+      tags,
+      autoNavigate,
+      createJiraTicket,
+      createGithubIssue,
+      notificationChannel,
+    };
+    try {
+      sessionStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(draftData));
+    } catch {
+      // ignore storage errors
+    }
+  }, [
+    isOpen, name, url, goalText, context, device, strictMode, useCache,
+    isolatedEnv, model, selectedModelType, customModelSlug, tags,
+    autoNavigate, createJiraTicket, createGithubIssue, notificationChannel, initialData
+  ]);
+
+  // Prevent accidental reload when form has unsaved content
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (isOpen && (goalText.trim() || context.trim() || (name.trim() && name !== ''))) {
+        e.preventDefault();
+        e.returnValue = '';
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [isOpen, goalText, context, name]);
+
   useEffect(() => {
     if (!isOpen) return;
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setIsOpen(false);
+      if (e.key === 'Escape') handleClose();
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
@@ -177,11 +293,27 @@ export default function NewRunForm({ initialData, triggerButton, onRunCreated }:
     setModel(val.trim());
   };
 
+  const handleResetModel = () => {
+    setSelectedModelType('default');
+    setModel('');
+    setCustomModelSlug('');
+  };
+
   const openModal = (e?: React.MouseEvent) => {
     if (e) {
       e.preventDefault();
       e.stopPropagation();
     }
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+    fetch(`${apiUrl}/api/models`)
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (data) {
+          if (data.default_model) setDefaultModelName(data.default_model);
+          if (data.models && Array.isArray(data.models)) setAvailableModels(data.models);
+        }
+      })
+      .catch(() => {});
     if (initialData) {
       setName(initialData.name || '');
       setUrl(initialData.url || 'https://');
@@ -210,24 +342,62 @@ export default function NewRunForm({ initialData, triggerButton, onRunCreated }:
       if (initialData.createJiraTicket !== undefined) {
         setCreateJiraTicket(Boolean(initialData.createJiraTicket));
       }
+      if (initialData.createGithubIssue !== undefined) {
+        setCreateGithubIssue(Boolean(initialData.createGithubIssue));
+      }
       if (initialData.notificationChannel) {
         setNotificationChannel(initialData.notificationChannel);
       }
     } else {
-      setName('');
-      setUrl('https://');
-      setGoalText('');
-      setContext('');
-      setDevice('desktop');
-      setStrictMode(false);
-      setUseCache(false);
-      setIsolatedEnv(isK8sAvailable);
-      setModel('');
-      setSelectedModelType('default');
-      setCustomModelSlug('');
-      setTags([]);
-      setTagInput('');
-      setNotificationChannel('default');
+      let restored = false;
+      try {
+        const raw = sessionStorage.getItem(DRAFT_STORAGE_KEY);
+        if (raw) {
+          const draft = JSON.parse(raw);
+          if (draft && draft.isPrimary && (draft.name || draft.goalText || draft.context)) {
+            restored = true;
+            if (typeof draft.name === 'string') setName(draft.name);
+            if (typeof draft.url === 'string') setUrl(draft.url);
+            if (typeof draft.goalText === 'string') setGoalText(draft.goalText);
+            if (typeof draft.context === 'string') setContext(draft.context);
+            if (typeof draft.device === 'string') setDevice(draft.device);
+            if (typeof draft.strictMode === 'boolean') setStrictMode(draft.strictMode);
+            if (typeof draft.useCache === 'boolean') setUseCache(draft.useCache);
+            if (typeof draft.isolatedEnv === 'boolean') setIsolatedEnv(draft.isolatedEnv);
+            if (typeof draft.model === 'string') setModel(draft.model);
+            if (typeof draft.selectedModelType === 'string') setSelectedModelType(draft.selectedModelType);
+            if (typeof draft.customModelSlug === 'string') setCustomModelSlug(draft.customModelSlug);
+            if (Array.isArray(draft.tags)) setTags(draft.tags);
+            if (typeof draft.autoNavigate === 'boolean') setAutoNavigate(draft.autoNavigate);
+            if (typeof draft.createJiraTicket === 'boolean') setCreateJiraTicket(draft.createJiraTicket);
+            if (typeof draft.createGithubIssue === 'boolean') setCreateGithubIssue(draft.createGithubIssue);
+            if (typeof draft.notificationChannel === 'string') setNotificationChannel(draft.notificationChannel);
+            setHasRestoredDraft(true);
+          }
+        }
+      } catch {
+        // ignore
+      }
+
+      if (!restored) {
+        setName('');
+        setUrl('https://');
+        setGoalText('');
+        setContext('');
+        setDevice('desktop');
+        setStrictMode(false);
+        setUseCache(false);
+        setIsolatedEnv(isK8sAvailable);
+        setModel('');
+        setSelectedModelType('default');
+        setCustomModelSlug('');
+        setTags([]);
+        setTagInput('');
+        setNotificationChannel('default');
+        setCreateJiraTicket(jiraAutoCreateDefault);
+        setCreateGithubIssue(githubAutoCreateDefault);
+        setHasRestoredDraft(false);
+      }
     }
     setIsOpen(true);
   };
@@ -252,10 +422,12 @@ export default function NewRunForm({ initialData, triggerButton, onRunCreated }:
           tags,
           isolated_env: isK8sAvailable ? isolatedEnv : false,
           create_jira_ticket: createJiraTicket,
+          create_github_issue: createGithubIssue,
           notification_channel: notificationChannel
         })
       });
       if (res.ok) {
+        clearDraft();
         const data = await res.json();
         const createdJobId = data.job_id;
 
@@ -305,620 +477,738 @@ export default function NewRunForm({ initialData, triggerButton, onRunCreated }:
 
   const modalContent = (
     <div 
-      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4 text-left whitespace-normal select-auto overflow-y-auto"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-3 sm:p-6 text-left whitespace-normal select-auto overflow-y-auto"
       onClick={(e) => {
-        if (e.target === e.currentTarget) setIsOpen(false);
+        if (e.target === e.currentTarget) handleClose();
       }}
     >
       <form 
         onSubmit={handleRun} 
-        className="bg-[#0d1322] border border-slate-800 rounded-xl p-6 w-full max-w-lg shadow-2xl space-y-5 text-left whitespace-normal relative my-auto"
+        className="bg-[#0d1322] border border-slate-800 rounded-2xl w-full max-w-5xl shadow-2xl flex flex-col max-h-[92vh] overflow-hidden text-left whitespace-normal relative my-auto animate-in fade-in zoom-in-95 duration-150"
       >
-        <div className="flex items-center justify-between pb-3 border-b border-slate-800/80">
-          <div>
-            <h3 className="text-lg font-bold text-slate-100 text-left">
-              {initialData ? 'Re-run & Reconfigure Test' : 'Configure Test Run'}
-            </h3>
-            <p className="text-xs text-slate-400 mt-0.5 text-left">
-              {initialData ? 'Tweak any test parameters and launch a new execution.' : 'The autonomous AI agent will execute your test instructions.'}
-            </p>
+        {/* Pinned Modal Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800/80 bg-[#0d1322] flex-shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-[#0278ff]/10 border border-[#0278ff]/20 flex items-center justify-center text-[#0278ff] flex-shrink-0">
+              <Play className="w-4 h-4 fill-current" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h3 className="text-base font-bold text-slate-100 flex items-center gap-2">
+                  {initialData ? 'Re-run & Reconfigure Test' : 'Configure Test Run'}
+                  {initialData && (
+                    <span className="text-[10px] font-mono font-medium px-2 py-0.5 rounded bg-purple-500/15 text-purple-300 border border-purple-500/30">
+                      Re-run
+                    </span>
+                  )}
+                </h3>
+                {hasRestoredDraft && (
+                  <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-amber-500/15 border border-amber-500/30 text-amber-300 text-[10px] font-mono">
+                    <span>⚡ Draft Restored</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        clearDraft();
+                        setName('');
+                        setUrl('https://');
+                        setGoalText('');
+                        setContext('');
+                        setTags([]);
+                      }}
+                      className="text-amber-400 hover:text-amber-200 underline ml-1 cursor-pointer"
+                      title="Discard draft and start fresh"
+                    >
+                      Clear
+                    </button>
+                  </div>
+                )}
+              </div>
+              <p className="text-xs text-slate-400 mt-0.5">
+                {initialData ? 'Tweak parameters or target environment and launch a new execution.' : 'The autonomous AI agent will navigate, evaluate assertions, and generate audit reports.'}
+              </p>
+            </div>
           </div>
           <button 
             type="button" 
-            onClick={() => setIsOpen(false)} 
+            onClick={handleClose} 
             className="p-1.5 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-white transition-colors cursor-pointer flex-shrink-0"
           >
             <X className="w-4 h-4" />
           </button>
         </div>
 
-        <div className="space-y-4 text-left">
-          {/* Test Name */}
-          <div className="space-y-1.5 text-left">
-            <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider text-left">Test Name</label>
-            <input 
-              type="text" 
-              required 
-              placeholder="e.g. Wikipedia Search Verification"
-              value={name} 
-              onChange={e => setName(e.target.value)}
-              className="w-full block bg-[#070b14] border border-slate-800 rounded-lg px-4 py-2.5 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:border-[#0278ff] focus:ring-1 focus:ring-[#0278ff]" 
-            />
-          </div>
+        {/* Scrollable Body - 2 Column Rectangular Layout */}
+        <div className="p-6 overflow-y-auto flex-1 text-left">
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+            
+            {/* Left Column (7 Cols): Test Definition, Context & Instructions */}
+            <div className="lg:col-span-7 space-y-4">
+              
+              {/* Row 1: Test Name & Target URL Side-by-Side */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                <div className="space-y-1.5 text-left">
+                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider text-left">
+                    Test Name <span className="text-[#0278ff]">*</span>
+                  </label>
+                  <input 
+                    type="text" 
+                    required 
+                    placeholder="e.g. Wikipedia Search Verification"
+                    value={name} 
+                    onChange={e => setName(e.target.value)}
+                    className="w-full block bg-[#070b14] border border-slate-800 rounded-lg px-3.5 py-2.5 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:border-[#0278ff] focus:ring-1 focus:ring-[#0278ff]" 
+                  />
+                </div>
 
-          {/* Target URL */}
-          <div className="space-y-1.5 text-left">
-            <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider text-left">Target URL</label>
-            <div className="relative w-full">
-              <Globe className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 pointer-events-none" />
-              <input 
-                type="url" 
-                required 
-                value={url} 
-                onChange={e => setUrl(e.target.value)}
-                className="w-full block bg-[#070b14] border border-slate-800 rounded-lg pl-10 pr-4 py-2.5 text-sm text-slate-200 focus:outline-none focus:border-[#0278ff] focus:ring-1 focus:ring-[#0278ff]" 
-              />
-            </div>
-          </div>
-
-          {/* Application Context (Given to Model Before Testing) */}
-          <div className="space-y-1.5 text-left">
-            <div className="flex items-center justify-between">
-              <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5 text-left">
-                <span className="w-2 h-2 rounded-full bg-purple-400 inline-block"></span>
-                Application Context <span className="text-[10px] text-slate-500 font-normal lowercase">(given to model before testing)</span>
-              </label>
-              <span className="text-[11px] text-purple-400/80 font-medium">App identity, persona &amp; domain knowledge</span>
-            </div>
-            <textarea 
-              rows={3} 
-              value={context} 
-              onChange={e => setContext(e.target.value)}
-              placeholder={"You are testing an e-commerce store ABC. Act as a customer browsing the catalog, adding items to cart, and proceeding through checkout.\nContext: Dismiss any promotional modal if shown. Sandbox card: 4242-4242-4242-4242."}
-              className="w-full block bg-[#070b14] border border-purple-500/30 rounded-lg p-3 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:border-purple-400 focus:ring-1 focus:ring-purple-400 resize-none font-mono leading-relaxed text-xs" 
-            />
-            <p className="text-[11px] text-slate-500">
-              Injected into the AI agent's system prompt to ground it in your application's domain (e.g. e-commerce, banking, SaaS).
-            </p>
-          </div>
-
-          {/* Test Goal & Instructions (Separate Input Field) */}
-          <div className="space-y-1.5 text-left">
-            <div className="flex items-center justify-between">
-              <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5 text-left">
-                <span className="w-2 h-2 rounded-full bg-[#0278ff] inline-block"></span>
-                Test Goal &amp; Instructions <span className="text-[10px] text-slate-500 font-normal lowercase">(separate step list)</span>
-              </label>
-              <span className="text-[11px] text-slate-500">Numbered sequence of actions</span>
-            </div>
-            <textarea 
-              required 
-              rows={4} 
-              value={goalText} 
-              onChange={e => setGoalText(e.target.value)}
-              placeholder={"1. Type running shoes into search box\n2. Click search button\n3. Click on the first product\n4. Click Add to Cart\n5. Verify cart counter displays 1"}
-              className="w-full block bg-[#070b14] border border-slate-800 rounded-lg p-3 text-sm text-slate-200 placeholder-slate-600 focus:outline-none focus:border-[#0278ff] focus:ring-1 focus:ring-[#0278ff] resize-none font-mono leading-relaxed" 
-            />
-          </div>
-
-          {/* Tags Configuration */}
-          <div className="space-y-2 text-left">
-            <div className="flex items-center justify-between">
-              <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5 text-left">
-                <Tag className="w-3.5 h-3.5 text-[#0278ff]" /> Tags
-              </label>
-              <span className="text-[11px] text-slate-500">Press Enter or comma to add</span>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-1.5 min-h-[42px] p-2 bg-[#070b14] border border-slate-800 rounded-lg focus-within:border-[#0278ff] focus-within:ring-1 focus-within:ring-[#0278ff] transition-all">
-              {tags.map((tag) => (
-                <span
-                  key={tag}
-                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-mono font-medium bg-[#0278ff]/15 text-[#0278ff] border border-[#0278ff]/30 group"
-                >
-                  <span>#{tag}</span>
-                  <button
-                    type="button"
-                    onClick={() => removeTag(tag)}
-                    className="text-slate-400 hover:text-white rounded transition-colors"
-                  >
-                    <X className="w-3 h-3" />
-                  </button>
-                </span>
-              ))}
-              <input
-                type="text"
-                value={tagInput}
-                onChange={(e) => setTagInput(e.target.value)}
-                onKeyDown={handleTagKeyDown}
-                placeholder={tags.length === 0 ? "e.g. smoke, regression, auth, p0..." : "Add more..."}
-                className="flex-1 min-w-[140px] bg-transparent text-sm text-slate-200 placeholder-slate-600 focus:outline-none px-1"
-              />
-            </div>
-
-            <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
-              <span className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Presets:</span>
-              {['smoke', 'regression', 'auth', 'p0', 'e2e'].map((preset) => {
-                const isSelected = tags.includes(preset);
-                return (
-                  <button
-                    key={preset}
-                    type="button"
-                    onClick={() => isSelected ? removeTag(preset) : addTag(preset)}
-                    className={`text-[11px] font-mono px-2 py-0.5 rounded border transition-colors cursor-pointer ${
-                      isSelected
-                        ? 'bg-[#0278ff]/25 text-[#0278ff] border-[#0278ff]/50 font-bold'
-                        : 'bg-slate-900/60 text-slate-400 border-slate-800 hover:border-slate-700 hover:text-slate-300'
-                    }`}
-                  >
-                    {isSelected ? '✓ ' : '+ '}#{preset}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Device Profile */}
-          <div className="space-y-1.5 text-left">
-            <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider text-left">Device Profile</label>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-              {devices.map(d => (
-                <button 
-                  key={d.id} 
-                  type="button" 
-                  onClick={() => setDevice(d.id)}
-                  className={"flex flex-col items-center justify-center gap-1.5 py-3 px-2 rounded-lg border text-xs font-medium transition-colors cursor-pointer text-center " +
-                    (device === d.id
-                      ? 'bg-[#0278ff]/15 border-[#0278ff] text-[#0278ff] font-bold shadow-sm'
-                      : 'bg-[#070b14] border-slate-800 text-slate-400 hover:text-slate-200 hover:border-slate-700')}>
-                  <d.icon className="w-4 h-4 flex-shrink-0" />
-                  <span className="block truncate">{d.label}</span>
-                  <span className="block text-[10px] opacity-60 font-mono">{d.desc}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* AI Model (Optional Dropdown & Presets) */}
-          <div className="space-y-2 text-left pt-2 border-t border-slate-800/80">
-            <div className="flex items-center justify-between">
-              <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5 text-left">
-                <Cpu className="w-3.5 h-3.5 text-purple-400" /> AI Model
-              </label>
-              <span className="text-[11px] text-slate-400 font-medium">
-                Default: <span className="text-purple-300 font-semibold">{formatModelName(defaultModelName)}</span>
-              </span>
-            </div>
-
-            <div className="relative w-full">
-              <select
-                value={selectedModelType}
-                onChange={handleModelSelectChange}
-                className="w-full bg-[#070b14] border border-slate-800 rounded-lg px-3.5 py-2.5 text-xs font-mono text-slate-200 outline-none focus:border-[#0278ff] focus:ring-1 focus:ring-[#0278ff] transition-all cursor-pointer appearance-none pr-8"
-              >
-                <option value="default">
-                  ⚡ Default ({formatModelName(defaultModelName)})
-                </option>
-
-                {availableModels.filter(m => m.provider === 'anthropic' && m.enabled !== false).length > 0 && (
-                  <optgroup label="Anthropic (High Reasoning)">
-                    {availableModels
-                      .filter(m => m.provider === 'anthropic' && m.enabled !== false)
-                      .map(m => (
-                        <option key={m.id} value={m.id}>
-                          {m.name} {m.recommended ? '★ (Recommended)' : ''}
-                        </option>
-                      ))}
-                  </optgroup>
-                )}
-
-                {availableModels.filter(m => m.provider === 'openai' && m.enabled !== false).length > 0 && (
-                  <optgroup label="OpenAI (Vision Grounding)">
-                    {availableModels
-                      .filter(m => m.provider === 'openai' && m.enabled !== false)
-                      .map(m => (
-                        <option key={m.id} value={m.id}>
-                          {m.name} {m.recommended ? '★ (Recommended)' : ''}
-                        </option>
-                      ))}
-                  </optgroup>
-                )}
-
-                {availableModels.filter(m => m.provider === 'gemini' && m.enabled !== false).length > 0 && (
-                  <optgroup label="Google Gemini (Long Context & Vision)">
-                    {availableModels
-                      .filter(m => m.provider === 'gemini' && m.enabled !== false)
-                      .map(m => (
-                        <option key={m.id} value={m.id}>
-                          {m.name} {m.recommended ? '★ (Recommended)' : ''}
-                        </option>
-                      ))}
-                  </optgroup>
-                )}
-
-                {availableModels.filter(m => m.provider === 'groq' && m.enabled !== false).length > 0 && (
-                  <optgroup label="Groq (High-Speed LPU)">
-                    {availableModels
-                      .filter(m => m.provider === 'groq' && m.enabled !== false)
-                      .map(m => (
-                        <option key={m.id} value={m.id}>
-                          {m.name} {m.recommended ? '★ (Recommended)' : ''}
-                        </option>
-                      ))}
-                  </optgroup>
-                )}
-
-                <optgroup label="Custom / Open Source">
-                  <option value="custom">✎ Custom Model Identifier...</option>
-                </optgroup>
-              </select>
-
-              <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-slate-500">
-                <ChevronDown className="w-4 h-4" />
-              </div>
-            </div>
-
-            {selectedModelType === 'custom' && (
-              <div className="pt-1.5 space-y-1">
-                <input
-                  type="text"
-                  value={customModelSlug}
-                  onChange={(e) => handleCustomModelChange(e.target.value)}
-                  placeholder="e.g. ollama/llama3, deepseek/deepseek-r1, mistral/mistral-large"
-                  className="w-full bg-[#0a0f1d] border border-purple-500/40 rounded-lg px-3.5 py-2 text-xs font-mono text-purple-200 placeholder-slate-600 focus:outline-none focus:border-purple-400 focus:ring-1 focus:ring-purple-400 transition-all"
-                  autoFocus
-                />
-                <p className="text-[10px] text-slate-500">
-                  Enter provider prefix + model slug (e.g. <code className="text-purple-300">ollama/qwen2.5</code>).
-                </p>
-              </div>
-            )}
-
-            {selectedModelType !== 'default' && selectedModelType !== 'custom' && (
-              <div className="flex items-center gap-2 pt-0.5">
-                {(() => {
-                  const m = availableModels.find(x => x.id === selectedModelType);
-                  if (!m) return null;
-                  return (
-                    <div className="flex items-center gap-1.5 text-[10px] font-mono text-slate-400">
-                      <span className="px-2 py-0.5 rounded bg-purple-500/10 text-purple-300 border border-purple-500/20 uppercase font-semibold">
-                        {m.provider}
-                      </span>
-                      {m.supports_vision && (
-                        <span className="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-                          👁 Vision Grounding
-                        </span>
-                      )}
-                      {m.context_window && (
-                        <span className="px-2 py-0.5 rounded bg-slate-800 text-slate-400 border border-slate-700">
-                          {m.context_window} Context
-                        </span>
-                      )}
-                    </div>
-                  );
-                })()}
-              </div>
-            )}
-          </div>
-
-          {/* Strict Mode Configuration */}
-          <div className="pt-2 border-t border-slate-800/80 text-left">
-            <div className="flex items-center justify-between p-3 rounded-lg border border-slate-800 bg-[#070b14]">
-              <div className="space-y-0.5 pr-3 text-left">
-                <div className="flex items-center gap-1.5">
-                  <span className="text-xs font-bold text-slate-200">Strict Locator Mode</span>
-                  <div className="relative group cursor-help">
-                    <Info className="w-3.5 h-3.5 text-slate-400 hover:text-[#0278ff] transition-colors" />
-                    <div className="absolute left-0 bottom-full mb-2 hidden group-hover:block w-72 p-3 rounded-lg bg-[#0d1322] border border-slate-700 shadow-2xl text-[11px] text-slate-300 leading-relaxed z-50 pointer-events-none text-left whitespace-normal">
-                      <p className="font-bold text-white mb-1">What is Strict Mode?</p>
-                      <p>
-                        When <strong className="text-emerald-400">Enabled</strong>: Playwright strictly enforces that an interactive element matched by the AI is 100% unique in the DOM. If multiple matching elements exist, the test halts with a strict-mode violation.
-                      </p>
-                      <p className="mt-1.5 text-slate-400">
-                        When <strong className="text-[#0278ff]">Disabled (Recommended)</strong>: Barely auto-heals by interacting with the primary active matching element.
-                      </p>
-                    </div>
+                <div className="space-y-1.5 text-left">
+                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider text-left">
+                    Target URL <span className="text-[#0278ff]">*</span>
+                  </label>
+                  <div className="relative w-full">
+                    <Globe className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 pointer-events-none" />
+                    <input 
+                      type="url" 
+                      required 
+                      value={url} 
+                      onChange={e => setUrl(e.target.value)}
+                      className="w-full block bg-[#070b14] border border-slate-800 rounded-lg pl-9 pr-3.5 py-2.5 text-sm text-slate-200 focus:outline-none focus:border-[#0278ff] focus:ring-1 focus:ring-[#0278ff]" 
+                    />
                   </div>
                 </div>
-                <p className="text-[11px] text-slate-400 text-left">
-                  {strictMode ? 'Fail immediately if duplicate matching elements exist' : 'Auto-heal by targeting primary matching element'}
-                </p>
               </div>
 
-              <label className="relative inline-flex items-center cursor-pointer flex-shrink-0">
-                <input
-                  type="checkbox"
-                  checked={strictMode}
-                  onChange={(e) => setStrictMode(e.target.checked)}
-                  className="sr-only peer"
-                />
-                <div className="w-9 h-5 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#0278ff]"></div>
-              </label>
-            </div>
-          </div>
-
-          {/* GitHub-style Auto-navigate Toggle */}
-          <div className="text-left">
-            <div className="flex items-center justify-between p-3 rounded-lg border border-slate-800 bg-[#070b14]">
-              <div className="space-y-0.5 pr-3 text-left">
-                <div className="flex items-center gap-1.5">
-                  <span className="text-xs font-bold text-slate-200">Auto-navigate to Live Audit</span>
-                  <div className="relative group cursor-help">
-                    <Info className="w-3.5 h-3.5 text-slate-400 hover:text-[#0278ff] transition-colors" />
-                    <div className="absolute left-0 bottom-full mb-2 hidden group-hover:block w-72 p-3 rounded-lg bg-[#0d1322] border border-slate-700 shadow-2xl text-[11px] text-slate-300 leading-relaxed z-50 pointer-events-none text-left whitespace-normal">
-                      <p className="font-bold text-white mb-1">What is Auto-navigate?</p>
-                      <p>
-                        When <strong className="text-emerald-400">Enabled</strong>: Your browser immediately opens the live test execution screen upon queueing the test.
-                      </p>
-                      <p className="mt-1.5 text-slate-400">
-                        When <strong className="text-[#0278ff]">Disabled (Recommended)</strong>: Stays on your current page (GitHub Actions style), updates the runs table in real time, and shows a floating notification toast to view the audit when ready.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-                <p className="text-[11px] text-slate-400 text-left">
-                  {autoNavigate 
-                    ? 'Immediately open live execution logs upon dispatch' 
-                    : 'Stay on page and display background dispatch toast (GitHub Actions style)'}
-                </p>
-              </div>
-
-              <label className="relative inline-flex items-center cursor-pointer flex-shrink-0">
-                <input
-                  type="checkbox"
-                  checked={autoNavigate}
-                  onChange={(e) => setAutoNavigate(e.target.checked)}
-                  className="sr-only peer"
-                />
-                <div className="w-9 h-5 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#0278ff]"></div>
-              </label>
-            </div>
-          </div>
-
-          {/* Ephemeral Pod Isolation Toggle */}
-          <div className="text-left">
-            <div className="flex items-center justify-between p-3 rounded-lg border border-slate-800 bg-[#070b14]">
-              <div className="space-y-0.5 pr-3 text-left">
-                <div className="flex items-center gap-1.5">
-                  <span className="text-xs font-bold text-slate-200">🛡️ Run in Isolated Pod</span>
-                  <div className="relative group cursor-help">
-                    <Info className="w-3.5 h-3.5 text-slate-400 hover:text-[#0278ff] transition-colors" />
-                    <div className="absolute left-0 bottom-full mb-2 hidden group-hover:block w-72 p-3 rounded-lg bg-[#0d1322] border border-slate-700 shadow-2xl text-[11px] text-slate-300 leading-relaxed z-50 pointer-events-none text-left whitespace-normal">
-                      <p className="font-bold text-white mb-1">Ephemeral Pod Isolation</p>
-                      <p>
-                        When <strong className="text-emerald-400">Enabled</strong>: Spawns an isolated, single-use Kubernetes Pod running strictly as an unprivileged non-root user (UID 10001, drop: ALL). Prevents container privilege escalation and isolates memory &amp; processes.
-                      </p>
-                      <p className="mt-1.5 text-slate-400">
-                        When <strong className="text-[#0278ff]">Disabled</strong>: Executes in the persistent daemon worker pool.
-                      </p>
-                    </div>
-                  </div>
-                  <span className={`text-[10px] font-mono font-bold px-1.5 py-0.2 rounded border ${
-                    !isK8sAvailable
-                      ? 'bg-slate-800/80 text-slate-400 border-slate-700'
-                      : isolatedEnv 
-                      ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30' 
-                      : 'bg-slate-800 text-slate-400 border-slate-700'
-                  }`}>
-                    {!isK8sAvailable ? 'Worker Pool (Docker)' : isolatedEnv ? 'Non-Root Pod' : 'Worker Pool'}
-                  </span>
-                </div>
-                <p className="text-[11px] text-slate-400 text-left">
-                  {!isK8sAvailable
-                    ? 'Running in Docker Compose mode. Tests execute in the persistent daemon worker pool.'
-                    : isolatedEnv 
-                    ? 'Spawns dedicated ephemeral non-root Kubernetes pod (UID 10001, /dev/shm sandbox)' 
-                    : 'Runs on shared persistent worker pool (fast execution)'}
-                </p>
-              </div>
-
-              <label className={`relative inline-flex items-center ${!isK8sAvailable ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'} flex-shrink-0`}>
-                <input
-                  type="checkbox"
-                  disabled={!isK8sAvailable}
-                  checked={isK8sAvailable && isolatedEnv}
-                  onChange={(e) => isK8sAvailable && setIsolatedEnv(e.target.checked)}
-                  className="sr-only peer"
-                />
-                <div className="w-9 h-5 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-emerald-500"></div>
-              </label>
-            </div>
-          </div>
-
-          {/* Enterprise Jira Ticket Auto-Creation Toggle */}
-          <div className="text-left">
-            <div className="flex items-center justify-between p-3 rounded-lg border border-slate-800 bg-[#070b14]">
-              <div className="space-y-0.5 pr-3 text-left">
-                <div className="flex items-center gap-1.5">
-                  <span className="text-xs font-bold text-slate-200 flex items-center gap-1.5">
-                    <svg className="w-3.5 h-3.5 fill-[#2684ff]" viewBox="0 0 24 24">
-                      <path d="M11.53 2c0 2.4 1.97 4.35 4.35 4.35h1.78v1.7c0 2.4 1.94 4.34 4.34 4.35V2.84a.84.84 0 0 0-.84-.84H11.53zM6.77 6.8a4.36 4.36 0 0 0 4.34 4.34h1.8v1.72a4.36 4.36 0 0 0 4.34 4.34V7.63a.84.84 0 0 0-.83-.83H6.77zM2 11.6a4.36 4.36 0 0 0 4.34 4.34h1.8v1.72a4.35 4.35 0 0 0 4.35 4.34v-9.57a.84.84 0 0 0-.84-.83H2z"/>
-                    </svg>
-                    Auto-Create Jira Bug on Failure
-                  </span>
-                  <div className="relative group cursor-help">
-                    <Info className="w-3.5 h-3.5 text-slate-400 hover:text-[#0278ff] transition-colors" />
-                    <div className="absolute left-0 bottom-full mb-2 hidden group-hover:block w-72 p-3 rounded-lg bg-[#0d1322] border border-slate-700 shadow-2xl text-[11px] text-slate-300 leading-relaxed z-50 pointer-events-none text-left whitespace-normal">
-                      <p className="font-bold text-white mb-1">Jira Auto-Defect Creation</p>
-                      <p>
-                        When <strong className="text-[#2684ff]">Enabled</strong>: If this test execution encounters an assertion failure or timeout, Barely automatically files a rich Jira bug ticket with reproduction steps, error details, and failure screenshots.
-                      </p>
-                    </div>
-                  </div>
-                  <span className={`text-[10px] font-mono font-bold px-1.5 py-0.2 rounded border ${
-                    !jiraConfigured
-                      ? 'bg-slate-800/80 text-slate-500 border-slate-700'
-                      : createJiraTicket 
-                      ? 'bg-blue-500/15 text-[#2684ff] border-blue-500/30' 
-                      : 'bg-slate-800 text-slate-400 border-slate-700'
-                  }`}>
-                    {!jiraConfigured ? 'Not Configured' : createJiraTicket ? `Active (${jiraProjectKey})` : 'Off'}
-                  </span>
-                </div>
-                <p className="text-[11px] text-slate-400 text-left">
-                  {!jiraConfigured
-                    ? 'Configure Jira Cloud integration in Settings to enable automatic bug ticketing.'
-                    : createJiraTicket 
-                    ? `Auto-files bug issue in project '${jiraProjectKey}' with reproduction artifacts if test fails.` 
-                    : 'Bug ticket will not be auto-filed. Manual 1-click filing is still available in run audit.'}
-                </p>
-              </div>
-
-              <label className={`relative inline-flex items-center ${!jiraConfigured ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'} flex-shrink-0`}>
-                <input
-                  type="checkbox"
-                  disabled={!jiraConfigured}
-                  checked={jiraConfigured && createJiraTicket}
-                  onChange={(e) => jiraConfigured && setCreateJiraTicket(e.target.checked)}
-                  className="sr-only peer"
-                />
-                <div className="w-9 h-5 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#0052cc]"></div>
-              </label>
-            </div>
-          </div>
-
-          {/* Incident Notification Mechanism Dropdown */}
-          <div className="space-y-1.5 text-left pt-2 border-t border-slate-800/80">
-            <div className="flex items-center justify-between">
-              <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5 text-left">
-                <Bell className="w-3.5 h-3.5 text-amber-400" /> Incident Notifications
-              </label>
-              <span className="text-[11px] text-slate-400 font-medium">
-                Default: <span className="text-amber-300 font-semibold font-mono">
-                  {defaultNotificationMechanism === 'both' ? 'Both (Slack & Teams)' : defaultNotificationMechanism === 'slack' ? 'Slack' : defaultNotificationMechanism === 'teams' ? 'Teams' : 'Muted'}
-                </span>
-              </span>
-            </div>
-
-            <div className="relative w-full">
-              <select
-                value={notificationChannel}
-                onChange={(e) => setNotificationChannel(e.target.value)}
-                disabled={!slackConfigured && !teamsConfigured}
-                className="w-full bg-[#070b14] border border-slate-800 rounded-lg px-3.5 py-2.5 text-xs font-mono text-slate-200 outline-none focus:border-[#0278ff] focus:ring-1 focus:ring-[#0278ff] transition-all cursor-pointer appearance-none pr-8 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {!slackConfigured && !teamsConfigured ? (
-                  <option value="default">⚠️ No notification channels configured (set up in Settings)</option>
-                ) : (
-                  <>
-                    <option value="default">
-                      ⚡ Default Channel ({defaultNotificationMechanism === 'both' ? 'Slack & Teams' : defaultNotificationMechanism === 'slack' ? 'Slack' : defaultNotificationMechanism === 'teams' ? 'Teams' : 'None'})
-                    </option>
-
-                    {slackConfigured && teamsConfigured && (
-                      <option value="both">
-                        🔔 Both Slack &amp; Microsoft Teams
-                      </option>
-                    )}
-
-                    {slackConfigured && (
-                      <option value="slack">
-                        💬 Slack Channel Only
-                      </option>
-                    )}
-
-                    {teamsConfigured && (
-                      <option value="teams">
-                        👥 Microsoft Teams Channel Only
-                      </option>
-                    )}
-
-                    <option value="none">
-                      🔕 Mute Notifications for this Run
-                    </option>
-                  </>
-                )}
-              </select>
-
-              <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-slate-500">
-                <ChevronDown className="w-4 h-4" />
-              </div>
-            </div>
-
-            {(!slackConfigured && !teamsConfigured) ? (
-              <p className="text-[10px] text-slate-500">
-                Add Slack or Microsoft Teams incoming webhook URLs in <span className="text-slate-300 underline">Settings</span> to stream alerts.
-              </p>
-            ) : (
-              <p className="text-[10px] text-slate-400">
-                {notificationChannel === 'default'
-                  ? `Dispatches alerts using platform default (${defaultNotificationMechanism === 'both' ? 'Both Slack & Teams' : defaultNotificationMechanism === 'slack' ? 'Slack' : defaultNotificationMechanism === 'teams' ? 'Teams' : 'Muted'}).`
-                  : notificationChannel === 'both'
-                  ? 'Dispatches alerts to both Slack (Block Kit) and Microsoft Teams (Adaptive Cards).'
-                  : notificationChannel === 'slack'
-                  ? 'Dispatches alerts strictly to the configured Slack channel.'
-                  : notificationChannel === 'teams'
-                  ? 'Dispatches alerts strictly to the configured Microsoft Teams channel.'
-                  : 'Suppresses webhook alerts for this execution.'}
-              </p>
-            )}
-          </div>
-
-          {/* AI Decision Caching Toggle - Only relevant when Re-running an existing test */}
-          {initialData && (
-            <div className="text-left">
-              <div className="flex items-center justify-between p-3 rounded-lg border border-slate-800 bg-[#070b14]">
-                <div className="space-y-0.5 pr-3 text-left">
+              {/* Row 2: Application Context */}
+              <div className="space-y-1.5 text-left">
+                <div className="flex items-center justify-between">
                   <div className="flex items-center gap-1.5">
-                    <span className="text-xs font-bold text-slate-200">AI Decision Caching</span>
-                    <div className="relative group cursor-help">
-                      <Info className="w-3.5 h-3.5 text-slate-400 hover:text-[#0278ff] transition-colors" />
-                      <div className="absolute left-0 bottom-full mb-2 hidden group-hover:block w-72 p-3 rounded-lg bg-[#0d1322] border border-slate-700 shadow-2xl text-[11px] text-slate-300 leading-relaxed z-50 pointer-events-none text-left whitespace-normal">
-                        <p className="font-bold text-white mb-1">What is AI Decision Caching?</p>
+                    <label className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5 text-left">
+                      <span className="w-2 h-2 rounded-full bg-purple-400 inline-block"></span>
+                      <span>Application Context</span>
+                    </label>
+                    <div className="relative group cursor-help inline-flex items-center">
+                      <Info className="w-3.5 h-3.5 text-slate-400 hover:text-purple-400 transition-colors" />
+                      <div className="absolute left-0 bottom-full mb-2 hidden group-hover:block w-72 p-3 rounded-lg bg-[#0d1322] border border-slate-700 shadow-2xl text-[11px] text-slate-300 leading-relaxed z-50 pointer-events-none text-left whitespace-normal normal-case font-normal font-sans">
+                        <p className="font-bold text-white mb-1">Application Context</p>
+                        <p className="text-purple-300 mb-1 font-medium">App identity, persona &amp; domain knowledge</p>
                         <p>
-                          When <strong className="text-emerald-400">Enabled</strong>: Replays previous verified LLM decisions for identical DOM states to achieve sub-second execution speed without calling the AI model.
-                        </p>
-                        <p className="mt-1.5 text-slate-400">
-                          When <strong className="text-[#0278ff]">Disabled (Recommended)</strong>: Prompts Claude live at every step to inspect the live page and verify dynamic behavior or recent website changes.
+                          Given to the model before testing. Injected into the AI agent&apos;s system prompt to ground it in your application&apos;s business logic, user roles, sandbox credentials, or custom rules.
                         </p>
                       </div>
                     </div>
-                    <span className={`text-[10px] font-mono font-bold px-1.5 py-0.2 rounded border ${
-                      useCache 
-                        ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30' 
-                        : 'bg-slate-800 text-slate-400 border-slate-700'
-                    }`}>
-                      {useCache ? 'Active' : 'Disabled (Live AI)'}
-                    </span>
                   </div>
-                  <p className="text-[11px] text-slate-400 text-left">
-                    {useCache 
-                      ? 'Replays cached decisions if DOM matches (fastest, skips LLM calls)' 
-                      : 'Disabled (Recommended) — AI agent inspects DOM and prompts Claude live at every step'}
-                  </p>
+                  <span className="text-[10px] text-slate-500 font-mono">Injected into system prompt · Optional</span>
+                </div>
+                <textarea 
+                  value={context} 
+                  onChange={e => setContext(e.target.value)}
+                  placeholder={"You are testing an e-commerce store ABC. Act as a customer browsing the catalog, adding items to cart, and proceeding through checkout.\nContext: Dismiss any promotional modal if shown. Sandbox card: 4242-4242-4242-4242."}
+                  className="w-full h-[150px] block bg-[#070b14] border border-purple-500/30 rounded-lg p-3 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-purple-400 focus:ring-1 focus:ring-purple-400 resize-none font-mono leading-relaxed" 
+                />
+              </div>
+
+              {/* Row 3: Test Goal & Instructions */}
+              <div className="space-y-1.5 text-left">
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5 text-left">
+                    <span className="w-2 h-2 rounded-full bg-[#0278ff] inline-block"></span>
+                    Test Goal &amp; Instructions <span className="text-[#0278ff]">*</span>
+                  </label>
+                  <span className="text-[11px] text-slate-500">Numbered sequence of actions</span>
+                </div>
+                <textarea 
+                  required 
+                  value={goalText} 
+                  onChange={e => setGoalText(e.target.value)}
+                  placeholder={"1. Type running shoes into search box\n2. Click search button\n3. Click on the first product\n4. Click Add to Cart\n5. Verify cart counter displays 1"}
+                  className="w-full h-[150px] block bg-[#070b14] border border-slate-800 rounded-lg p-3 text-xs text-slate-200 placeholder-slate-600 focus:outline-none focus:border-[#0278ff] focus:ring-1 focus:ring-[#0278ff] resize-none font-mono leading-relaxed" 
+                />
+              </div>
+
+              {/* Row 4: Tags Configuration */}
+              <div className="space-y-2 text-left">
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5 text-left">
+                    <Tag className="w-3.5 h-3.5 text-[#0278ff]" /> Tags &amp; Classification
+                  </label>
+                  <span className="text-[11px] text-slate-500">Press Enter or comma to add</span>
                 </div>
 
-                <label className="relative inline-flex items-center cursor-pointer flex-shrink-0">
+                <div className="flex flex-wrap items-center gap-1.5 min-h-[38px] p-2 bg-[#070b14] border border-slate-800 rounded-lg focus-within:border-[#0278ff] focus-within:ring-1 focus-within:ring-[#0278ff] transition-all">
+                  {tags.map((tag) => (
+                    <span
+                      key={tag}
+                      className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-md text-xs font-mono font-medium bg-[#0278ff]/15 text-[#0278ff] border border-[#0278ff]/30 group"
+                    >
+                      <span>#{tag}</span>
+                      <button
+                        type="button"
+                        onClick={() => removeTag(tag)}
+                        className="text-slate-400 hover:text-white rounded transition-colors"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
+                    </span>
+                  ))}
                   <input
-                    type="checkbox"
-                    checked={useCache}
-                    onChange={(e) => setUseCache(e.target.checked)}
-                    className="sr-only peer"
+                    type="text"
+                    value={tagInput}
+                    onChange={(e) => setTagInput(e.target.value)}
+                    onKeyDown={handleTagKeyDown}
+                    placeholder={tags.length === 0 ? "e.g. smoke, regression, auth, p0..." : "Add more..."}
+                    className="flex-1 min-w-[130px] bg-transparent text-xs text-slate-200 placeholder-slate-600 focus:outline-none px-1"
                   />
-                  <div className="w-9 h-5 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-[#0278ff]"></div>
-                </label>
+                </div>
+
+                <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
+                  <span className="text-[10px] uppercase font-bold text-slate-500 tracking-wider">Presets:</span>
+                  {['smoke', 'regression', 'auth', 'p0', 'e2e'].map((preset) => {
+                    const isSelected = tags.includes(preset);
+                    return (
+                      <button
+                        key={preset}
+                        type="button"
+                        onClick={() => isSelected ? removeTag(preset) : addTag(preset)}
+                        className={`text-[11px] font-mono px-2 py-0.5 rounded border transition-colors cursor-pointer ${
+                          isSelected
+                            ? 'bg-[#0278ff]/25 text-[#0278ff] border-[#0278ff]/50 font-bold'
+                            : 'bg-slate-900/60 text-slate-400 border-slate-800 hover:border-slate-700 hover:text-slate-300'
+                        }`}
+                      >
+                        {isSelected ? '✓ ' : '+ '}#{preset}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             </div>
-          )}
+
+            {/* Right Column (5 Cols): Execution Engine, Sandboxing & Integrations */}
+            <div className="lg:col-span-5 space-y-4">
+              
+              {/* Group 1: AI Model & Emulated Device */}
+              <div className="p-4 rounded-xl border border-slate-800/90 bg-[#070b14]/70 space-y-3.5">
+                
+                {/* AI Model */}
+                <div className="space-y-1.5 text-left">
+                  <div className="flex items-center justify-between">
+                    <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5 text-left">
+                      <Cpu className="w-3.5 h-3.5 text-purple-400" /> AI Model
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] text-slate-400 font-medium">
+                        Default: <span className="text-purple-300 font-semibold">{formatModelName(defaultModelName)}</span>
+                      </span>
+                      {selectedModelType !== 'default' && (
+                        <button
+                          type="button"
+                          onClick={handleResetModel}
+                          className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium text-slate-400 hover:text-rose-300 hover:bg-rose-500/10 border border-slate-700 hover:border-rose-500/30 transition-colors cursor-pointer"
+                          title="Reset to Platform Default"
+                        >
+                          <Trash2 className="w-2.5 h-2.5" />
+                          <span>Reset</span>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="relative w-full">
+                    <select
+                      value={selectedModelType}
+                      onChange={handleModelSelectChange}
+                      className="w-full bg-[#0a0f1d] border border-slate-800 rounded-lg px-3 py-2 text-xs font-mono text-slate-200 outline-none focus:border-[#0278ff] focus:ring-1 focus:ring-[#0278ff] transition-all cursor-pointer appearance-none pr-8"
+                    >
+                      <option value="default">
+                        ⚡ Platform Default ({formatModelName(defaultModelName)})
+                      </option>
+
+                      {availableModels.filter(m => m.provider === 'anthropic' && m.enabled !== false && m.configured !== false).length > 0 && (
+                        <optgroup label="Anthropic (High Reasoning)">
+                          {availableModels
+                            .filter(m => m.provider === 'anthropic' && m.enabled !== false && m.configured !== false)
+                            .map(m => (
+                              <option key={m.id} value={m.id}>
+                                {m.name} {m.recommended ? '★ (Recommended)' : ''}
+                              </option>
+                            ))}
+                        </optgroup>
+                      )}
+
+                      {availableModels.filter(m => m.provider === 'openai' && m.enabled !== false && m.configured !== false).length > 0 && (
+                        <optgroup label="OpenAI (Vision Grounding)">
+                          {availableModels
+                            .filter(m => m.provider === 'openai' && m.enabled !== false && m.configured !== false)
+                            .map(m => (
+                              <option key={m.id} value={m.id}>
+                                {m.name} {m.recommended ? '★ (Recommended)' : ''}
+                              </option>
+                            ))}
+                        </optgroup>
+                      )}
+
+                      {availableModels.filter(m => m.provider === 'gemini' && m.enabled !== false && m.configured !== false).length > 0 && (
+                        <optgroup label="Google Gemini (Long Context & Vision)">
+                          {availableModels
+                            .filter(m => m.provider === 'gemini' && m.enabled !== false && m.configured !== false)
+                            .map(m => (
+                              <option key={m.id} value={m.id}>
+                                {m.name} {m.recommended ? '★ (Recommended)' : ''}
+                              </option>
+                            ))}
+                        </optgroup>
+                      )}
+
+                      {availableModels.filter(m => m.provider === 'groq' && m.enabled !== false && m.configured !== false).length > 0 && (
+                        <optgroup label="Groq (High-Speed LPU)">
+                          {availableModels
+                            .filter(m => m.provider === 'groq' && m.enabled !== false && m.configured !== false)
+                            .map(m => (
+                              <option key={m.id} value={m.id}>
+                                {m.name} {m.recommended ? '★ (Recommended)' : ''}
+                              </option>
+                            ))}
+                        </optgroup>
+                      )}
+
+                      <optgroup label="Custom / Open Source">
+                        <option value="custom">✎ Custom Model Identifier...</option>
+                      </optgroup>
+                    </select>
+
+                    <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-slate-500">
+                      <ChevronDown className="w-4 h-4" />
+                    </div>
+                  </div>
+
+                  {selectedModelType === 'custom' && (
+                    <div className="pt-1.5 space-y-1">
+                      <input
+                        type="text"
+                        value={customModelSlug}
+                        onChange={(e) => handleCustomModelChange(e.target.value)}
+                        placeholder="e.g. ollama/llama3, deepseek/deepseek-r1"
+                        className="w-full bg-[#0a0f1d] border border-purple-500/40 rounded-lg px-3 py-1.5 text-xs font-mono text-purple-200 placeholder-slate-600 focus:outline-none focus:border-purple-400 focus:ring-1 focus:ring-purple-400 transition-all"
+                        autoFocus
+                      />
+                      <p className="text-[10px] text-slate-500">
+                        Enter provider prefix + model slug (e.g. <code className="text-purple-300">ollama/qwen2.5</code>).
+                      </p>
+                    </div>
+                  )}
+
+                  {selectedModelType !== 'default' && selectedModelType !== 'custom' && (
+                    <div className="flex items-center gap-1.5 pt-0.5 flex-wrap">
+                      {(() => {
+                        const m = availableModels.find(x => x.id === selectedModelType);
+                        if (!m) return null;
+                        return (
+                          <>
+                            <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-purple-500/10 text-purple-300 border border-purple-500/20 uppercase font-semibold">
+                              {m.provider}
+                            </span>
+                            {m.supports_vision && (
+                              <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 inline-flex items-center gap-1">
+                                <Eye className="w-3 h-3" />
+                                <span>Vision</span>
+                              </span>
+                            )}
+                            {m.context_window && (
+                              <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-slate-800 text-slate-400 border border-slate-700">
+                                {m.context_window}
+                              </span>
+                            )}
+                          </>
+                        );
+                      })()}
+                    </div>
+                  )}
+                </div>
+
+                {/* Emulated Device Profile */}
+                <div className="space-y-1.5 text-left pt-2 border-t border-slate-800/80">
+                  <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider text-left">Device Profile</label>
+                  <div className="grid grid-cols-4 gap-1.5">
+                    {devices.map(d => (
+                      <button 
+                        key={d.id} 
+                        type="button" 
+                        onClick={() => setDevice(d.id)}
+                        className={"flex flex-col items-center justify-center gap-1 py-2 px-1 rounded-lg border text-xs font-medium transition-all cursor-pointer text-center " +
+                          (device === d.id
+                            ? 'bg-[#0278ff]/15 border-[#0278ff] text-[#0278ff] font-bold shadow-sm'
+                            : 'bg-[#0a0f1d] border-slate-800 text-slate-400 hover:text-slate-200 hover:border-slate-700')}>
+                        <d.icon className="w-3.5 h-3.5 flex-shrink-0" />
+                        <span className="block truncate text-[11px]">{d.label}</span>
+                        <span className="block text-[9px] opacity-60 font-mono truncate max-w-full">{d.desc}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Group 2: Sandboxing & Execution Policy */}
+              <div className="space-y-2.5">
+                {/* Ephemeral Pod Isolation Toggle */}
+                <div className="flex items-center justify-between p-3 rounded-xl border border-slate-800 bg-[#070b14]/70">
+                  <div className="space-y-0.5 pr-2.5 text-left min-w-0 flex-1">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <ShieldCheck className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                      <span className="text-xs font-bold text-slate-200">Run in Isolated Pod</span>
+                      <div className="relative group cursor-help inline-flex items-center">
+                        <Info className="w-3.5 h-3.5 text-slate-400 hover:text-[#0278ff] transition-colors" />
+                        <div className="absolute right-0 bottom-full mb-2 hidden group-hover:block w-72 p-3 rounded-lg bg-[#0d1322] border border-slate-700 shadow-2xl text-[11px] text-slate-300 leading-relaxed z-50 pointer-events-none text-left whitespace-normal font-sans font-normal">
+                          <p className="font-bold text-white mb-1">Ephemeral Pod Isolation</p>
+                          <p>
+                            When <strong className="text-emerald-400">Enabled</strong>: Spawns an isolated, single-use Kubernetes Pod running strictly as an unprivileged non-root user (UID 10001, drop: ALL). Prevents privilege escalation and isolates memory &amp; processes.
+                          </p>
+                          <p className="mt-1.5 text-slate-400">
+                            When <strong className="text-[#0278ff]">Disabled</strong>: Executes in the persistent daemon worker pool.
+                          </p>
+                        </div>
+                      </div>
+                      <span className={`text-[9px] font-mono font-bold px-1.5 py-0.2 rounded border shrink-0 ${
+                        !isK8sAvailable
+                          ? 'bg-slate-800/80 text-slate-400 border-slate-700'
+                          : isolatedEnv 
+                          ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30' 
+                          : 'bg-slate-800 text-slate-400 border-slate-700'
+                      }`}>
+                        {!isK8sAvailable ? 'Worker Pool (Docker)' : isolatedEnv ? 'Non-Root Pod' : 'Worker Pool'}
+                      </span>
+                    </div>
+                    <p className="text-[10px] text-slate-400 truncate">
+                      {!isK8sAvailable
+                        ? 'Docker mode: runs in persistent daemon worker pool.'
+                        : isolatedEnv 
+                        ? 'Dedicated ephemeral non-root pod (UID 10001, /dev/shm)' 
+                        : 'Shared persistent worker pool (fast execution)'}
+                    </p>
+                  </div>
+
+                  <label className={`relative inline-flex items-center ${!isK8sAvailable ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'} shrink-0 ml-2`}>
+                    <input
+                      type="checkbox"
+                      disabled={!isK8sAvailable}
+                      checked={isK8sAvailable && isolatedEnv}
+                      onChange={(e) => isK8sAvailable && setIsolatedEnv(e.target.checked)}
+                      className="sr-only peer"
+                    />
+                    <div className="w-8 h-4 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-emerald-500"></div>
+                  </label>
+                </div>
+
+                {/* Strict Locator Mode Toggle */}
+                <div className="flex items-center justify-between p-3 rounded-xl border border-slate-800 bg-[#070b14]/70">
+                  <div className="space-y-0.5 pr-2.5 text-left min-w-0 flex-1">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="text-xs font-bold text-slate-200">Strict Locator Mode</span>
+                      <div className="relative group cursor-help inline-flex items-center">
+                        <Info className="w-3.5 h-3.5 text-slate-400 hover:text-[#0278ff] transition-colors" />
+                        <div className="absolute right-0 bottom-full mb-2 hidden group-hover:block w-72 p-3 rounded-lg bg-[#0d1322] border border-slate-700 shadow-2xl text-[11px] text-slate-300 leading-relaxed z-50 pointer-events-none text-left whitespace-normal font-sans font-normal">
+                          <p className="font-bold text-white mb-1">What is Strict Mode?</p>
+                          <p>
+                            When <strong className="text-emerald-400">Enabled</strong>: Playwright strictly enforces that an interactive element matched by the AI is 100% unique in the DOM. If multiple matching elements exist, the test halts with a strict-mode violation.
+                          </p>
+                          <p className="mt-1.5 text-slate-400">
+                            When <strong className="text-[#0278ff]">Disabled (Recommended)</strong>: Barely auto-heals by interacting with the primary active matching element.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                    <p className="text-[10px] text-slate-400 truncate">
+                      {strictMode ? 'Fail immediately if duplicate matching elements exist' : 'Auto-heal by targeting primary matching element'}
+                    </p>
+                  </div>
+
+                  <label className="relative inline-flex items-center cursor-pointer shrink-0 ml-2">
+                    <input
+                      type="checkbox"
+                      checked={strictMode}
+                      onChange={(e) => setStrictMode(e.target.checked)}
+                      className="sr-only peer"
+                    />
+                    <div className="w-8 h-4 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-[#0278ff]"></div>
+                  </label>
+                </div>
+              </div>
+
+              {/* Group 3: Integrations & Notifications */}
+              <div className="space-y-2.5">
+                {/* Jira Bug Auto-Creation */}
+                <div className="flex items-center justify-between p-3 rounded-xl border border-slate-800 bg-[#070b14]/70">
+                  <div className="space-y-0.5 pr-2.5 text-left min-w-0 flex-1">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <svg className="w-3.5 h-3.5 fill-[#2684ff] shrink-0" viewBox="0 0 24 24">
+                        <path d="M11.53 2c0 2.4 1.97 4.35 4.35 4.35h1.78v1.7c0 2.4 1.94 4.34 4.34 4.35V2.84a.84.84 0 0 0-.84-.84H11.53zM6.77 6.8a4.36 4.36 0 0 0 4.34 4.34h1.8v1.72a4.36 4.36 0 0 0 4.34 4.34V7.63a.84.84 0 0 0-.83-.83H6.77zM2 11.6a4.36 4.36 0 0 0 4.34 4.34h1.8v1.72a4.35 4.35 0 0 0 4.35 4.34v-9.57a.84.84 0 0 0-.84-.83H2z"/>
+                      </svg>
+                      <span className="text-xs font-bold text-slate-200">Auto-Create Jira Bug</span>
+                      <div className="relative group cursor-help inline-flex items-center">
+                        <Info className="w-3.5 h-3.5 text-slate-400 hover:text-[#0278ff] transition-colors" />
+                        <div className="absolute right-0 bottom-full mb-2 hidden group-hover:block w-72 p-3 rounded-lg bg-[#0d1322] border border-slate-700 shadow-2xl text-[11px] text-slate-300 leading-relaxed z-50 pointer-events-none text-left whitespace-normal font-sans font-normal">
+                          <p className="font-bold text-white mb-1">Jira Auto-Defect Creation</p>
+                          <p>
+                            When <strong className="text-[#2684ff]">Enabled</strong>: If this test encounters an assertion failure or timeout, Barely automatically files a rich Jira bug ticket with reproduction steps, error logs, and screenshots.
+                          </p>
+                        </div>
+                      </div>
+                      <span className={`text-[9px] font-mono font-bold px-1.5 py-0.2 rounded border shrink-0 ${
+                        !jiraConfigured
+                          ? 'bg-slate-800/80 text-slate-500 border-slate-700'
+                          : createJiraTicket 
+                          ? 'bg-blue-500/15 text-[#2684ff] border-blue-500/30' 
+                          : 'bg-slate-800 text-slate-400 border-slate-700'
+                      }`}>
+                        {!jiraConfigured ? 'Unconfigured' : createJiraTicket ? `Active (${jiraProjectKey})` : 'Off'}
+                      </span>
+                    </div>
+                    <p className="text-[10px] text-slate-400 truncate">
+                      {!jiraConfigured
+                        ? 'Configure Jira Cloud integration in Settings to enable.'
+                        : createJiraTicket 
+                        ? `Auto-files bug issue in project '${jiraProjectKey}' on failure.` 
+                        : 'Manual 1-click filing is available in run audit.'}
+                    </p>
+                  </div>
+
+                  <label className={`relative inline-flex items-center ${!jiraConfigured ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'} shrink-0 ml-2`}>
+                    <input
+                      type="checkbox"
+                      disabled={!jiraConfigured}
+                      checked={jiraConfigured && createJiraTicket}
+                      onChange={(e) => jiraConfigured && setCreateJiraTicket(e.target.checked)}
+                      className="sr-only peer"
+                    />
+                    <div className="w-8 h-4 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-[#0052cc]"></div>
+                  </label>
+                </div>
+
+                {/* GitHub Issue Auto-Creation */}
+                <div className="flex items-center justify-between p-3 rounded-xl border border-slate-800 bg-[#070b14]/70">
+                  <div className="space-y-0.5 pr-2.5 text-left min-w-0 flex-1">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <svg className="w-3.5 h-3.5 fill-slate-200 shrink-0" viewBox="0 0 24 24">
+                        <path fillRule="evenodd" clipRule="evenodd" d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.53 1.032 1.53 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"/>
+                      </svg>
+                      <span className="text-xs font-bold text-slate-200">Auto-Create GitHub Issue</span>
+                      <div className="relative group cursor-help inline-flex items-center">
+                        <Info className="w-3.5 h-3.5 text-slate-400 hover:text-[#0278ff] transition-colors" />
+                        <div className="absolute right-0 bottom-full mb-2 hidden group-hover:block w-72 p-3 rounded-lg bg-[#0d1322] border border-slate-700 shadow-2xl text-[11px] text-slate-300 leading-relaxed z-50 pointer-events-none text-left whitespace-normal font-sans font-normal">
+                          <p className="font-bold text-white mb-1">GitHub Defect Issue Auto-Filing</p>
+                          <p>
+                            When <strong className="text-[#0278ff]">Enabled</strong>: If this test fails or times out, Barely automatically files a defect issue in your target GitHub repository with reproduction steps, logs, and screenshots.
+                          </p>
+                        </div>
+                      </div>
+                      <span className={`text-[9px] font-mono font-bold px-1.5 py-0.2 rounded border shrink-0 ${
+                        !githubConfigured
+                          ? 'bg-slate-800/80 text-slate-500 border-slate-700'
+                          : createGithubIssue 
+                          ? 'bg-blue-500/15 text-[#0278ff] border-blue-500/30' 
+                          : 'bg-slate-800 text-slate-400 border-slate-700'
+                      }`}>
+                        {!githubConfigured ? 'Unconfigured' : createGithubIssue ? `Active (${githubRepo.split('/')[1] || githubRepo})` : 'Off'}
+                      </span>
+                    </div>
+                    <p className="text-[10px] text-slate-400 truncate">
+                      {!githubConfigured
+                        ? 'Configure GitHub repository & token in Settings to enable.'
+                        : createGithubIssue 
+                        ? `Auto-files issue to '${githubRepo}' on failure.` 
+                        : 'Manual 1-click filing is available in run audit.'}
+                    </p>
+                  </div>
+
+                  <label className={`relative inline-flex items-center ${!githubConfigured ? 'opacity-40 cursor-not-allowed' : 'cursor-pointer'} shrink-0 ml-2`}>
+                    <input
+                      type="checkbox"
+                      disabled={!githubConfigured}
+                      checked={githubConfigured && createGithubIssue}
+                      onChange={(e) => githubConfigured && setCreateGithubIssue(e.target.checked)}
+                      className="sr-only peer"
+                    />
+                    <div className="w-8 h-4 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-[#0278ff]"></div>
+                  </label>
+                </div>
+
+                {/* Incident Notifications Dropdown */}
+                <div className="p-3 rounded-xl border border-slate-800 bg-[#070b14]/70 space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5 text-left">
+                      <Bell className="w-3.5 h-3.5 text-amber-400" /> Incident Notifications
+                    </label>
+                    <span className="text-[10px] text-slate-400 font-medium">
+                      Default: <span className="text-amber-300 font-semibold font-mono">
+                        {defaultNotificationMechanism === 'both' ? 'Slack & Teams' : defaultNotificationMechanism === 'slack' ? 'Slack' : defaultNotificationMechanism === 'teams' ? 'Teams' : 'Muted'}
+                      </span>
+                    </span>
+                  </div>
+
+                  <div className="relative w-full">
+                    <select
+                      value={notificationChannel}
+                      onChange={(e) => setNotificationChannel(e.target.value)}
+                      disabled={!slackConfigured && !teamsConfigured}
+                      className="w-full bg-[#0a0f1d] border border-slate-800 rounded-lg px-3 py-1.5 text-xs font-mono text-slate-200 outline-none focus:border-[#0278ff] focus:ring-1 focus:ring-[#0278ff] transition-all cursor-pointer appearance-none pr-8 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {!slackConfigured && !teamsConfigured ? (
+                        <option value="default">No notification webhooks set up (configure in Settings)</option>
+                      ) : (
+                        <>
+                          <option value="default">
+                            Default Channel ({defaultNotificationMechanism === 'both' ? 'Slack & Teams' : defaultNotificationMechanism === 'slack' ? 'Slack' : defaultNotificationMechanism === 'teams' ? 'Teams' : 'None'})
+                          </option>
+                          {slackConfigured && teamsConfigured && (
+                            <option value="both">Both Slack &amp; Microsoft Teams</option>
+                          )}
+                          {slackConfigured && (
+                            <option value="slack">Slack Channel Only</option>
+                          )}
+                          {teamsConfigured && (
+                            <option value="teams">Microsoft Teams Channel Only</option>
+                          )}
+                          <option value="none">Mute Notifications for this Run</option>
+                        </>
+                      )}
+                    </select>
+
+                    <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-slate-500">
+                      <ChevronDown className="w-4 h-4" />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Group 4: Preferences & Decision Cache */}
+              <div className="space-y-2.5">
+                {/* Auto-navigate Toggle */}
+                <div className="flex items-center justify-between p-3 rounded-xl border border-slate-800 bg-[#070b14]/70">
+                  <div className="space-y-0.5 pr-2.5 text-left min-w-0 flex-1">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="text-xs font-bold text-slate-200">Auto-navigate to Live Audit</span>
+                      <div className="relative group cursor-help inline-flex items-center">
+                        <Info className="w-3.5 h-3.5 text-slate-400 hover:text-[#0278ff] transition-colors" />
+                        <div className="absolute right-0 bottom-full mb-2 hidden group-hover:block w-72 p-3 rounded-lg bg-[#0d1322] border border-slate-700 shadow-2xl text-[11px] text-slate-300 leading-relaxed z-50 pointer-events-none text-left whitespace-normal font-sans font-normal">
+                          <p className="font-bold text-white mb-1">Auto-navigate vs Background Toast</p>
+                          <p>
+                            When <strong className="text-emerald-400">Enabled</strong>: Browser redirects immediately to live test execution logs upon dispatch.
+                          </p>
+                          <p className="mt-1.5 text-slate-400">
+                            When <strong className="text-[#0278ff]">Disabled (Recommended)</strong>: Remains on current page (GitHub Actions style) with a non-intrusive floating toast.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                    <p className="text-[10px] text-slate-400 truncate">
+                      {autoNavigate ? 'Redirect immediately to live execution logs' : 'Stay on current page and show dispatch toast'}
+                    </p>
+                  </div>
+
+                  <label className="relative inline-flex items-center cursor-pointer shrink-0 ml-2">
+                    <input
+                      type="checkbox"
+                      checked={autoNavigate}
+                      onChange={(e) => setAutoNavigate(e.target.checked)}
+                      className="sr-only peer"
+                    />
+                    <div className="w-8 h-4 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-[#0278ff]"></div>
+                  </label>
+                </div>
+
+                {/* AI Decision Caching Toggle - Only when re-running */}
+                {initialData && (
+                  <div className="flex items-center justify-between p-3 rounded-xl border border-slate-800 bg-[#070b14]/70">
+                    <div className="space-y-0.5 pr-2.5 text-left min-w-0 flex-1">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="text-xs font-bold text-slate-200">AI Decision Caching</span>
+                        <div className="relative group cursor-help inline-flex items-center">
+                          <Info className="w-3.5 h-3.5 text-slate-400 hover:text-[#0278ff] transition-colors" />
+                          <div className="absolute right-0 bottom-full mb-2 hidden group-hover:block w-72 p-3 rounded-lg bg-[#0d1322] border border-slate-700 shadow-2xl text-[11px] text-slate-300 leading-relaxed z-50 pointer-events-none text-left whitespace-normal font-sans font-normal">
+                            <p className="font-bold text-white mb-1">What is AI Decision Caching?</p>
+                            <p>
+                              When <strong className="text-emerald-400">Enabled</strong>: Replays previous verified LLM decisions for identical DOM states to achieve sub-second execution speed without calling the AI model.
+                            </p>
+                            <p className="mt-1.5 text-slate-400">
+                              When <strong className="text-[#0278ff]">Disabled (Recommended)</strong>: Prompts Claude live at every step to inspect the live page.
+                            </p>
+                          </div>
+                        </div>
+                        <span className={`text-[9px] font-mono font-bold px-1.5 py-0.2 rounded border shrink-0 ${
+                          useCache 
+                            ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30' 
+                            : 'bg-slate-800 text-slate-400 border-slate-700'
+                        }`}>
+                          {useCache ? 'Active' : 'Disabled (Live AI)'}
+                        </span>
+                      </div>
+                      <p className="text-[10px] text-slate-400 truncate">
+                        {useCache ? 'Replay cached decisions if DOM matches' : 'Prompt Claude live at every step'}
+                      </p>
+                    </div>
+
+                    <label className="relative inline-flex items-center cursor-pointer shrink-0 ml-2">
+                      <input
+                        type="checkbox"
+                        checked={useCache}
+                        onChange={(e) => setUseCache(e.target.checked)}
+                        className="sr-only peer"
+                      />
+                      <div className="w-8 h-4 bg-slate-800 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-[#0278ff]"></div>
+                    </label>
+                  </div>
+                )}
+              </div>
+
+            </div>
+          </div>
         </div>
 
-        <div className="flex items-center gap-3 justify-end pt-2 border-t border-slate-800/80">
-          <button 
-            type="button" 
-            onClick={() => setIsOpen(false)} 
-            className="px-4 py-2 text-sm font-semibold text-slate-400 hover:text-white transition-colors cursor-pointer"
-          >
-            Cancel
-          </button>
-          <button 
-            type="submit" 
-            disabled={loading}
-            className="flex items-center gap-2 px-5 py-2.5 bg-[#0278ff] hover:bg-[#0062d6] text-white text-sm font-semibold rounded-lg shadow-lg shadow-[#0278ff]/20 transition-all disabled:opacity-50 cursor-pointer"
-          >
-            {loading
-              ? <><span className="animate-spin inline-block w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full" /> Queuing Test...</>
-              : <><Play className="w-3.5 h-3.5 fill-current" /> {initialData ? 'Re-run Now' : 'Run Test'}</>}
-          </button>
+        {/* Pinned Modal Footer */}
+        <div className="px-6 py-3.5 border-t border-slate-800/80 bg-[#0a0f1d] flex items-center justify-between flex-shrink-0">
+          <div className="hidden sm:flex items-center gap-2 text-[11px] text-slate-400 font-mono">
+            <span className="flex items-center gap-1.5 px-2 py-1 rounded bg-slate-800/80 border border-slate-700/60">
+              {device === 'desktop' && <Monitor className="w-3 h-3 text-[#0278ff]" />}
+              {device === 'tablet' && <Tablet className="w-3 h-3 text-[#0278ff]" />}
+              {(device === 'ios' || device === 'android') && <Smartphone className="w-3 h-3 text-[#0278ff]" />}
+              <span className="capitalize text-slate-300">{device}</span>
+            </span>
+            <span className="text-slate-600">·</span>
+            <span className="px-2 py-1 rounded bg-purple-500/10 text-purple-300 border border-purple-500/20 truncate max-w-[180px]">
+              {selectedModelType === 'default' 
+                ? formatModelName(defaultModelName) 
+                : selectedModelType === 'custom' 
+                ? (customModelSlug || 'Custom Model') 
+                : formatModelName(selectedModelType)}
+            </span>
+            <span className="text-slate-600">·</span>
+            <span className={`px-2 py-1 rounded border ${
+              !isK8sAvailable 
+                ? 'bg-slate-800/80 text-slate-400 border-slate-700/60' 
+                : isolatedEnv 
+                ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' 
+                : 'bg-slate-800/80 text-slate-400 border-slate-700/60'
+            }`}>
+              {!isK8sAvailable ? 'Worker Pool (Docker)' : isolatedEnv ? 'Isolated Non-Root Pod' : 'Worker Pool'}
+            </span>
+          </div>
+
+          <div className="flex items-center gap-3 ml-auto">
+            <button 
+              type="button" 
+              onClick={handleClose} 
+              className="px-4 py-2 text-xs font-semibold text-slate-400 hover:text-white transition-colors cursor-pointer rounded-lg hover:bg-slate-800/60"
+            >
+              Cancel
+            </button>
+            <button 
+              type="submit" 
+              disabled={loading}
+              className="flex items-center gap-2 px-5 py-2.5 bg-[#0278ff] hover:bg-[#0062d6] text-white text-xs font-semibold rounded-lg shadow-lg shadow-[#0278ff]/20 transition-all disabled:opacity-50 cursor-pointer"
+            >
+              {loading
+                ? <><span className="animate-spin inline-block w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full" /> Queuing Test...</>
+                : <><Play className="w-3.5 h-3.5 fill-current" /> {initialData ? 'Re-run Now' : 'Run Test'}</>}
+            </button>
+          </div>
         </div>
       </form>
     </div>

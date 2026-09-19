@@ -1,3 +1,5 @@
+import os
+import re
 import json
 import uuid
 import datetime
@@ -11,6 +13,34 @@ from pydantic import BaseModel
 from typing import Optional, List
 
 from barely_api.report import router as report_router
+
+def extract_clean_llm_error(raw_err: str) -> str:
+    """Extracts human-readable message from litellm/provider exception strings."""
+    if not raw_err:
+        return "Unknown error occurred"
+    
+    # Check if there is embedded JSON in the error (e.g. Anthropic, OpenAI, LiteLLM)
+    json_match = re.search(r'\{.*\}', raw_err)
+    if json_match:
+        try:
+            parsed = json.loads(json_match.group(0))
+            if isinstance(parsed, dict):
+                if "error" in parsed and isinstance(parsed["error"], dict):
+                    err_obj = parsed["error"]
+                    msg = err_obj.get("message")
+                    err_type = err_obj.get("type", "")
+                    if msg:
+                        prefix = f"{err_type.replace('_', ' ').title()}: " if err_type else ""
+                        return f"{prefix}{msg}"
+                elif "message" in parsed:
+                    return str(parsed["message"])
+        except Exception:
+            pass
+
+    # Strip verbose exception class prefixes
+    cleaned = re.sub(r'^(litellm\.[a-zA-Z0-9_.]+:|Exception:|\w+Exception:)\s*', '', raw_err).strip()
+    cleaned = re.sub(r',\s*request_id:.*$', '', cleaned).strip()
+    return cleaned or raw_err
 
 app = FastAPI(title="Barely Control Plane API")
 
@@ -40,6 +70,7 @@ class RunRequest(BaseModel):
     tags: Optional[List[str]] = []
     isolated_env: Optional[bool] = None
     create_jira_ticket: Optional[bool] = None
+    create_github_issue: Optional[bool] = None
     notification_channel: Optional[str] = None
     context: Optional[str] = None
 
@@ -70,11 +101,22 @@ def list_runs():
                 "failure_reason": r.failure_reason,
                 "strict_mode": bool(r.strict_mode),
                 "use_cache": bool(getattr(r, "use_cache", False)),
-                "model": getattr(r, "model", None) or "anthropic/claude-sonnet-4-5",
+                "model": getattr(r, "model", None) or "anthropic/claude-3-7-sonnet",
                 "tags": [t for t in r.tags.split(",") if t] if r.tags else [],
                 "jira_issue_key": getattr(r, "jira_issue_key", None),
                 "jira_issue_url": getattr(r, "jira_issue_url", None),
-                "create_jira_ticket": getattr(r, "create_jira_ticket", None),
+                "create_jira_ticket": (
+                    r.create_jira_ticket
+                    if getattr(r, "create_jira_ticket", None) is not None
+                    else (get_setting("JIRA_AUTO_CREATE") or "").strip().lower() in ("true", "1", "yes")
+                ),
+                "github_issue_number": getattr(r, "github_issue_number", None),
+                "github_issue_url": getattr(r, "github_issue_url", None),
+                "create_github_issue": (
+                    r.create_github_issue
+                    if getattr(r, "create_github_issue", None) is not None
+                    else (get_setting("GITHUB_AUTO_CREATE") or "").strip().lower() in ("true", "1", "yes")
+                ),
                 "notification_channel": getattr(r, "notification_channel", None),
                 "isolated_env": bool(getattr(r, "isolated_env", False)),
                 "runner_pod": getattr(r, "runner_pod", None),
@@ -160,13 +202,24 @@ def get_run(run_id: str):
             "failure_reason": r.failure_reason,
             "strict_mode": bool(r.strict_mode),
             "use_cache": bool(getattr(r, "use_cache", False)),
-            "model": getattr(r, "model", None) or "anthropic/claude-sonnet-4-5",
+            "model": getattr(r, "model", None) or "anthropic/claude-3-7-sonnet",
             "tags": [t for t in r.tags.split(",") if t] if r.tags else [],
             "created_at": r.created_at.isoformat() if r.created_at else None,
             "logs": r.logs or "",
             "jira_issue_key": getattr(r, "jira_issue_key", None),
             "jira_issue_url": getattr(r, "jira_issue_url", None),
-            "create_jira_ticket": getattr(r, "create_jira_ticket", None),
+            "create_jira_ticket": (
+                r.create_jira_ticket
+                if getattr(r, "create_jira_ticket", None) is not None
+                else (get_setting("JIRA_AUTO_CREATE") or "").strip().lower() in ("true", "1", "yes")
+            ),
+            "github_issue_number": getattr(r, "github_issue_number", None),
+            "github_issue_url": getattr(r, "github_issue_url", None),
+            "create_github_issue": (
+                r.create_github_issue
+                if getattr(r, "create_github_issue", None) is not None
+                else (get_setting("GITHUB_AUTO_CREATE") or "").strip().lower() in ("true", "1", "yes")
+            ),
             "notification_channel": getattr(r, "notification_channel", None),
             "isolated_env": bool(getattr(r, "isolated_env", False)),
             "runner_pod": getattr(r, "runner_pod", None),
@@ -259,7 +312,7 @@ def trigger_run(req: RunRequest):
             initial_logs = f"[{now_str}] ℹ️ Running outside Kubernetes cluster. Executing run on persistent worker pool.\n"
             should_isolate = False
 
-    active_model = req.model.strip() if req.model and req.model.strip() else (get_setting("DEFAULT_MODEL") or "anthropic/claude-sonnet-4-5")
+    active_model = req.model.strip() if req.model and req.model.strip() else (get_setting("DEFAULT_MODEL") or "anthropic/claude-3-7-sonnet")
     db = SessionLocal()
     try:
         new_run = RunRecord(
@@ -276,6 +329,7 @@ def trigger_run(req: RunRequest):
             isolated_env=should_isolate,
             runner_pod=runner_pod_name,
             create_jira_ticket=req.create_jira_ticket,
+            create_github_issue=req.create_github_issue,
             notification_channel=req.notification_channel.strip().lower() if req.notification_channel else None,
             context=req.context.strip() if req.context and req.context.strip() else None,
             logs=initial_logs or None
@@ -310,6 +364,7 @@ class SaveSettingRequest(BaseModel):
 class TestKeyRequest(BaseModel):
     provider: str
     key: Optional[str] = None
+    model: Optional[str] = None
 
 def get_storage_target_info():
     """Classifies database & storage target at a high level (Docker vs GCP vs AWS vs Azure) with ZERO credential leakage."""
@@ -456,20 +511,51 @@ def update_execution_engine(req: SetExecutionEngineRequest):
 
 @app.post("/api/settings")
 def save_setting(req: SaveSettingRequest):
-    from barely_core.settings import set_setting, read_k8s_secret_file
+    from barely_core.settings import set_setting, read_k8s_secret_file, get_secrets_mode
     if not req.key or not req.key.strip():
         raise HTTPException(status_code=400, detail="Key cannot be empty")
     
     key_clean = req.key.strip()
 
-    # Check if actively managed by K8s volume mount or container environment
-    if read_k8s_secret_file(key_clean) or os.getenv(key_clean):
+    # Priority infrastructure locks:
+    # 1. Kubernetes Secret Volume file mount (Helm/ESO)
+    if read_k8s_secret_file(key_clean):
         raise HTTPException(
             status_code=403, 
-            detail=f"Setting '{key_clean}' is managed externally via Helm / Kubernetes Secret (ESO) or Environment. Modifications should be made in your GitOps repository or Cloud Secret Manager."
+            detail=f"Setting '{key_clean}' is mounted via Kubernetes Secret volume and locked against UI modifications."
+        )
+
+    # 2. Maximum pod concurrency is strictly infrastructure-managed
+    if key_clean == "MAX_PARALLEL_PODS":
+        raise HTTPException(
+            status_code=403,
+            detail="MAX_PARALLEL_PODS is an infrastructure capacity constraint managed via Helm values or Environment."
+        )
+
+    # 3. Helm mode active for secret credentials
+    secrets_mode = get_secrets_mode()
+    if secrets_mode["mode"] == "helm" and key_clean in [
+        "ANTHROPIC_API_KEY", "OPENAI_API_KEY", "GEMINI_API_KEY", "GROQ_API_KEY",
+        "JIRA_API_TOKEN", "GITHUB_TOKEN", "SLACK_WEBHOOK_URL", "TEAMS_WEBHOOK_URL"
+    ]:
+        raise HTTPException(
+            status_code=403,
+            detail=f"Helm / GitOps Mode is active. Secret '{key_clean}' must be configured via Helm values or Kubernetes Secret."
         )
         
     set_setting(key_clean, req.value)
+    
+    # Invalidate model discovery cache if an LLM key changed
+    llm_key_map = {
+        "ANTHROPIC_API_KEY": "anthropic",
+        "GROQ_API_KEY": "groq",
+        "OPENAI_API_KEY": "openai",
+        "GEMINI_API_KEY": "gemini"
+    }
+    if key_clean in llm_key_map:
+        from barely_core.models_provider import invalidate_models_cache
+        invalidate_models_cache(llm_key_map[key_clean])
+
     return {"message": f"Setting '{key_clean}' updated successfully", "key": key_clean}
 
 @app.delete("/api/settings/{key}")
@@ -477,16 +563,40 @@ def remove_setting(key: str):
     from barely_core.settings import delete_setting, read_k8s_secret_file
     
     key_clean = key.strip()
-    if read_k8s_secret_file(key_clean) or os.getenv(key_clean):
+    if read_k8s_secret_file(key_clean):
         raise HTTPException(
             status_code=403,
-            detail=f"Cannot delete setting '{key_clean}': managed externally via Infrastructure."
+            detail=f"Cannot delete setting '{key_clean}': mounted via Kubernetes Secret volume."
         )
 
     deleted = delete_setting(key_clean)
-    if not deleted:
-        return {"message": f"No database override found for '{key_clean}'", "deleted": False}
-    return {"message": f"Setting '{key_clean}' database override removed", "deleted": True}
+    if not deleted and key_clean != "DEFAULT_MODEL":
+        return {"message": f"Setting '{key_clean}' was not found", "deleted": False}
+
+    llm_key_map = {
+        "ANTHROPIC_API_KEY": "anthropic",
+        "GROQ_API_KEY": "groq",
+        "OPENAI_API_KEY": "openai",
+        "GEMINI_API_KEY": "gemini"
+    }
+    if key_clean in llm_key_map:
+        from barely_core.models_provider import invalidate_models_cache
+        invalidate_models_cache(llm_key_map[key_clean])
+
+    if key_clean == "DEFAULT_MODEL":
+        from barely_core.models_provider import invalidate_models_cache
+        invalidate_models_cache()
+
+    friendly_names = {
+        "ANTHROPIC_API_KEY": "Anthropic API key",
+        "GROQ_API_KEY": "Groq API key",
+        "OPENAI_API_KEY": "OpenAI API key",
+        "GEMINI_API_KEY": "Google Gemini API key",
+        "GITHUB_TOKEN": "GitHub Personal Access Token",
+        "DEFAULT_MODEL": "Default model configuration",
+    }
+    label = friendly_names.get(key_clean, f"Setting '{key_clean}'")
+    return {"message": f"{label} deleted successfully", "deleted": True}
 
 @app.post("/api/settings/test-key")
 def test_key(req: TestKeyRequest):
@@ -499,16 +609,32 @@ def test_key(req: TestKeyRequest):
     provider_map = {
         "anthropic": (
             [
-                "anthropic/claude-sonnet-4-5",
                 "anthropic/claude-3-7-sonnet",
                 "anthropic/claude-3-5-sonnet-20241022",
-                "anthropic/claude-3-5-haiku-20241022"
+                "anthropic/claude-3-5-haiku-20241022",
+                "claude-3-7-sonnet",
+                "claude-3-5-sonnet"
             ],
             "ANTHROPIC_API_KEY"
         ),
-        "openai": (["gpt-4o-mini", "gpt-4o"], "OPENAI_API_KEY"),
-        "groq": (["groq/llama-3.1-8b-instant", "groq/llama-3.3-70b-versatile"], "GROQ_API_KEY"),
-        "gemini": (["gemini/gemini-1.5-flash", "gemini/gemini-2.0-flash"], "GEMINI_API_KEY")
+        "openai": (
+            ["gpt-4o-mini", "gpt-4o", "openai/gpt-4o-mini", "openai/gpt-4o"],
+            "OPENAI_API_KEY"
+        ),
+        "groq": (
+            [
+                "groq/llama-3.3-70b-versatile",
+                "llama-3.3-70b-versatile",
+                "groq/llama-3.1-8b-instant",
+                "llama-3.1-8b-instant",
+                "groq/deepseek-r1-distill-llama-70b"
+            ],
+            "GROQ_API_KEY"
+        ),
+        "gemini": (
+            ["gemini/gemini-2.0-flash", "gemini/gemini-1.5-flash", "gemini/gemini-1.5-pro"],
+            "GEMINI_API_KEY"
+        )
     }
 
     if provider not in provider_map:
@@ -523,13 +649,30 @@ def test_key(req: TestKeyRequest):
             "error": f"No API key provided or configured for {provider.capitalize()}"
         }
 
+    # Prepend requested model or configured default model if applicable
+    models_to_try = []
+    if req.model and req.model.strip():
+        m_req = req.model.strip()
+        models_to_try.append(m_req)
+        if "/" in m_req:
+            models_to_try.append(m_req.split("/", 1)[1])
+        else:
+            models_to_try.append(f"{provider}/{m_req}")
+
+    for m in candidate_models:
+        if m not in models_to_try:
+            models_to_try.append(m)
+
     last_error_message = None
-    for model_name in candidate_models:
+    if provider == "groq" and active_key:
+        os.environ["GROQ_API_KEY"] = active_key
+
+    for model_name in models_to_try:
         try:
             response = litellm.completion(
                 model=model_name,
                 messages=[{"role": "user", "content": "ping"}],
-                max_tokens=1,
+                max_tokens=16 if provider == "groq" else 1,
                 drop_params=True,
                 api_key=active_key
             )
@@ -541,20 +684,70 @@ def test_key(req: TestKeyRequest):
             err_str = str(e)
             last_error_message = err_str
             err_lower = err_str.lower()
-            # If model is not found on user's account/tier, try next candidate model
-            if "not_found" in err_lower or "not found" in err_lower or "invalid model" in err_lower or "does not exist" in err_lower:
-                continue
-            # If authentication failure or quota exceeded, stop trying
-            break
+            # If genuine authentication failure (401, invalid key), stop trying immediately
+            if "invalid_api_key" in err_lower or "invalid api key" in err_lower or "401" in err_lower or "unauthorized" in err_lower:
+                break
 
-    err_display = last_error_message or "Unknown verification failure"
-    for part in active_key.split("-"):
-        if len(part) > 6 and part in err_display:
-            err_display = err_display.replace(part, "••••")
+            # Secondary attempt for Groq via OpenAI-compatible endpoint
+            if provider == "groq" and active_key:
+                try:
+                    clean_m = model_name.replace("groq/", "")
+                    litellm.completion(
+                        model=f"openai/{clean_m}",
+                        api_base="https://api.groq.com/openai/v1",
+                        messages=[{"role": "user", "content": "ping"}],
+                        max_tokens=16,
+                        drop_params=True,
+                        api_key=active_key
+                    )
+                    return {
+                        "success": True,
+                        "message": f"Groq API key verified successfully via Groq LPU (model: {clean_m})!"
+                    }
+                except Exception as groq_e:
+                    last_error_message = str(groq_e)
+
+            # Otherwise (model mismatch, decommissioned, not found, rate limit on specific model), continue trying candidate models
+            continue
+
+    # Fallback verification: Check directly against provider's models endpoint
+    # If the provider's models endpoint returns 200 OK, the key is 100% valid!
+    if "401" not in (last_error_message or "").lower() and "invalid_api_key" not in (last_error_message or "").lower() and "unauthorized" not in (last_error_message or "").lower():
+        try:
+            from barely_core.models_provider import (
+                fetch_groq_models,
+                fetch_anthropic_models,
+                fetch_openai_models,
+                fetch_gemini_models
+            )
+            live_models = []
+            if provider == "groq":
+                live_models = fetch_groq_models(active_key)
+            elif provider == "anthropic":
+                live_models = fetch_anthropic_models(active_key)
+            elif provider == "openai":
+                live_models = fetch_openai_models(active_key)
+            elif provider == "gemini":
+                live_models = fetch_gemini_models(active_key)
+
+            if live_models:
+                first_model = live_models[0]["name"]
+                return {
+                    "success": True,
+                    "message": f"{provider.capitalize()} API key verified successfully via live API! Discovered {len(live_models)} active models (e.g. {first_model})."
+                }
+        except Exception as probe_err:
+            logger.debug(f"Direct {provider} probe fallback error: {probe_err}")
+
+    err_display = extract_clean_llm_error(last_error_message or "Unknown verification failure")
+    if active_key:
+        for part in active_key.split("-"):
+            if len(part) > 6 and part in err_display:
+                err_display = err_display.replace(part, "••••")
 
     return {
         "success": False,
-        "error": f"Verification failed: {err_display[:250]}"
+        "error": f"Verification failed: {err_display}"
     }
 
 class TestModelRequest(BaseModel):
@@ -565,39 +758,109 @@ class TestModelRequest(BaseModel):
 def test_model(req: TestModelRequest):
     import litellm
     litellm.drop_params = True
-    from barely_core.settings import resolve_model_api_key
+    from barely_core.settings import resolve_model_api_key, get_setting
     
     target_model = req.model.strip() if req.model else ""
     if not target_model:
         raise HTTPException(status_code=400, detail="Model name cannot be empty")
-        
+
+    m_lower = target_model.lower()
+    is_groq = "groq" in m_lower or "llama" in m_lower or "mixtral" in m_lower or "deepseek" in m_lower
+
+    # Auto-prefix groq if omitted (e.g. 'llama-3.3-70b-versatile')
+    if is_groq and not m_lower.startswith("openai/") and not m_lower.startswith("anthropic/") and not m_lower.startswith("gemini/"):
+        if not target_model.startswith("groq/"):
+            target_model = f"groq/{target_model}"
+
     active_key = req.api_key.strip() if req.api_key and req.api_key.strip() else resolve_model_api_key(target_model)
-    
+    if not active_key and is_groq:
+        active_key = get_setting("GROQ_API_KEY")
+
+    if not active_key:
+        provider_name = "Groq" if is_groq else ("Anthropic" if "claude" in m_lower else ("OpenAI" if "gpt" in m_lower else "Provider"))
+        return {
+            "success": False,
+            "error": f"No API key configured for {provider_name}. Please configure your API key in Section 1 first."
+        }
+
+    # If Groq, export GROQ_API_KEY into os.environ for underlying SDK compatibility
+    if is_groq and active_key:
+        os.environ["GROQ_API_KEY"] = active_key
+
+    # For Groq, avoid max_tokens=1 which is rejected with a 400 Bad Request by Groq's API
+    token_limit = 16 if is_groq else 1
+
+    last_error = None
+    # 1. Primary invocation attempt via litellm.completion
     try:
         kwargs = {
             "model": target_model,
             "messages": [{"role": "user", "content": "ping"}],
-            "max_tokens": 1,
-            "drop_params": True
+            "max_tokens": token_limit,
+            "drop_params": True,
+            "api_key": active_key
         }
-        if active_key:
-            kwargs["api_key"] = active_key
-            
         litellm.completion(**kwargs)
         return {
             "success": True,
             "message": f"Verified '{target_model}' successfully (1-token test passed)!"
         }
     except Exception as e:
-        err_str = str(e)
-        if active_key:
-            for part in active_key.split("-"):
-                if len(part) > 6 and part in err_str:
-                    err_str = err_str.replace(part, "••••")
-        return {
-            "success": False,
-            "error": f"Test failed for '{target_model}': {err_str[:250]}"
-        }
+        last_error = str(e)
+        logger.warning(f"Initial test_model failure for {target_model}: {e}")
+
+    # 2. For Groq: secondary invocation attempt via Groq's official OpenAI-compatible endpoint
+    if is_groq and active_key:
+        clean_model = target_model.replace("groq/", "")
+        try:
+            kwargs = {
+                "model": f"openai/{clean_model}",
+                "api_base": "https://api.groq.com/openai/v1",
+                "messages": [{"role": "user", "content": "ping"}],
+                "max_tokens": 16,
+                "drop_params": True,
+                "api_key": active_key
+            }
+            litellm.completion(**kwargs)
+            return {
+                "success": True,
+                "message": f"Verified '{target_model}' successfully on Groq LPU!"
+            }
+        except Exception as e2:
+            last_error = str(e2)
+            logger.warning(f"Secondary OpenAI-compatible test_model failure for {target_model}: {e2}")
+
+        # 3. Fallback: verify via direct Groq models API probe
+        err_lower = (last_error or "").lower()
+        if "401" not in err_lower and "invalid_api_key" not in err_lower and "unauthorized" not in err_lower:
+            try:
+                from barely_core.models_provider import fetch_groq_models
+                live_models = fetch_groq_models(active_key)
+                if live_models:
+                    model_ids = [m["id"].replace("groq/", "") for m in live_models]
+                    if clean_model in model_ids or any(clean_model in mid for mid in model_ids):
+                        return {
+                            "success": True,
+                            "message": f"Verified '{target_model}' successfully! Model is active on your Groq account."
+                        }
+                    else:
+                        active_names = ", ".join(m["name"] for m in live_models[:4])
+                        return {
+                            "success": False,
+                            "error": f"Model '{clean_model}' is not active on Groq. Active models include: {active_names}."
+                        }
+            except Exception as probe_err:
+                logger.debug(f"Direct Groq probe fallback error: {probe_err}")
+
+    clean_msg = extract_clean_llm_error(last_error or "Model verification failed")
+    if active_key:
+        for part in active_key.split("-"):
+            if len(part) > 6 and part in clean_msg:
+                clean_msg = clean_msg.replace(part, "••••")
+    return {
+        "success": False,
+        "error": clean_msg
+    }
 
 # -------------------------------------------------------------
 # Enterprise Jira & Incident Integration Endpoints
@@ -668,6 +931,77 @@ def create_run_jira_issue(run_id: str, req: Optional[CreateJiraIssueRequest] = N
     finally:
         db.close()
 
+class CreateGitHubIssueRequest(BaseModel):
+    repo: Optional[str] = None
+    labels: Optional[str] = None
+    title: Optional[str] = None
+
+@app.post("/api/runs/{run_id}/github")
+def create_run_github_issue(run_id: str, req: Optional[CreateGitHubIssueRequest] = None):
+    """
+    1-Click Manual GitHub Issue Creation from Run Details page.
+    Generates a Markdown reproduction report and files an issue in GitHub.
+    """
+    from barely_core.db import RunStep
+    from barely_core.integrations.github import GitHubClient
+    
+    db = SessionLocal()
+    try:
+        r = db.query(RunRecord).filter(RunRecord.id == run_id).first()
+        if not r:
+            raise HTTPException(status_code=404, detail="Run not found")
+            
+        if r.github_issue_url:
+            return {
+                "success": True,
+                "issue_number": r.github_issue_number,
+                "issue_url": r.github_issue_url,
+                "message": f"GitHub issue #{r.github_issue_number} already exists for this run."
+            }
+            
+        steps = db.query(RunStep).filter(RunStep.run_id == run_id).order_by(RunStep.step_index.asc()).all()
+        run_data = {
+            "id": r.id,
+            "name": (req.title if req and req.title else None) or r.name or r.id,
+            "start_url": r.start_url or "",
+            "device": r.device or "desktop",
+            "status": r.status or "completed",
+            "success": r.success,
+            "failure_reason": r.failure_reason or "Manual failure issue created from Barely UI",
+            "model": getattr(r, "model", None) or "Default Model",
+            "steps": [{"description": s.description, "thought": s.thought} for s in steps]
+        }
+        
+        github_client = GitHubClient()
+        if not github_client.is_configured:
+            raise HTTPException(
+                status_code=400,
+                detail="GitHub integration is not fully configured. Please configure your GitHub Personal Access Token and Target Repository in Settings."
+            )
+            
+        custom_repo = req.repo if req and req.repo else None
+        custom_labels = req.labels if req and req.labels else None
+        success, issue_num, issue_url, error = github_client.create_issue(
+            run_data,
+            repo=custom_repo,
+            labels=custom_labels
+        )
+        if not success or not issue_url:
+            raise HTTPException(status_code=400, detail=error or "Failed to create GitHub issue.")
+            
+        r.github_issue_number = issue_num
+        r.github_issue_url = issue_url
+        db.commit()
+        
+        return {
+            "success": True,
+            "issue_number": issue_num,
+            "issue_url": issue_url,
+            "message": f"Created GitHub issue #{issue_num} successfully!"
+        }
+    finally:
+        db.close()
+
 class SaveIntegrationsRequest(BaseModel):
     jira_host: Optional[str] = None
     jira_email: Optional[str] = None
@@ -675,6 +1009,10 @@ class SaveIntegrationsRequest(BaseModel):
     jira_project_key: Optional[str] = None
     jira_issue_type: Optional[str] = None
     jira_auto_create: Optional[bool] = None
+    github_token: Optional[str] = None
+    github_repo: Optional[str] = None
+    github_labels: Optional[str] = None
+    github_auto_create: Optional[bool] = None
     slack_webhook_url: Optional[str] = None
     slack_notify_on: Optional[str] = None
     teams_webhook_url: Optional[str] = None
@@ -704,6 +1042,7 @@ def save_integrations(req: SaveIntegrationsRequest):
     # Check if attempting to modify secret credentials in Helm mode
     has_secret_edits = any([
         req.jira_api_token is not None and req.jira_api_token.strip(),
+        req.github_token is not None and req.github_token.strip(),
         req.slack_webhook_url is not None and req.slack_webhook_url.strip(),
         req.teams_webhook_url is not None and req.teams_webhook_url.strip(),
     ])
@@ -726,6 +1065,16 @@ def save_integrations(req: SaveIntegrationsRequest):
         set_setting("JIRA_ISSUE_TYPE", req.jira_issue_type.strip(), is_secret=False)
     if req.jira_auto_create is not None:
         set_setting("JIRA_AUTO_CREATE", "true" if req.jira_auto_create else "false", is_secret=False)
+
+    # Save GitHub settings
+    if req.github_repo is not None:
+        set_setting("GITHUB_REPO", req.github_repo.strip(), is_secret=False)
+    if req.github_token is not None and req.github_token.strip():
+        set_setting("GITHUB_TOKEN", req.github_token.strip(), is_secret=True)
+    if req.github_labels is not None:
+        set_setting("GITHUB_LABELS", req.github_labels.strip(), is_secret=False)
+    if req.github_auto_create is not None:
+        set_setting("GITHUB_AUTO_CREATE", "true" if req.github_auto_create else "false", is_secret=False)
 
     # Save Slack settings
     if req.slack_webhook_url is not None and req.slack_webhook_url.strip():
@@ -755,12 +1104,14 @@ class TestIntegrationRequest(BaseModel):
     jira_email: Optional[str] = None
     jira_api_token: Optional[str] = None
     jira_project_key: Optional[str] = None
+    github_token: Optional[str] = None
+    github_repo: Optional[str] = None
     slack_webhook_url: Optional[str] = None
     teams_webhook_url: Optional[str] = None
 
 @app.post("/api/integrations/test")
 def test_integration(req: TestIntegrationRequest):
-    """Verifies credentials and connectivity for Jira, Slack, or Teams."""
+    """Verifies credentials and connectivity for Jira, GitHub, Slack, or Teams."""
     provider = req.provider.strip().lower()
     
     if provider == "jira":
@@ -774,6 +1125,15 @@ def test_integration(req: TestIntegrationRequest):
         )
         return {"success": success, "message": message}
         
+    elif provider in ("github", "gh"):
+        from barely_core.integrations.github import GitHubClient
+        client = GitHubClient()
+        success, message = client.test_connection(
+            token=req.github_token,
+            repo=req.github_repo
+        )
+        return {"success": success, "message": message}
+
     elif provider == "slack":
         from barely_core.integrations.slack import SlackClient
         client = SlackClient()
@@ -787,6 +1147,60 @@ def test_integration(req: TestIntegrationRequest):
         return {"success": success, "message": message}
         
     else:
-        raise HTTPException(status_code=400, detail=f"Unknown provider '{provider}'. Must be 'jira', 'slack', or 'teams'.")
+        raise HTTPException(status_code=400, detail=f"Unknown provider '{provider}'. Must be 'jira', 'github', 'slack', or 'teams'.")
+
+@app.delete("/api/integrations/{provider}")
+def delete_integration(provider: str):
+    """
+    Deletes enterprise integration configuration for Slack, Teams, Jira, or GitHub.
+    Reverts status to unconfigured and wipes encrypted webhooks/tokens from the database.
+    Enforces GitOps/Helm mode protection if active.
+    """
+    from barely_core.settings import delete_setting, get_setting, set_setting, get_secrets_mode, get_integrations_summary
+    
+    secrets_mode = get_secrets_mode()
+    is_helm_mode = secrets_mode["mode"] == "helm"
+    
+    if is_helm_mode:
+        raise HTTPException(
+            status_code=403,
+            detail="Helm / GitOps Mode is active. Integrations managed via Kubernetes Secret cannot be deleted from the UI."
+        )
+        
+    p = provider.strip().lower()
+    if p == "slack":
+        delete_setting("SLACK_WEBHOOK_URL")
+        delete_setting("SLACK_NOTIFY_ON")
+        curr_mech = (get_setting("DEFAULT_NOTIFICATION_MECHANISM") or "both").strip().lower()
+        if curr_mech in ("slack", "both"):
+            teams_url = get_setting("TEAMS_WEBHOOK_URL")
+            set_setting("DEFAULT_NOTIFICATION_MECHANISM", "teams" if teams_url else "none", is_secret=False)
+    elif p in ("teams", "ms_teams"):
+        delete_setting("TEAMS_WEBHOOK_URL")
+        delete_setting("TEAMS_NOTIFY_ON")
+        curr_mech = (get_setting("DEFAULT_NOTIFICATION_MECHANISM") or "both").strip().lower()
+        if curr_mech in ("teams", "both"):
+            slack_url = get_setting("SLACK_WEBHOOK_URL")
+            set_setting("DEFAULT_NOTIFICATION_MECHANISM", "slack" if slack_url else "none", is_secret=False)
+    elif p == "jira":
+        delete_setting("JIRA_HOST")
+        delete_setting("JIRA_EMAIL")
+        delete_setting("JIRA_API_TOKEN")
+        delete_setting("JIRA_PROJECT_KEY")
+        delete_setting("JIRA_ISSUE_TYPE")
+        delete_setting("JIRA_AUTO_CREATE")
+    elif p in ("github", "gh"):
+        delete_setting("GITHUB_TOKEN")
+        delete_setting("GITHUB_REPO")
+        delete_setting("GITHUB_LABELS")
+        delete_setting("GITHUB_AUTO_CREATE")
+    else:
+        raise HTTPException(status_code=400, detail=f"Unknown integration provider '{provider}'. Must be 'jira', 'github', 'slack', or 'teams'.")
+
+    return {
+        "success": True,
+        "message": f"{p.capitalize()} integration removed successfully.",
+        "integrations": get_integrations_summary()
+    }
 
 

@@ -95,6 +95,8 @@ class TeamsClient:
         failure_reason = run_data.get("failure_reason")
         jira_key = run_data.get("jira_issue_key")
         jira_url = run_data.get("jira_issue_url")
+        github_number = run_data.get("github_issue_number")
+        github_url = run_data.get("github_issue_url")
         steps_count = len(run_data.get("steps", []))
 
         web_base = (base_report_url or get_setting("BARELY_WEB_URL") or "http://localhost:3000").rstrip("/")
@@ -128,6 +130,9 @@ class TeamsClient:
         if jira_key and jira_url:
             facts.append({"name": "Jira Ticket", "value": f"[{jira_key}]({jira_url})"})
 
+        if github_number and github_url:
+            facts.append({"name": "GitHub Issue", "value": f"[#{github_number}]({github_url})"})
+
         actions = [
             {
                 "@type": "OpenUri",
@@ -141,6 +146,13 @@ class TeamsClient:
                 "@type": "OpenUri",
                 "name": f"🎫 Jira ({jira_key})",
                 "targets": [{"os": "default", "uri": jira_url}]
+            })
+
+        if github_url:
+            actions.append({
+                "@type": "OpenUri",
+                "name": f"🐙 GitHub (#{github_number})",
+                "targets": [{"os": "default", "uri": github_url}]
             })
 
         card = {

@@ -212,8 +212,8 @@ def mask_secret(secret: Optional[str]) -> str:
     if len(s) <= 8:
         return "••••••••"
     
-    # Check for known prefixes like sk-ant-, sk-, gsk_
-    for prefix in ["sk-ant-", "sk-", "gsk_", "AIza"]:
+    # Check for known prefixes like sk-ant-, sk-, gsk_, ghp_
+    for prefix in ["sk-ant-", "sk-", "gsk_", "AIza", "ghp_", "github_pat_"]:
         if s.startswith(prefix):
             suffix = s[-4:]
             return f"{prefix}••••••••••••{suffix}"

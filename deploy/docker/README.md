@@ -72,6 +72,9 @@ POSTGRES_USER=barely
 POSTGRES_PASSWORD=your_super_secret_password_here
 POSTGRES_DB=barelydb
 
+# Encryption Master Key (Optional: Auto-generated to PostgreSQL if omitted)
+BARELY_SECRET_KEY=your_256_bit_hex_secret_key_here
+
 # AI Model Provider API Keys
 ANTHROPIC_API_KEY=sk-ant-api03-...
 OPENAI_API_KEY=sk-proj-...

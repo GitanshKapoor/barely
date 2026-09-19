@@ -13,7 +13,7 @@ KNOWN_SETTINGS = [
     {"key": "OPENAI_API_KEY", "is_secret": True, "label": "OpenAI API Key", "category": "api_keys", "placeholder": "sk-..."},
     {"key": "GROQ_API_KEY", "is_secret": True, "label": "Groq API Key", "category": "api_keys", "placeholder": "gsk_..."},
     {"key": "GEMINI_API_KEY", "is_secret": True, "label": "Google Gemini API Key", "category": "api_keys", "placeholder": "AIzaSy..."},
-    {"key": "DEFAULT_MODEL", "is_secret": False, "label": "Default AI Model", "category": "model", "placeholder": "anthropic/claude-sonnet-4-5"},
+    {"key": "DEFAULT_MODEL", "is_secret": False, "label": "Default AI Model", "category": "model", "placeholder": "anthropic/claude-3-7-sonnet"},
     {"key": "DEFAULT_DEVICE", "is_secret": False, "label": "Default Test Device", "category": "defaults", "placeholder": "desktop"},
     {"key": "MAX_STEPS", "is_secret": False, "label": "Max Steps Per Test", "category": "defaults", "placeholder": "20"},
     {"key": "STRICT_MODE_DEFAULT", "is_secret": False, "label": "Default Strict Mode", "category": "defaults", "placeholder": "false"},
@@ -24,6 +24,11 @@ KNOWN_SETTINGS = [
     {"key": "JIRA_PROJECT_KEY", "is_secret": False, "label": "Jira Project Key", "category": "jira", "placeholder": "QA"},
     {"key": "JIRA_ISSUE_TYPE", "is_secret": False, "label": "Jira Issue Type", "category": "jira", "placeholder": "Bug"},
     {"key": "JIRA_AUTO_CREATE", "is_secret": False, "label": "Auto-Create Jira Ticket on Failure", "category": "jira", "placeholder": "false"},
+    # GitHub Issues Integration
+    {"key": "GITHUB_TOKEN", "is_secret": True, "label": "GitHub Personal Access Token", "category": "github", "placeholder": "ghp_... or github_pat_..."},
+    {"key": "GITHUB_REPO", "is_secret": False, "label": "GitHub Target Repository", "category": "github", "placeholder": "owner/repo"},
+    {"key": "GITHUB_LABELS", "is_secret": False, "label": "GitHub Issue Labels", "category": "github", "placeholder": "bug, automated-test"},
+    {"key": "GITHUB_AUTO_CREATE", "is_secret": False, "label": "Auto-Create GitHub Issue on Failure", "category": "github", "placeholder": "false"},
     # Slack Incident Alerts
     {"key": "SLACK_WEBHOOK_URL", "is_secret": True, "label": "Slack Webhook URL", "category": "slack", "placeholder": "https://hooks.slack.com/services/..."},
     {"key": "SLACK_NOTIFY_ON", "is_secret": False, "label": "Slack Notification Trigger", "category": "slack", "placeholder": "failure_only"},
@@ -237,6 +242,27 @@ def delete_setting(key: str) -> bool:
         if rec:
             db.delete(rec)
             db.commit()
+
+            # If an API key was deleted, check if DEFAULT_MODEL was using that provider.
+            # If so, remove the DEFAULT_MODEL override so it doesn't point to an unconfigured provider!
+            key_to_prov = {
+                "ANTHROPIC_API_KEY": "anthropic",
+                "GROQ_API_KEY": "groq",
+                "OPENAI_API_KEY": "openai",
+                "GEMINI_API_KEY": "gemini",
+            }
+            if key in key_to_prov:
+                deleted_prov = key_to_prov[key]
+                def_rec = db.query(SettingRecord).filter(SettingRecord.key == "DEFAULT_MODEL").first()
+                if def_rec and def_rec.value:
+                    try:
+                        dec_val = decrypt_secret(def_rec.value)
+                        if get_model_provider(dec_val) == deleted_prov:
+                            db.delete(def_rec)
+                            db.commit()
+                    except Exception:
+                        pass
+
             return True
         return False
     finally:
@@ -282,12 +308,6 @@ def list_settings_status() -> List[Dict[str, Any]]:
             source = "kubernetes"
             is_read_only = True
             masked_val = mask_secret(k8s_file_val) if is_secret else k8s_file_val
-        elif env_val:
-            is_configured = True
-            is_infra_managed = True
-            source = "kubernetes" if in_k8s else "environment"
-            is_read_only = True
-            masked_val = mask_secret(env_val) if is_secret else env_val
         elif db_rec and db_rec.value:
             is_configured = True
             is_infra_managed = False
@@ -302,6 +322,12 @@ def list_settings_status() -> List[Dict[str, Any]]:
                     masked_val = "••••••••"
             else:
                 masked_val = db_rec.value
+        elif env_val:
+            is_configured = True
+            is_infra_managed = True if (is_secret or in_k8s) else False
+            source = "kubernetes" if in_k8s else "environment"
+            is_read_only = True if (is_secret or in_k8s) else False
+            masked_val = mask_secret(env_val) if is_secret else env_val
         else:
             is_configured = False
             is_infra_managed = False
@@ -324,20 +350,48 @@ def list_settings_status() -> List[Dict[str, Any]]:
 
     return result
 
+def get_model_provider(model: str) -> str:
+    """
+    Returns the provider ('anthropic', 'groq', 'openai', 'gemini') for a model name or ID.
+    Explicit provider prefixes take absolute precedence over model name substrings.
+    """
+    m = (model or "").lower().strip()
+    if m.startswith("anthropic/"):
+        return "anthropic"
+    if m.startswith("groq/"):
+        return "groq"
+    if m.startswith("openai/"):
+        return "openai"
+    if m.startswith("gemini/"):
+        return "gemini"
+
+    # Keyword heuristics when model identifier is provided without provider prefix
+    if "claude" in m:
+        return "anthropic"
+    if "llama" in m or "mixtral" in m or "deepseek" in m or "gemma" in m or "groq" in m or "qwen" in m:
+        return "groq"
+    if "gpt" in m or m.startswith("o1") or m.startswith("o3") or "chatgpt" in m:
+        return "openai"
+    if "gemini" in m:
+        return "gemini"
+    return "unknown"
+
 def resolve_model_api_key(model: str) -> Optional[str]:
     """
     Resolves the active API key for a specified LiteLLM model string.
     Supports Anthropic, OpenAI, Groq, and Google Gemini.
     """
-    m = (model or "").lower()
-    if m.startswith("anthropic/") or "claude" in m:
-        return get_setting("ANTHROPIC_API_KEY")
-    elif m.startswith("openai/") or "gpt" in m:
-        return get_setting("OPENAI_API_KEY")
-    elif m.startswith("groq/") or "llama" in m or "mixtral" in m:
-        return get_setting("GROQ_API_KEY")
-    elif m.startswith("gemini/") or "gemini" in m:
-        return get_setting("GEMINI_API_KEY")
+    prov = get_model_provider(model)
+    key_map = {
+        "anthropic": "ANTHROPIC_API_KEY",
+        "groq": "GROQ_API_KEY",
+        "openai": "OPENAI_API_KEY",
+        "gemini": "GEMINI_API_KEY",
+    }
+    key_name = key_map.get(prov)
+    if key_name:
+        val = get_setting(key_name)
+        return val.strip() if val and val.strip() else None
     return None
 
 PROVIDER_DOCS = {
@@ -366,15 +420,6 @@ PROVIDER_DOCS = {
 KNOWN_MODELS = [
     # Anthropic Claude
     {
-        "id": "anthropic/claude-sonnet-4-5",
-        "name": "Claude 3.5 Sonnet",
-        "provider": "anthropic",
-        "supports_vision": True,
-        "recommended": True,
-        "context_window": "200k",
-        "description": "Recommended for end-to-end web QA. Superior spatial awareness, robust DOM locators, and resilient error recovery."
-    },
-    {
         "id": "anthropic/claude-3-7-sonnet",
         "name": "Claude 3.7 Sonnet",
         "provider": "anthropic",
@@ -382,6 +427,15 @@ KNOWN_MODELS = [
         "recommended": True,
         "context_window": "200k",
         "description": "Hybrid standard and extended thinking reasoning model for multi-step enterprise QA."
+    },
+    {
+        "id": "anthropic/claude-3-5-sonnet-20241022",
+        "name": "Claude 3.5 Sonnet",
+        "provider": "anthropic",
+        "supports_vision": True,
+        "recommended": True,
+        "context_window": "200k",
+        "description": "High-precision multimodal model with spatial DOM element awareness and resilient error recovery."
     },
     {
         "id": "anthropic/claude-3-5-haiku-20241022",
@@ -421,18 +475,27 @@ KNOWN_MODELS = [
         "description": "Ultra-fast ~800 tokens/sec for rapid navigation and high-frequency health pings."
     },
     {
-        "id": "groq/mixtral-8x7b-32768",
-        "name": "Mixtral 8x7B MoE",
+        "id": "groq/deepseek-r1-distill-llama-70b",
+        "name": "DeepSeek R1 Distill 70B",
         "provider": "groq",
         "supports_vision": False,
+        "recommended": True,
+        "context_window": "128k",
+        "description": "Open-weights reasoning model running on Groq LPUs for complex problem solving."
+    },
+    {
+        "id": "groq/llama-3.2-11b-vision-preview",
+        "name": "Meta Llama 3.2 11B Vision",
+        "provider": "groq",
+        "supports_vision": True,
         "recommended": False,
-        "context_window": "32k",
-        "description": "Mixture of Experts architecture on Groq for efficient natural language instruction parsing."
+        "context_window": "128k",
+        "description": "Multimodal vision reasoning on Groq LPUs for visual screenshot inspection."
     },
     # OpenAI
     {
         "id": "openai/gpt-4o",
-        "name": "GPT-4o (Omni)",
+        "name": "GPT-4o",
         "provider": "openai",
         "supports_vision": True,
         "recommended": True,
@@ -447,6 +510,15 @@ KNOWN_MODELS = [
         "recommended": False,
         "context_window": "128k",
         "description": "Cost-effective multimodal model for high-volume automated testing pipelines."
+    },
+    {
+        "id": "openai/o3-mini",
+        "name": "OpenAI o3-mini",
+        "provider": "openai",
+        "supports_vision": False,
+        "recommended": True,
+        "context_window": "200k",
+        "description": "High-efficiency reasoning model with deep chain-of-thought analysis for complex workflows."
     },
     # Google Gemini
     {
@@ -479,8 +551,81 @@ KNOWN_MODELS = [
 ]
 
 def list_supported_models() -> Dict[str, Any]:
-    """Returns the model catalog, provider documentation links, and current active default model."""
-    default_model = get_setting("DEFAULT_MODEL") or "anthropic/claude-sonnet-4-5"
+    """
+    Returns the model catalog, provider documentation links, and current active default model.
+    Dynamically queries provider APIs when API keys are configured, falling back to curated active models.
+    """
+    from barely_core.models_provider import get_dynamic_models_for_provider
+
+    default_model = get_setting("DEFAULT_MODEL") or "anthropic/claude-3-7-sonnet"
+
+    # Check which provider keys are configured
+    provider_keys = {
+        "anthropic": get_setting("ANTHROPIC_API_KEY"),
+        "groq": get_setting("GROQ_API_KEY"),
+        "openai": get_setting("OPENAI_API_KEY"),
+        "gemini": get_setting("GEMINI_API_KEY"),
+    }
+
+    # Fetch dynamic models for each configured provider
+    dynamic_models_by_provider: Dict[str, List[Dict[str, Any]]] = {}
+    provider_sync_status: Dict[str, Dict[str, Any]] = {}
+
+    for provider, key in provider_keys.items():
+        is_conf = bool(key and key.strip())
+        if is_conf:
+            try:
+                dyn = get_dynamic_models_for_provider(provider, key.strip())
+                if dyn:
+                    dynamic_models_by_provider[provider] = dyn
+                    provider_sync_status[provider] = {"configured": True, "dynamic": True, "count": len(dyn)}
+                else:
+                    curated_count = len([m for m in KNOWN_MODELS if m["provider"] == provider])
+                    provider_sync_status[provider] = {"configured": True, "dynamic": False, "count": curated_count}
+            except Exception as ex:
+                logger.debug(f"Dynamic fetch error for {provider}: {ex}")
+                curated_count = len([m for m in KNOWN_MODELS if m["provider"] == provider])
+                provider_sync_status[provider] = {"configured": True, "dynamic": False, "count": curated_count, "error": str(ex)}
+        else:
+            provider_sync_status[provider] = {"configured": False, "dynamic": False, "count": 0}
+
+    # Assemble complete model catalog:
+    # If at least one provider has an active API key, ONLY include models for configured providers!
+    has_any_key = any(bool(k and k.strip()) for k in provider_keys.values())
+    combined_models: List[Dict[str, Any]] = []
+
+    for provider in ("anthropic", "groq", "openai", "gemini"):
+        is_conf = bool(provider_keys.get(provider) and provider_keys[provider].strip())
+
+        # Omit unconfigured providers if the user has configured at least one provider key
+        if has_any_key and not is_conf:
+            continue
+
+        if provider in dynamic_models_by_provider and dynamic_models_by_provider[provider]:
+            combined_models.extend(dynamic_models_by_provider[provider])
+        else:
+            provider_defaults = [m for m in KNOWN_MODELS if m["provider"] == provider]
+            for m in provider_defaults:
+                m_copy = dict(m)
+                m_copy["dynamic"] = False
+                combined_models.append(m_copy)
+
+    # Ensure default_model resolves to a configured provider if keys are configured
+    if has_any_key:
+        def_prov = get_model_provider(default_model)
+        if not (provider_keys.get(def_prov) and provider_keys[def_prov].strip()):
+            rec_model = next((m["id"] for m in combined_models if m.get("recommended")), None)
+            default_model = rec_model or (combined_models[0]["id"] if combined_models else "anthropic/claude-3-7-sonnet")
+
+    # Ensure the active default_model is present in combined_models only if its provider is configured
+    if default_model and not any(m["id"] == default_model for m in combined_models):
+        def_prov = get_model_provider(default_model)
+        if not has_any_key or (provider_keys.get(def_prov) and provider_keys[def_prov].strip()):
+            matching_known = next((m for m in KNOWN_MODELS if m["id"] == default_model), None)
+            if matching_known:
+                m_copy = dict(matching_known)
+                m_copy["dynamic"] = False
+                combined_models.append(m_copy)
 
     # Check if Helm or environment specified a list of enabled models
     raw_enabled = os.getenv("MODELS_ENABLED") or os.getenv("BARELY_MODELS_ENABLED")
@@ -495,33 +640,39 @@ def list_supported_models() -> Dict[str, Any]:
             enabled_set = {m.strip() for m in raw_enabled.split(",") if m.strip()}
 
     models_list = []
-    for m in KNOWN_MODELS:
+    for m in combined_models:
         m_copy = dict(m)
         m_copy["is_default"] = (m["id"] == default_model)
         m_copy["enabled"] = (m["id"] in enabled_set) if enabled_set else True
+        prov = m.get("provider", "")
+        m_copy["configured"] = bool(provider_keys.get(prov) and provider_keys[prov].strip())
         models_list.append(m_copy)
 
     return {
         "models": models_list,
         "providers": PROVIDER_DOCS,
-        "default_model": default_model
+        "default_model": default_model,
+        "sync_status": provider_sync_status
     }
 
 def get_integrations_summary() -> Dict[str, Any]:
     """
     Returns the status and non-sensitive configuration for enterprise integrations:
-    Atlassian Jira, Slack Webhooks, and Microsoft Teams Webhooks.
+    Atlassian Jira, GitHub Issues, Slack Webhooks, and Microsoft Teams Webhooks.
     Zero credential leakage: tokens and webhooks are securely masked.
     """
     from barely_core.integrations.jira import JiraClient
+    from barely_core.integrations.github import GitHubClient
     from barely_core.integrations.slack import SlackClient
     from barely_core.integrations.teams import TeamsClient
 
     jira_client = JiraClient()
+    github_client = GitHubClient()
     slack_client = SlackClient()
     teams_client = TeamsClient()
 
     jira_token = get_setting("JIRA_API_TOKEN")
+    github_token = get_setting("GITHUB_TOKEN")
     slack_url = get_setting("SLACK_WEBHOOK_URL")
     teams_url = get_setting("TEAMS_WEBHOOK_URL")
 
@@ -535,6 +686,14 @@ def get_integrations_summary() -> Dict[str, Any]:
             "auto_create": (get_setting("JIRA_AUTO_CREATE") or "false").strip().lower() in ("true", "1", "yes"),
             "has_token": bool(jira_token),
             "masked_token": mask_secret(jira_token) if jira_token else ""
+        },
+        "github": {
+            "configured": github_client.is_configured,
+            "repo": get_setting("GITHUB_REPO") or "",
+            "labels": get_setting("GITHUB_LABELS") or "bug, automated-test",
+            "auto_create": (get_setting("GITHUB_AUTO_CREATE") or "false").strip().lower() in ("true", "1", "yes"),
+            "has_token": bool(github_token),
+            "masked_token": mask_secret(github_token) if github_token else ""
         },
         "slack": {
             "configured": slack_client.is_configured,

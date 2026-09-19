@@ -54,7 +54,7 @@ class RunResult:
     failure_reason: str = None
 
 class AgentLoop:
-    def __init__(self, engine: BrowserEngine, model: str = "anthropic/claude-sonnet-4-5", run_id: str = None, use_cache: bool = False):
+    def __init__(self, engine: BrowserEngine, model: str = "anthropic/claude-3-7-sonnet", run_id: str = None, use_cache: bool = False):
         self.engine = engine
         self.model = model
         self.cache = ActionCache()
@@ -318,16 +318,58 @@ Always adopt the persona, domain knowledge, and testing mindset appropriate for 
             {"role": "user", "content": prompt}
         ]
         
+        import os
+
         # Dynamically resolve encrypted key from DB or fallback to environment
         api_key = resolve_model_api_key(self.model)
+
+        # If active model has no API key configured, check if any alternate provider is configured
+        if not api_key:
+            from barely_core.settings import get_model_provider, get_setting
+            active_prov = get_model_provider(self.model)
+            fallback_candidates = [
+                ("anthropic", "anthropic/claude-3-7-sonnet", "ANTHROPIC_API_KEY"),
+                ("openai", "openai/gpt-4o", "OPENAI_API_KEY"),
+                ("groq", "groq/llama-3.3-70b-versatile", "GROQ_API_KEY"),
+                ("gemini", "gemini/gemini-2.0-flash", "GEMINI_API_KEY"),
+            ]
+            for prov, fallback_model, key_name in fallback_candidates:
+                cand_key = get_setting(key_name)
+                if cand_key and cand_key.strip():
+                    logger.warning(
+                        f"Active model '{self.model}' has no {active_prov.upper()}_API_KEY configured. "
+                        f"Auto-falling back to configured model '{fallback_model}'."
+                    )
+                    self.model = fallback_model
+                    api_key = cand_key.strip()
+                    break
+
+        if not api_key:
+            from barely_core.settings import get_model_provider
+            raise ValueError(
+                f"No API key configured for model '{self.model}'. Please configure your {get_model_provider(self.model).upper()}_API_KEY in Settings."
+            )
+
         call_kwargs = {}
-        if api_key:
-            call_kwargs["api_key"] = api_key
+        call_kwargs["api_key"] = api_key
+
+        model_name = self.model
+        from barely_core.settings import get_model_provider
+        prov = get_model_provider(model_name)
+        is_groq = (prov == "groq")
+        if is_groq:
+            if not model_name.startswith("groq/"):
+                model_name = f"groq/{model_name}"
+            os.environ["GROQ_API_KEY"] = api_key
+
+        # Safe token ceiling to prevent LiteLLM/Groq token overflow or missing token errors
+        call_kwargs["max_tokens"] = 2048
 
         # Call LiteLLM with drop_params=True and resilient fallback for models rejecting custom temperature (e.g. claude-sonnet-5, o1, o3-mini)
+        response = None
         try:
             response = litellm.completion(
-                model=self.model,
+                model=model_name,
                 messages=messages,
                 temperature=0.0,
                 drop_params=True,
@@ -337,20 +379,20 @@ Always adopt the persona, domain knowledge, and testing mindset appropriate for 
             err_str = str(e).lower()
             if "unsupportedparamserror" in err_str or "temperature" in err_str or "unsupported params" in err_str:
                 logger.warning(
-                    f"Model '{self.model}' rejected temperature=0.0 ({e}). Retrying without temperature..."
+                    f"Model '{model_name}' rejected temperature=0.0 ({e}). Retrying without temperature..."
                 )
                 try:
                     response = litellm.completion(
-                        model=self.model,
+                        model=model_name,
                         messages=messages,
                         drop_params=True,
                         **call_kwargs
                     )
                 except Exception as e2:
                     if "temperature=1" in str(e2).lower() or "only temperature=1" in err_str:
-                        logger.warning(f"Model '{self.model}' mandates temperature=1.0. Retrying with temperature=1.0...")
+                        logger.warning(f"Model '{model_name}' mandates temperature=1.0. Retrying with temperature=1.0...")
                         response = litellm.completion(
-                            model=self.model,
+                            model=model_name,
                             messages=messages,
                             temperature=1.0,
                             drop_params=True,
@@ -358,10 +400,32 @@ Always adopt the persona, domain knowledge, and testing mindset appropriate for 
                         )
                     else:
                         raise e2
+            elif is_groq and ("not_found" in err_str or "connection" in err_str or "unsupported" in err_str or "provider" in err_str):
+                # Resilient fallback: Try Groq via its OpenAI-compatible endpoint
+                clean_slug = model_name[5:] if model_name.startswith("groq/") else model_name
+                call_slug = clean_slug if clean_slug.startswith("openai/") else f"openai/{clean_slug}"
+                logger.warning(f"Groq provider invocation error ({e}). Retrying via Groq OpenAI-compatible endpoint...")
+                try:
+                    call_kwargs_openai = dict(call_kwargs)
+                    call_kwargs_openai["api_base"] = "https://api.groq.com/openai/v1"
+                    response = litellm.completion(
+                        model=call_slug,
+                        messages=messages,
+                        drop_params=True,
+                        **call_kwargs_openai
+                    )
+                except Exception as e_retry:
+                    raise e_retry
             else:
                 raise
-        raw_output = response.choices[0].message.content
+
+        raw_output = ""
+        if response and response.choices and len(response.choices) > 0 and response.choices[0].message:
+            raw_output = response.choices[0].message.content or ""
         
+        # Strip DeepSeek R1 reasoning thought tags (<think>...</think>) if present
+        raw_output = re.sub(r'<think>.*?</think>', '', raw_output, flags=re.DOTALL).strip()
+
         # More robust JSON extraction using regex to find the first { and last }
         json_match = re.search(r'\{.*\}', raw_output, re.DOTALL)
         if json_match:
@@ -375,24 +439,37 @@ Always adopt the persona, domain knowledge, and testing mindset appropriate for 
     def _save_result_db(self, success: bool, reason: str, rich_history: list):
         if not self.run_id:
             return
+        # 1. Record outcome and failure reason first
         db = SessionLocal()
         try:
             run_rec = db.query(RunRecord).filter(RunRecord.id == self.run_id).first()
-            if run_rec:
-                if run_rec.status != "cancelled":
-                    run_rec.status = "completed"
-                    run_rec.success = success
-                    run_rec.failure_reason = reason
+            if run_rec and run_rec.status != "cancelled":
+                run_rec.success = success
+                run_rec.failure_reason = reason
                 db.commit()
         except Exception as e:
             logger.error(f"DB Save Error: {e}")
         finally:
             db.close()
 
-        # Trigger notifications & automated Jira filing asynchronously/post-commit
+        # 2. Trigger integrations (Jira ticket auto-creation, Slack/Teams)
+        # Executing before marking status 'completed' eliminates race condition with UI polling.
         try:
             from barely_core.integrations.dispatcher import dispatch_run_notifications
             dispatch_run_notifications(self.run_id)
         except Exception as ne:
             logger.error(f"Failed to dispatch post-run integrations for {self.run_id}: {ne}")
+
+        # 3. Mark run status as completed
+        db = SessionLocal()
+        try:
+            run_rec = db.query(RunRecord).filter(RunRecord.id == self.run_id).first()
+            if run_rec and run_rec.status != "cancelled":
+                run_rec.status = "completed"
+                db.commit()
+        except Exception as e:
+            logger.error(f"DB Status Completion Error: {e}")
+        finally:
+            db.close()
+
 

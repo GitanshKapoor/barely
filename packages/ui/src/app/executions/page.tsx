@@ -15,7 +15,8 @@ import {
   X, 
   Tag, 
   Monitor,
-  Cpu
+  Cpu,
+  ShieldCheck
 } from 'lucide-react';
 import { formatModelName } from '../../utils/models';
 
@@ -384,8 +385,33 @@ export default function ExecutionsPage() {
                       <span className="truncate max-w-xs">{run.name || run.id}</span>
                       {run.isolated_env && (
                         <span className="inline-flex items-center gap-1 text-[9px] font-mono font-bold text-emerald-400 bg-emerald-500/10 border border-emerald-500/25 px-1.5 py-0.2 rounded" title="Isolated Ephemeral Non-Root Pod">
-                          🛡️ Isolated Pod
+                          <ShieldCheck className="w-2.5 h-2.5" />
+                          <span>Isolated Pod</span>
                         </span>
+                      )}
+                      {run.jira_issue_key && (
+                        <a
+                          href={run.jira_issue_url || '#'}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          className="inline-flex items-center gap-1 text-[9px] font-mono font-bold text-[#2684ff] bg-[#0052cc]/15 border border-[#0052cc]/30 px-1.5 py-0.5 rounded hover:bg-[#0052cc]/25 transition-colors"
+                          title={`Jira Issue: ${run.jira_issue_key}`}
+                        >
+                          <span>{run.jira_issue_key}</span>
+                        </a>
+                      )}
+                      {run.github_issue_number && (
+                        <a
+                          href={run.github_issue_url || '#'}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          className="inline-flex items-center gap-1 text-[9px] font-mono font-bold text-slate-300 bg-slate-800 border border-slate-700 px-1.5 py-0.5 rounded hover:bg-slate-700 transition-colors"
+                          title={`GitHub Issue #${run.github_issue_number}`}
+                        >
+                          <span>#{run.github_issue_number}</span>
+                        </a>
                       )}
                     </div>
                     {run.tags && run.tags.length > 0 && (
@@ -423,11 +449,36 @@ export default function ExecutionsPage() {
                       run.status === 'cancelled' ? 'bg-orange-500/10 text-orange-400 border-orange-500/25' :
                       'bg-amber-500/10 text-amber-400 border-amber-500/20'
                     }`}>
-                      {run.status === "pending" && "⏳ Pending"}
-                      {run.status === "running" && "🔄 Running..."}
-                      {run.status === "completed" && run.success && "✓ Passed"}
-                      {run.status === "completed" && !run.success && "✕ Failed"}
-                      {run.status === "cancelled" && "⊘ Cancelled"}
+                      {run.status === "pending" && (
+                        <>
+                          <Clock className="w-3 h-3 text-amber-400" />
+                          <span>Pending</span>
+                        </>
+                      )}
+                      {run.status === "running" && (
+                        <>
+                          <RotateCw className="w-3 h-3 animate-spin text-[#0278ff]" />
+                          <span>Running...</span>
+                        </>
+                      )}
+                      {run.status === "completed" && run.success && (
+                        <>
+                          <CheckCircle2 className="w-3 h-3 text-emerald-400" />
+                          <span>Passed</span>
+                        </>
+                      )}
+                      {run.status === "completed" && !run.success && (
+                        <>
+                          <XCircle className="w-3 h-3 text-rose-400" />
+                          <span>Failed</span>
+                        </>
+                      )}
+                      {run.status === "cancelled" && (
+                        <>
+                          <Ban className="w-3 h-3 text-orange-400" />
+                          <span>Cancelled</span>
+                        </>
+                      )}
                     </span>
                   </td>
                   <td className="px-6 py-4 text-right whitespace-nowrap align-middle">
@@ -456,6 +507,7 @@ export default function ExecutionsPage() {
                           model: run.model,
                           tags: run.tags || [],
                           createJiraTicket: run.create_jira_ticket ?? undefined,
+                          createGithubIssue: run.create_github_issue ?? undefined,
                           notificationChannel: run.notification_channel ?? undefined
                         }}
                         onRunCreated={() => fetchRuns()}
