@@ -75,19 +75,44 @@ Once running, access:
 
 ### Option B: Local CLI Installation
 
-Install Barely as a standalone Python CLI:
+Barely includes automated, zero-assumption installation scripts for Ubuntu/Debian (EC2/Cloud VMs), RHEL/Fedora, macOS, and Windows:
 
+#### Quick Automated Setup
 ```bash
-# We recommend using uv for lightning-fast installation
-uv pip install barely
+git clone https://github.com/GitanshKapoor/barely.git
+cd barely
+
+# 1. Run the cross-platform installer (auto-detects OS and installs packages & browser dependencies)
+./install.sh
+
+# Or run the dedicated installer for your specific operating system:
+# Ubuntu/Debian (EC2):  ./scripts/install-ubuntu.sh
+# RHEL/Amazon Linux:    ./scripts/install-rhel.sh
+# macOS:                ./scripts/install-mac.sh
+# Windows PowerShell:   powershell -ExecutionPolicy Bypass -File scripts\install-windows.ps1
 ```
 
-**1. Initialize a Workspace**
+#### 2. Verify Setup with Environment Diagnostics
+Run `barely doctor` at any time to verify Python, Playwright Chromium, system display status, and configured AI keys:
 ```bash
-barely init
+source .venv/bin/activate
+barely doctor
 ```
 
-**2. Write a Test Goal with Application Context** (`.barely/goals/checkout.md`)
+#### 3. Configure API Keys Securely
+Add your AI keys without opening text editors or leaking tokens into your shell history:
+```bash
+# Set interactively via hidden prompt (never leaks into bash history):
+barely secret set ANTHROPIC_API_KEY
+
+# Or set directly:
+barely secret set GROQ_API_KEY gsk_...
+
+# View configured secrets (safely masked):
+barely secret list
+```
+
+#### 4. Write a Test Goal (`.barely/goals/checkout.md`)
 ```markdown
 ---
 name: Checkout Flow
@@ -102,7 +127,7 @@ context: "You are testing an e-commerce store ABC. Act as a shopper browsing the
 4. Verify the cart badge displays "1"
 ```
 
-**3. Run the Agent (with optional CLI context override)**
+#### 5. Run the Agent
 ```bash
 barely run \
   --url https://staging.myapp.com \
@@ -110,6 +135,7 @@ barely run \
   --context "You are testing an e-commerce store ABC" \
   --model anthropic/claude-sonnet-4-5
 ```
+> 💡 *Note: On headless Linux cloud instances or SSH sessions without an active monitor, Barely automatically activates `--headless` mode.*
 
 ## 🏗️ Enterprise Cloud Deployments & Runbooks
 

@@ -721,21 +721,21 @@
 
       <!-- Tabs Navigation -->
       <div class="flex flex-wrap justify-center gap-2 mb-6 px-1">
-        <button onclick="switchTab('docker')" id="tab-btn-docker" class="tab-btn active px-3.5 py-2 sm:px-4 sm:py-2 rounded-lg text-xs sm:text-sm font-semibold bg-brand-500 text-white shadow-lg transition-all flex items-center gap-1.5">
+        <button onclick="switchTab('cli')" id="tab-btn-cli" class="tab-btn active px-3.5 py-2 sm:px-4 sm:py-2 rounded-lg text-xs sm:text-sm font-semibold bg-brand-500 text-white shadow-lg transition-all flex items-center gap-1.5">
+          <i data-lucide="terminal" class="w-4 h-4"></i>
+          <span>Native CLI</span>
+        </button>
+        <button onclick="switchTab('docker')" id="tab-btn-docker" class="tab-btn px-3.5 py-2 sm:px-4 sm:py-2 rounded-lg text-xs sm:text-sm font-semibold bg-dark-800 text-slate-300 hover:bg-dark-700 transition-all flex items-center gap-1.5 border border-dark-700">
           <i data-lucide="container" class="w-4 h-4"></i>
           <span>Docker Compose</span>
-        </button>
-        <button onclick="switchTab('helm')" id="tab-btn-helm" class="tab-btn px-3.5 py-2 sm:px-4 sm:py-2 rounded-lg text-xs sm:text-sm font-semibold bg-dark-800 text-slate-300 hover:bg-dark-700 transition-all flex items-center gap-1.5 border border-dark-700">
-          <i data-lucide="layers" class="w-4 h-4"></i>
-          <span>Kubernetes (Helm)</span>
         </button>
         <button onclick="switchTab('terraform')" id="tab-btn-terraform" class="tab-btn px-3.5 py-2 sm:px-4 sm:py-2 rounded-lg text-xs sm:text-sm font-semibold bg-dark-800 text-slate-300 hover:bg-dark-700 transition-all flex items-center gap-1.5 border border-dark-700">
           <i data-lucide="cloud" class="w-4 h-4"></i>
           <span>AWS ECS (Terraform)</span>
         </button>
-        <button onclick="switchTab('cli')" id="tab-btn-cli" class="tab-btn px-3.5 py-2 sm:px-4 sm:py-2 rounded-lg text-xs sm:text-sm font-semibold bg-dark-800 text-slate-300 hover:bg-dark-700 transition-all flex items-center gap-1.5 border border-dark-700">
-          <i data-lucide="terminal" class="w-4 h-4"></i>
-          <span>Native CLI</span>
+        <button onclick="switchTab('helm')" id="tab-btn-helm" class="tab-btn px-3.5 py-2 sm:px-4 sm:py-2 rounded-lg text-xs sm:text-sm font-semibold bg-dark-800 text-slate-300 hover:bg-dark-700 transition-all flex items-center gap-1.5 border border-dark-700">
+          <i data-lucide="layers" class="w-4 h-4"></i>
+          <span>Kubernetes (Helm)</span>
         </button>
         <button onclick="switchTab('goal')" id="tab-btn-goal" class="tab-btn px-3.5 py-2 sm:px-4 sm:py-2 rounded-lg text-xs sm:text-sm font-semibold bg-dark-800 text-slate-300 hover:bg-dark-700 transition-all flex items-center gap-1.5 border border-dark-700">
           <i data-lucide="file-code" class="w-4 h-4"></i>
@@ -743,8 +743,31 @@
         </button>
       </div>
 
-      <!-- Tab 1: Docker Compose -->
-      <div id="tab-content-docker" class="tab-panel block">
+      <!-- Tab 1: Native CLI -->
+      <div id="tab-content-cli" class="tab-panel block">
+        <div class="rounded-xl overflow-hidden bg-dark-850 border border-dark-700/80 shadow-2xl">
+          <div class="flex items-center justify-between px-3 sm:px-4 py-2.5 sm:py-3 bg-dark-900 border-b border-dark-700/60 font-mono text-[11px] sm:text-xs text-slate-400">
+            <span class="truncate pr-2">terminal • Automated Cross-Platform Setup & Diagnostics</span>
+            <button onclick="copyCommand(this, './install.sh\nsource .venv/bin/activate\nbarely secret set ANTHROPIC_API_KEY\nbarely doctor\nbarely run .barely/goals/example.md')" class="flex items-center gap-1 text-slate-300 hover:text-white shrink-0">
+              <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+              <span>Copy</span>
+            </button>
+          </div>
+          <pre class="p-3.5 sm:p-5 font-mono text-[11px] sm:text-xs sm:text-sm text-slate-200 overflow-x-auto leading-relaxed"><code><span class="text-slate-500"># 1. Run automated cross-platform installer (Ubuntu, RHEL, macOS, Windows)</span>
+<span class="text-brand-400">./install.sh</span>
+
+<span class="text-slate-500"># 2. Activate environment, configure API key & check diagnostics</span>
+<span class="text-brand-400">source</span> .venv/bin/activate
+<span class="text-brand-400">barely</span> secret set ANTHROPIC_API_KEY
+<span class="text-brand-400">barely</span> doctor
+
+<span class="text-slate-500"># 3. Run test goal (auto-enables headless on Linux/EC2)</span>
+<span class="text-brand-400">barely</span> run .barely/goals/example.md</code></pre>
+        </div>
+      </div>
+
+      <!-- Tab 2: Docker Compose -->
+      <div id="tab-content-docker" class="tab-panel hidden">
         <div class="rounded-xl overflow-hidden bg-dark-850 border border-dark-700/80 shadow-2xl">
           <div class="flex items-center justify-between px-3 sm:px-4 py-2.5 sm:py-3 bg-dark-900 border-b border-dark-700/60 font-mono text-[11px] sm:text-xs text-slate-400">
             <span class="truncate pr-2">docker-compose.yml • Control Plane + Worker + DB + UI</span>
@@ -776,7 +799,38 @@
         </div>
       </div>
 
-      <!-- Tab 2: Kubernetes (Helm v3) -->
+      <!-- Tab 3: AWS ECS (Terraform) -->
+      <div id="tab-content-terraform" class="tab-panel hidden">
+        <div class="rounded-xl overflow-hidden bg-dark-850 border border-dark-700/80 shadow-2xl">
+          <div class="flex items-center justify-between px-3 sm:px-4 py-2.5 sm:py-3 bg-dark-900 border-b border-dark-700/60 font-mono text-[11px] sm:text-xs text-slate-400">
+            <span class="truncate pr-2">deploy/terraform • AWS ECS Fargate + ALB + Cloud Map Private DNS</span>
+            <div class="flex items-center gap-3 shrink-0">
+              <a href="https://github.com/GitanshKapoor/barely/tree/main/deploy/terraform" target="_blank" class="hidden xs:flex items-center gap-1 text-sky-400 hover:text-sky-300 text-[11px]">
+                <i data-lucide="book-open" class="w-3.5 h-3.5"></i>
+                <span>Runbook</span>
+              </a>
+              <button onclick="copyCommand(this, 'cd deploy/terraform\ncp terraform.tfvars.example terraform.tfvars\nterraform init\nterraform apply')" class="flex items-center gap-1 text-slate-300 hover:text-white shrink-0">
+                <i data-lucide="copy" class="w-3.5 h-3.5"></i>
+                <span>Copy</span>
+              </button>
+            </div>
+          </div>
+          <pre class="p-3.5 sm:p-5 font-mono text-[11px] sm:text-xs sm:text-sm text-slate-200 overflow-x-auto leading-relaxed"><code><span class="text-slate-500"># 1. Initialize production Terraform module</span>
+<span class="text-brand-400">cd</span> deploy/terraform
+<span class="text-brand-400">cp</span> terraform.tfvars.example terraform.tfvars
+<span class="text-brand-400">terraform</span> init
+
+<span class="text-slate-500"># 2. Provision zero-trust Fargate tasks in 100% private subnets</span>
+<span class="text-brand-400">terraform</span> apply
+
+<span class="text-emerald-400">✔</span> Apply complete! Resources: 14 added, 0 changed, 0 destroyed.
+<span class="text-emerald-400">✔</span> Outputs:
+<span class="text-slate-400">  alb_dns_name =</span> <span class="text-sky-300">"barely-alb-123456789.us-east-1.elb.amazonaws.com"</span>
+<span class="text-slate-400">  cloudmap_namespace =</span> <span class="text-sky-300">"barely.internal"</span></code></pre>
+        </div>
+      </div>
+
+      <!-- Tab 4: Kubernetes (Helm v3) -->
       <div id="tab-content-helm" class="tab-panel hidden">
         <div class="rounded-xl overflow-hidden bg-dark-850 border border-dark-700/80 shadow-2xl">
           <div class="flex items-center justify-between px-3 sm:px-4 py-2.5 sm:py-3 bg-dark-900 border-b border-dark-700/60 font-mono text-[11px] sm:text-xs text-slate-400">
@@ -813,58 +867,6 @@
 <span class="text-emerald-400">✔</span> [barely-worker-59f77b-k8p9r]  1/1 Running   (Playwright Browser Pod, shm 1Gi)
 <span class="text-slate-400">ℹ  PostgreSQL 16: Managed Cloud Database (Amazon RDS / Cloud SQL / Neon)</span>
 <span class="text-slate-400">ℹ  CNCF ESO: Native support for AWS Secrets Manager &amp; HashiCorp Vault sync</span></code></pre>
-        </div>
-      </div>
-
-      <!-- Tab 3: AWS ECS (Terraform) -->
-      <div id="tab-content-terraform" class="tab-panel hidden">
-        <div class="rounded-xl overflow-hidden bg-dark-850 border border-dark-700/80 shadow-2xl">
-          <div class="flex items-center justify-between px-3 sm:px-4 py-2.5 sm:py-3 bg-dark-900 border-b border-dark-700/60 font-mono text-[11px] sm:text-xs text-slate-400">
-            <span class="truncate pr-2">deploy/terraform • AWS ECS Fargate + ALB + Cloud Map Private DNS</span>
-            <div class="flex items-center gap-3 shrink-0">
-              <a href="https://github.com/GitanshKapoor/barely/tree/main/deploy/terraform" target="_blank" class="hidden xs:flex items-center gap-1 text-sky-400 hover:text-sky-300 text-[11px]">
-                <i data-lucide="book-open" class="w-3.5 h-3.5"></i>
-                <span>Runbook</span>
-              </a>
-              <button onclick="copyCommand(this, 'cd deploy/terraform\ncp terraform.tfvars.example terraform.tfvars\nterraform init\nterraform apply')" class="flex items-center gap-1 text-slate-300 hover:text-white shrink-0">
-                <i data-lucide="copy" class="w-3.5 h-3.5"></i>
-                <span>Copy</span>
-              </button>
-            </div>
-          </div>
-          <pre class="p-3.5 sm:p-5 font-mono text-[11px] sm:text-xs sm:text-sm text-slate-200 overflow-x-auto leading-relaxed"><code><span class="text-slate-500"># 1. Initialize production Terraform module</span>
-<span class="text-brand-400">cd</span> deploy/terraform
-<span class="text-brand-400">cp</span> terraform.tfvars.example terraform.tfvars
-<span class="text-brand-400">terraform</span> init
-
-<span class="text-slate-500"># 2. Provision zero-trust Fargate tasks in 100% private subnets</span>
-<span class="text-brand-400">terraform</span> apply
-
-<span class="text-emerald-400">✔</span> Apply complete! Resources: 14 added, 0 changed, 0 destroyed.
-<span class="text-emerald-400">✔</span> Outputs:
-<span class="text-slate-400">  alb_dns_name =</span> <span class="text-sky-300">"barely-alb-123456789.us-east-1.elb.amazonaws.com"</span>
-<span class="text-slate-400">  cloudmap_namespace =</span> <span class="text-sky-300">"barely.internal"</span></code></pre>
-        </div>
-      </div>
-
-      <!-- Tab 4: Native CLI -->
-      <div id="tab-content-cli" class="tab-panel hidden">
-        <div class="rounded-xl overflow-hidden bg-dark-850 border border-dark-700/80 shadow-2xl">
-          <div class="flex items-center justify-between px-3 sm:px-4 py-2.5 sm:py-3 bg-dark-900 border-b border-dark-700/60 font-mono text-[11px] sm:text-xs text-slate-400">
-            <span class="truncate pr-2">terminal • Native Python Workspace via uv</span>
-            <button onclick="copyCommand(this, 'uv sync\nuv run playwright install chromium\nHEADLESS=false uv run barely run .barely/goals/example.md')" class="flex items-center gap-1 text-slate-300 hover:text-white shrink-0">
-              <i data-lucide="copy" class="w-3.5 h-3.5"></i>
-              <span>Copy</span>
-            </button>
-          </div>
-          <pre class="p-3.5 sm:p-5 font-mono text-[11px] sm:text-xs sm:text-sm text-slate-200 overflow-x-auto leading-relaxed"><code><span class="text-slate-500"># 1. Install dependencies with uv</span>
-<span class="text-brand-400">uv</span> sync
-
-<span class="text-slate-500"># 2. Install Chromium browser binaries</span>
-<span class="text-brand-400">uv</span> run playwright install chromium
-
-<span class="text-slate-500"># 3. Run with visible head to watch AI control the browser</span>
-<span class="text-brand-400">HEADLESS</span>=false uv run barely run .barely/goals/example.md</code></pre>
         </div>
       </div>
 
