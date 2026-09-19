@@ -54,7 +54,7 @@ You define the *test intent* and *assertions* in natural language — Barely's a
 - ✅ **Enterprise Secrets Management:** In-app AES-256 encrypted credential vault, Kubernetes External Secrets (ESO) integration, and zero credential leakage *(Delivered)*.
 - ✅ **Enterprise Incident Alerts (Slack & MS Teams):** Instant webhook notifications on test completions, visual regressions, and pipeline failures *(Delivered)*.
 - ✅ **Dynamic Multi-Provider AI Discovery:** Real-time model fetching and catalog filtering for Anthropic, Groq, OpenAI, and Gemini *(Delivered)*.
-- ☁️ **Cloud-Native Kubernetes (K8s) & AWS ECS Integration:** Production-ready Helm charts, Kubernetes Operator / pod autoscalers, and AWS ECS task definitions for horizontally orchestrating agent runners at enterprise cloud scale.
+- ✅ **Cloud-Native Kubernetes (K8s) & AWS ECS Integration:** Production-ready Helm charts, Kubernetes pod autoscalers (HPA), ephemeral job runner spawner, and AWS ECS Fargate Terraform task definitions *(Delivered)*.
 - 🤝 **Distributed Multi-Agent Fleet:** Coordinated fleet of parallel autonomous agents executing across sharded test suites.
 - 🐙 **GitHub Issues Auto-Creation:** Automated defect filing for GitHub Issues in addition to Jira.
 
