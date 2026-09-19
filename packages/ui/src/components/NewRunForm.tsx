@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useSyncExternalStore } from 'react';
 import { createPortal } from 'react-dom';
-import { Play, Globe, Smartphone, Monitor, Tablet, X, Info, Tag, ArrowRight, Loader2, Cpu, ChevronDown, Bell, Eye, ShieldCheck } from 'lucide-react';
+import { Play, Globe, Smartphone, Monitor, Tablet, X, Info, Tag, ArrowRight, Loader2, Cpu, ChevronDown, Bell, Eye, ShieldCheck, Trash2 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { formatModelName } from '../utils/models';
 
@@ -274,6 +274,12 @@ export default function NewRunForm({ initialData, triggerButton, onRunCreated }:
   const handleCustomModelChange = (val: string) => {
     setCustomModelSlug(val);
     setModel(val.trim());
+  };
+
+  const handleResetModel = () => {
+    setSelectedModelType('default');
+    setModel('');
+    setCustomModelSlug('');
   };
 
   const openModal = (e?: React.MouseEvent) => {
@@ -655,9 +661,22 @@ export default function NewRunForm({ initialData, triggerButton, onRunCreated }:
                     <label className="block text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5 text-left">
                       <Cpu className="w-3.5 h-3.5 text-purple-400" /> AI Model
                     </label>
-                    <span className="text-[10px] text-slate-400 font-medium">
-                      Default: <span className="text-purple-300 font-semibold">{formatModelName(defaultModelName)}</span>
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] text-slate-400 font-medium">
+                        Default: <span className="text-purple-300 font-semibold">{formatModelName(defaultModelName)}</span>
+                      </span>
+                      {selectedModelType !== 'default' && (
+                        <button
+                          type="button"
+                          onClick={handleResetModel}
+                          className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium text-slate-400 hover:text-rose-300 hover:bg-rose-500/10 border border-slate-700 hover:border-rose-500/30 transition-colors cursor-pointer"
+                          title="Reset to Platform Default"
+                        >
+                          <Trash2 className="w-2.5 h-2.5" />
+                          <span>Reset</span>
+                        </button>
+                      )}
+                    </div>
                   </div>
 
                   <div className="relative w-full">

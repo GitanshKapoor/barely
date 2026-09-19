@@ -172,6 +172,8 @@ export default function SettingsPage() {
   const [customModelSlug, setCustomModelSlug] = useState<string>('');
   const [testingModel, setTestingModel] = useState<boolean>(false);
   const [savingModel, setSavingModel] = useState<boolean>(false);
+  const [deletingModel, setDeletingModel] = useState<boolean>(false);
+  const [confirmDeleteModel, setConfirmDeleteModel] = useState<boolean>(false);
   const [modelTestResult, setModelTestResult] = useState<{ success: boolean; message: string } | null>(null);
   const [modelSaveError, setModelSaveError] = useState<string | null>(null);
   const [isEditModelModalOpen, setIsEditModelModalOpen] = useState<boolean>(false);
@@ -507,6 +509,29 @@ export default function SettingsPage() {
     setIsEditModelModalOpen(true);
   };
 
+  const handleDeleteModelConfig = async () => {
+    setDeletingModel(true);
+    try {
+      const res = await fetch(`${apiUrl}/api/settings/DEFAULT_MODEL`, {
+        method: 'DELETE'
+      });
+      if (!res.ok && res.status !== 404) {
+        throw new Error('Failed to delete model configuration');
+      }
+      showToast('Model configuration deleted. Reset to system default.', 'success');
+      setModelNameInput('anthropic/claude-3-7-sonnet');
+      setSelectedModelType('anthropic/claude-3-7-sonnet');
+      setCustomModelSlug('');
+      setIsEditModelModalOpen(false);
+      setConfirmDeleteModel(false);
+      await fetchSettings();
+    } catch (err: any) {
+      showToast(`Error deleting model config: ${err.message}`, 'error');
+    } finally {
+      setDeletingModel(false);
+    }
+  };
+
   const handleTestJira = async () => {
     setTestingJira(true);
     setJiraTestResult(null);
@@ -826,6 +851,9 @@ export default function SettingsPage() {
     try {
       const tempVal = inputValues[keyName]?.trim();
       const payload: any = { provider: info.provider };
+      if (info.model) {
+        payload.model = info.model;
+      }
       if (tempVal) {
         payload.key = tempVal;
       }
@@ -851,8 +879,10 @@ export default function SettingsPage() {
 
   const apiKeys = settings.filter(s => s.category === 'api_keys');
   const defaultSettings = settings.filter(s => s.category === 'defaults');
-  const activeModel = settings.find(s => s.key === 'DEFAULT_MODEL')?.masked_value || 'anthropic/claude-3-7-sonnet';
+  const defaultModelSetting = settings.find(s => s.key === 'DEFAULT_MODEL');
+  const activeModel = defaultModelSetting?.masked_value || 'anthropic/claude-3-7-sonnet';
   const activeModelObj = availableModels.find(m => m.id === activeModel);
+  const isModelOverridden = defaultModelSetting?.source === 'database' || activeModel !== 'anthropic/claude-3-7-sonnet';
 
   return (
     <div className="max-w-4xl mx-auto space-y-6 pb-12">
@@ -1771,6 +1801,24 @@ secrets:
                     >
                       <Pencil className="w-3 h-3" />
                     </button>
+                    {isModelOverridden && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteModelConfig();
+                        }}
+                        disabled={deletingModel}
+                        className="p-1 rounded hover:bg-rose-500/20 text-slate-400 hover:text-rose-400 transition-colors ml-0.5 cursor-pointer disabled:opacity-50"
+                        title="Delete model configuration and reset to default"
+                      >
+                        {deletingModel ? (
+                          <Loader2 className="w-3 h-3 animate-spin text-rose-400" />
+                        ) : (
+                          <Trash2 className="w-3 h-3" />
+                        )}
+                      </button>
+                    )}
                   </div>
 
                   <button
@@ -1820,15 +1868,52 @@ secrets:
                       </p>
                     </div>
 
-                    <button
-                      type="button"
-                      onClick={openEditModelModal}
-                      className="px-3.5 py-2 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 hover:border-purple-500/40 flex items-center gap-2 transition-all shadow-sm shrink-0 self-start sm:self-auto cursor-pointer"
-                      title="Edit Default AI Model"
-                    >
-                      <Pencil className="w-3.5 h-3.5 text-purple-400" />
-                      <span>Edit Model</span>
-                    </button>
+                    <div className="flex items-center gap-2 flex-wrap shrink-0 self-start sm:self-auto">
+                      {isModelOverridden && (
+                        confirmDeleteModel ? (
+                          <div className="flex items-center gap-2 bg-rose-950/40 border border-rose-800/60 rounded-lg px-2.5 py-1 text-xs">
+                            <span className="text-rose-300 text-[11px] font-medium">Delete config?</span>
+                            <button
+                              type="button"
+                              onClick={handleDeleteModelConfig}
+                              disabled={deletingModel}
+                              className="px-2 py-0.5 rounded text-[11px] font-semibold bg-rose-600 hover:bg-rose-500 text-white flex items-center gap-1 transition-colors cursor-pointer"
+                            >
+                              {deletingModel ? <Loader2 className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3 h-3" />}
+                              Confirm
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setConfirmDeleteModel(false)}
+                              disabled={deletingModel}
+                              className="px-2 py-0.5 rounded text-[11px] font-semibold text-slate-400 hover:text-slate-200 transition-colors cursor-pointer"
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => setConfirmDeleteModel(true)}
+                            disabled={deletingModel || savingModel}
+                            className="px-3 py-2 rounded-lg text-xs font-semibold text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 border border-rose-500/20 hover:border-rose-500/40 flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50"
+                            title="Delete model configuration and reset to default"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                            <span>Delete Config</span>
+                          </button>
+                        )
+                      )}
+                      <button
+                        type="button"
+                        onClick={openEditModelModal}
+                        className="px-3.5 py-2 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 hover:border-purple-500/40 flex items-center gap-2 transition-all shadow-sm cursor-pointer"
+                        title="Edit Default AI Model"
+                      >
+                        <Pencil className="w-3.5 h-3.5 text-purple-400" />
+                        <span>Edit Model</span>
+                      </button>
+                    </div>
                   </div>
 
                   {/* Provider Discovery & Live Sync Status Cards */}
@@ -2190,32 +2275,52 @@ secrets:
                 </div>
 
                 {/* Modal Footer */}
-                <div className="px-6 py-4 border-t border-slate-800 bg-slate-900/40 flex items-center justify-end gap-2.5">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsEditModelModalOpen(false);
-                      setModelTestResult(null);
-                      setModelSaveError(null);
-                    }}
-                    disabled={savingModel}
-                    className="px-4 py-2 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition-colors cursor-pointer"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="button"
-                    onClick={handleSaveModel}
-                    disabled={savingModel || !modelNameInput.trim()}
-                    className="px-4 py-2 rounded-lg text-xs font-semibold bg-[#0278ff] hover:bg-[#0062d6] text-white shadow-md disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5 cursor-pointer transition-all"
-                  >
-                    {savingModel ? (
-                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    ) : (
-                      <Check className="w-3.5 h-3.5" />
+                <div className="px-6 py-4 border-t border-slate-800 bg-slate-900/40 flex items-center justify-between gap-2.5">
+                  <div>
+                    {isModelOverridden && (
+                      <button
+                        type="button"
+                        onClick={handleDeleteModelConfig}
+                        disabled={savingModel || deletingModel}
+                        className="px-3 py-2 rounded-lg text-xs font-semibold text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 border border-rose-500/20 hover:border-rose-500/40 flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50"
+                        title="Delete custom model configuration and reset to platform default"
+                      >
+                        {deletingModel ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <Trash2 className="w-3.5 h-3.5" />
+                        )}
+                        <span>Delete Config</span>
+                      </button>
                     )}
-                    <span>Set as Default</span>
-                  </button>
+                  </div>
+                  <div className="flex items-center gap-2.5">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsEditModelModalOpen(false);
+                        setModelTestResult(null);
+                        setModelSaveError(null);
+                      }}
+                      disabled={savingModel || deletingModel}
+                      className="px-4 py-2 rounded-lg text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 transition-colors cursor-pointer"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleSaveModel}
+                      disabled={savingModel || deletingModel || !modelNameInput.trim()}
+                      className="px-4 py-2 rounded-lg text-xs font-semibold bg-[#0278ff] hover:bg-[#0062d6] text-white shadow-md disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5 cursor-pointer transition-all"
+                    >
+                      {savingModel ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <Check className="w-3.5 h-3.5" />
+                      )}
+                      <span>Set as Default</span>
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>

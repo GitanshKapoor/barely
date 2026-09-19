@@ -348,6 +348,7 @@ class SaveSettingRequest(BaseModel):
 class TestKeyRequest(BaseModel):
     provider: str
     key: Optional[str] = None
+    model: Optional[str] = None
 
 def get_storage_target_info():
     """Classifies database & storage target at a high level (Docker vs GCP vs AWS vs Azure) with ZERO credential leakage."""
@@ -553,7 +554,7 @@ def remove_setting(key: str):
         )
 
     deleted = delete_setting(key_clean)
-    if not deleted:
+    if not deleted and key_clean != "DEFAULT_MODEL":
         return {"message": f"No database override found for '{key_clean}'", "deleted": False}
 
     llm_key_map = {
@@ -565,6 +566,10 @@ def remove_setting(key: str):
     if key_clean in llm_key_map:
         from barely_core.models_provider import invalidate_models_cache
         invalidate_models_cache(llm_key_map[key_clean])
+
+    if key_clean == "DEFAULT_MODEL":
+        from barely_core.models_provider import invalidate_models_cache
+        invalidate_models_cache()
 
     return {"message": f"Setting '{key_clean}' database override removed", "deleted": True}
 
@@ -581,13 +586,30 @@ def test_key(req: TestKeyRequest):
             [
                 "anthropic/claude-3-7-sonnet",
                 "anthropic/claude-3-5-sonnet-20241022",
-                "anthropic/claude-3-5-haiku-20241022"
+                "anthropic/claude-3-5-haiku-20241022",
+                "claude-3-7-sonnet",
+                "claude-3-5-sonnet"
             ],
             "ANTHROPIC_API_KEY"
         ),
-        "openai": (["gpt-4o-mini", "gpt-4o"], "OPENAI_API_KEY"),
-        "groq": (["groq/llama-3.1-8b-instant", "groq/llama-3.3-70b-versatile"], "GROQ_API_KEY"),
-        "gemini": (["gemini/gemini-1.5-flash", "gemini/gemini-2.0-flash"], "GEMINI_API_KEY")
+        "openai": (
+            ["gpt-4o-mini", "gpt-4o", "openai/gpt-4o-mini", "openai/gpt-4o"],
+            "OPENAI_API_KEY"
+        ),
+        "groq": (
+            [
+                "groq/llama-3.3-70b-versatile",
+                "llama-3.3-70b-versatile",
+                "groq/llama-3.1-8b-instant",
+                "llama-3.1-8b-instant",
+                "groq/deepseek-r1-distill-llama-70b"
+            ],
+            "GROQ_API_KEY"
+        ),
+        "gemini": (
+            ["gemini/gemini-2.0-flash", "gemini/gemini-1.5-flash", "gemini/gemini-1.5-pro"],
+            "GEMINI_API_KEY"
+        )
     }
 
     if provider not in provider_map:
@@ -602,8 +624,22 @@ def test_key(req: TestKeyRequest):
             "error": f"No API key provided or configured for {provider.capitalize()}"
         }
 
+    # Prepend requested model or configured default model if applicable
+    models_to_try = []
+    if req.model and req.model.strip():
+        m_req = req.model.strip()
+        models_to_try.append(m_req)
+        if "/" in m_req:
+            models_to_try.append(m_req.split("/", 1)[1])
+        else:
+            models_to_try.append(f"{provider}/{m_req}")
+
+    for m in candidate_models:
+        if m not in models_to_try:
+            models_to_try.append(m)
+
     last_error_message = None
-    for model_name in candidate_models:
+    for model_name in models_to_try:
         try:
             response = litellm.completion(
                 model=model_name,
@@ -620,11 +656,40 @@ def test_key(req: TestKeyRequest):
             err_str = str(e)
             last_error_message = err_str
             err_lower = err_str.lower()
-            # If model is not found on user's account/tier, try next candidate model
-            if "not_found" in err_lower or "not found" in err_lower or "invalid model" in err_lower or "does not exist" in err_lower:
-                continue
-            # If authentication failure or quota exceeded, stop trying
-            break
+            # If genuine authentication failure (401, invalid key), stop trying immediately
+            if "invalid_api_key" in err_lower or "invalid api key" in err_lower or "401" in err_lower or "unauthorized" in err_lower:
+                break
+            # Otherwise (model mismatch, decommissioned, not found, rate limit on specific model), continue trying candidate models
+            continue
+
+    # Fallback verification: Check directly against provider's models endpoint
+    # If the provider's models endpoint returns 200 OK, the key is 100% valid!
+    if "401" not in (last_error_message or "").lower() and "invalid_api_key" not in (last_error_message or "").lower() and "unauthorized" not in (last_error_message or "").lower():
+        try:
+            from barely_core.models_provider import (
+                fetch_groq_models,
+                fetch_anthropic_models,
+                fetch_openai_models,
+                fetch_gemini_models
+            )
+            live_models = []
+            if provider == "groq":
+                live_models = fetch_groq_models(active_key)
+            elif provider == "anthropic":
+                live_models = fetch_anthropic_models(active_key)
+            elif provider == "openai":
+                live_models = fetch_openai_models(active_key)
+            elif provider == "gemini":
+                live_models = fetch_gemini_models(active_key)
+
+            if live_models:
+                first_model = live_models[0]["name"]
+                return {
+                    "success": True,
+                    "message": f"{provider.capitalize()} API key verified successfully via live API! Discovered {len(live_models)} active models (e.g. {first_model})."
+                }
+        except Exception as probe_err:
+            logger.debug(f"Direct {provider} probe fallback error: {probe_err}")
 
     err_display = extract_clean_llm_error(last_error_message or "Unknown verification failure")
     if active_key:
