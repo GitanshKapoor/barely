@@ -871,16 +871,18 @@
       <div id="tab-content-goal" class="tab-panel hidden">
         <div class="rounded-xl overflow-hidden bg-dark-850 border border-dark-700/80 shadow-2xl">
           <div class="flex items-center justify-between px-3 sm:px-4 py-2.5 sm:py-3 bg-dark-900 border-b border-dark-700/60 font-mono text-[11px] sm:text-xs text-slate-400">
-            <span class="truncate pr-2">.barely/goals/checkout.md • Declarative Goal</span>
-            <button onclick="copyCommand(this, '---\ntags: [smoke, e2e, checkout]\ntimeout: 120\nstrict_mode: false\n---\n# Test Checkout Flow\n1. Navigate to https://shop.example.com\n2. Search for \'Wireless Headphones\'\n3. Click the first product card and click \'Add to Cart\'\n4. Verify the cart badge displays \'1\'\n5. Proceed to checkout and assert total price matches $99')" class="flex items-center gap-1 text-slate-300 hover:text-white shrink-0">
+            <span class="truncate pr-2">.barely/goals/checkout.md • Declarative Goal with Application Context</span>
+            <button onclick="copyCommand(this, '---\nname: Checkout Flow\ntags: [smoke, e2e, checkout]\ntimeout: 120\nstrict_mode: false\ncontext: \x22You are testing an e-commerce store ABC. Act as a shopper browsing the catalog, managing cart, and purchasing.\x22\n---\n# Test Checkout Flow\n1. Navigate to https://shop.example.com\n2. Search for \'Wireless Headphones\'\n3. Click the first product card and click \'Add to Cart\'\n4. Verify the cart badge displays \'1\'\n5. Proceed to checkout and assert total price matches $99')" class="flex items-center gap-1 text-slate-300 hover:text-white shrink-0">
               <i data-lucide="copy" class="w-3.5 h-3.5"></i>
               <span>Copy</span>
             </button>
           </div>
           <pre class="p-3.5 sm:p-5 font-mono text-[11px] sm:text-xs sm:text-sm text-slate-200 overflow-x-auto leading-relaxed"><code><span class="text-slate-500">---</span>
+<span class="text-sky-400">name:</span> Checkout Flow
 <span class="text-sky-400">tags:</span> [smoke, e2e, checkout]
 <span class="text-sky-400">timeout:</span> 120
 <span class="text-sky-400">strict_mode:</span> false
+<span class="text-sky-400">context:</span> <span class="text-amber-300">"You are testing an e-commerce store ABC. Act as a shopper browsing the catalog, managing cart, and purchasing."</span>
 <span class="text-slate-500">---</span>
 <span class="text-brand-400"># Test Checkout Flow</span>
 1. Navigate to https://shop.example.com
