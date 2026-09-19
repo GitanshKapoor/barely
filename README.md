@@ -19,6 +19,7 @@
 [![Docker](https://img.shields.io/badge/Docker-Ready-2496ED.svg?logo=docker&logoColor=white)](https://www.docker.com)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169E1.svg?logo=postgresql&logoColor=white)](https://www.postgresql.org)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![Docs](https://img.shields.io/badge/docs-interactive%20portal-0ea5e9.svg)](docs/index.html)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg?logo=github&logoColor=white)](https://github.com/GitanshKapoor/barely/pulls)
 
 </div>
@@ -48,6 +49,8 @@ Barely combines vision-enabled AI reasoning with enterprise cloud execution prim
 - 🔐 **Zero-Leak Enterprise Secrets Management:** Dynamic AES-256 Fernet encryption in PostgreSQL, zero-leak masking in UI/API, and seamless External Secrets (ESO) Kubernetes support.
 - ☁️ **Cloud-Native Kubernetes & AWS ECS:** Ephemeral non-root container runner jobs (`UID 10001`), production Helm charts with HPA, and AWS ECS Fargate Terraform task definitions.
 - 📊 **Executive PDF Reports & Artifact Bundles:** One-click export of print-ready multi-page audit PDFs and downloadable `.zip` bundles with step screenshots and video traces.
+
+> 🌐 **Interactive Documentation & Roadmap:** Explore visual architectural topologies, cloud execution runbooks, and upcoming Release 3.0 milestones in our [Interactive Documentation Portal](docs/index.html).
 
 ## 🚀 Getting Started
 
