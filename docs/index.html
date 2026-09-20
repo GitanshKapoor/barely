@@ -715,7 +715,7 @@
           Up and Running in 60 Seconds
         </h2>
         <p class="text-slate-400 text-xs sm:text-base leading-relaxed">
-          Deploy the complete stack via Docker Compose, Kubernetes Helm, AWS ECS Terraform, or run locally via native Python CLI.
+          Install the native Python CLI locally, or deploy the full stack via Docker Compose, AWS ECS Terraform, or Kubernetes Helm.
         </p>
       </div>
 
@@ -747,23 +747,29 @@
       <div id="tab-content-cli" class="tab-panel block">
         <div class="rounded-xl overflow-hidden bg-dark-850 border border-dark-700/80 shadow-2xl">
           <div class="flex items-center justify-between px-3 sm:px-4 py-2.5 sm:py-3 bg-dark-900 border-b border-dark-700/60 font-mono text-[11px] sm:text-xs text-slate-400">
-            <span class="truncate pr-2">terminal • Automated Cross-Platform Setup & Diagnostics</span>
-            <button onclick="copyCommand(this, './install.sh\nsource .venv/bin/activate\nbarely secret set ANTHROPIC_API_KEY\nbarely doctor\nbarely run .barely/goals/example.md')" class="flex items-center gap-1 text-slate-300 hover:text-white shrink-0">
+            <span class="truncate pr-2">terminal • Up and Running in 60 Seconds</span>
+            <button onclick="copyCommand(this, 'curl -sSL https://raw.githubusercontent.com/GitanshKapoor/barely/main/install.sh | bash\nsource .venv/bin/activate\nbarely secret set ANTHROPIC_API_KEY\nbarely doctor\nbarely init\nbarely run .barely/goals/example.md --url https://example.com --headless')" class="flex items-center gap-1 text-slate-300 hover:text-white shrink-0">
               <i data-lucide="copy" class="w-3.5 h-3.5"></i>
               <span>Copy</span>
             </button>
           </div>
-          <pre class="p-3.5 sm:p-5 font-mono text-[11px] sm:text-xs sm:text-sm text-slate-200 overflow-x-auto leading-relaxed"><code><span class="text-slate-500"># 1. Run automated cross-platform installer (Ubuntu, RHEL, macOS, Windows)</span>
-<span class="text-brand-400">./install.sh</span>
+          <pre class="p-3.5 sm:p-5 font-mono text-[11px] sm:text-xs sm:text-sm text-slate-200 overflow-x-auto leading-relaxed"><code><span class="text-slate-500"># 1. One-line install (auto-detects Ubuntu, RHEL, macOS, Windows)</span>
+<span class="text-brand-400">curl</span> -sSL https://raw.githubusercontent.com/GitanshKapoor/barely/main/install.sh | bash
 
-<span class="text-slate-500"># 2. Activate environment, configure API key & check diagnostics</span>
+<span class="text-slate-500"># 2. Activate environment and configure your AI provider key</span>
 <span class="text-brand-400">source</span> .venv/bin/activate
 <span class="text-brand-400">barely</span> secret set ANTHROPIC_API_KEY
+
+<span class="text-slate-500"># 3. Verify everything is ready</span>
 <span class="text-brand-400">barely</span> doctor
 
-<span class="text-slate-500"># 3. Run test goal (auto-enables headless on Linux/EC2)</span>
-<span class="text-brand-400">barely</span> run .barely/goals/example.md</code></pre>
+<span class="text-slate-500"># 4. Initialize workspace and run your first test</span>
+<span class="text-brand-400">barely</span> init
+<span class="text-brand-400">barely</span> run .barely/goals/example.md --url https://example.com --headless</code></pre>
         </div>
+        <p class="mt-3 text-xs text-slate-500 px-1">
+          <a href="https://github.com/GitanshKapoor/barely/blob/main/packages/cli/README.md" target="_blank" class="text-brand-400 hover:text-brand-300 underline">View full CLI documentation</a> — model configuration, secret management, post-run integrations (Jira, GitHub, Slack, Teams), and OS-specific installers.
+        </p>
       </div>
 
       <!-- Tab 2: Docker Compose -->
