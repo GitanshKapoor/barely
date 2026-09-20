@@ -153,7 +153,7 @@ const PROVIDER_INFO: Record<string, { provider: string; model: string; desc: str
 };
 
 export default function SettingsPage() {
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL || '';
 
   const [settings, setSettings] = useState<SettingItem[]>(() => cachedSettingsData?.settings || []);
   const [dbStatus, setDbStatus] = useState<DatabaseStatus | null>(() => cachedSettingsData?.database || null);

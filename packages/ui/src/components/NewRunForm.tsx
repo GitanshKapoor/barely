@@ -103,7 +103,7 @@ export default function NewRunForm({ initialData, triggerButton, onRunCreated }:
   useEffect(() => {
     const fetchConfiguration = async () => {
       try {
-        const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+        const apiUrl = process.env.NEXT_PUBLIC_API_URL || '';
         
         // Fetch supported models
         const res = await fetch(`${apiUrl}/api/models`);
@@ -304,7 +304,7 @@ export default function NewRunForm({ initialData, triggerButton, onRunCreated }:
       e.preventDefault();
       e.stopPropagation();
     }
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || '';
     fetch(`${apiUrl}/api/models`)
       .then(r => r.ok ? r.json() : null)
       .then(data => {
@@ -406,7 +406,7 @@ export default function NewRunForm({ initialData, triggerButton, onRunCreated }:
     e.preventDefault();
     setLoading(true);
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || '';
       const res = await fetch(`${apiUrl}/api/runs`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

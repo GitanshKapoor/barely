@@ -113,7 +113,7 @@ Barely is engineered for cloud scale with production-ready installation runbooks
 - **Non-Root Execution**: Every workload runs strictly as an unprivileged user (UID `10001:10001`).
 - **Restricted Capabilities**: Linux kernel capabilities are explicitly stripped (`capabilities: drop: ["ALL"]`).
 - **No Privilege Escalation**: Prevents privilege escalation attacks across container lifecycles.
-- **Dedicated Chromium Memory**: 1GB dedicated `/dev/shm` allocation avoids browser memory fragmentation.
+- **Dedicated Chromium Memory**: 1GB dedicated `/dev/shm` on Docker Compose and Kubernetes avoids browser memory fragmentation. AWS Fargate caps `/dev/shm` at 64MB and rejects `sharedMemorySize`, so Chromium there automatically falls back to disk-backed `/tmp`.
 - **Architecture Topologies**: For full architectural diagrams and firewall rules, explore the dedicated runbooks linked above.
 
 ## 💬 Community

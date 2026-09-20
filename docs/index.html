@@ -471,12 +471,12 @@
                       </div>
                       <span class="text-[10px] font-mono text-emerald-300 bg-emerald-950/60 px-2 py-0.5 rounded border border-emerald-500/30">UID 10001</span>
                     </div>
-                    <p class="text-[11px] text-slate-400 leading-relaxed">Ephemeral browser sandboxing in K8s runner pods or AWS ECS Fargate tasks with 1GB shm.</p>
+                    <p class="text-[11px] text-slate-400 leading-relaxed">Ephemeral browser sandboxing in K8s runner pods (1Gi shm) or AWS ECS Fargate tasks (64MB shm, /tmp fallback).</p>
                   </div>
                   <div class="flex items-center gap-1.5 text-[10px] font-mono text-slate-400 pt-1">
                     <span class="px-1.5 py-0.5 rounded bg-dark-750 border border-dark-700 text-emerald-300">Chromium</span>
                     <span class="px-1.5 py-0.5 rounded bg-dark-750 border border-dark-700 text-purple-300">K8s / ECS</span>
-                    <span class="px-1.5 py-0.5 rounded bg-dark-750 border border-dark-700 text-cyan-300">1GB /dev/shm</span>
+                    <span class="px-1.5 py-0.5 rounded bg-dark-750 border border-dark-700 text-cyan-300">Auto shm sizing</span>
                   </div>
                 </div>
               </div>

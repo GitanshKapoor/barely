@@ -129,9 +129,36 @@ The `BARELY_SECRET_KEY` (AES-256 encryption key) is auto-generated if you don't 
 
 | Variable | Default |
 |----------|---------|
-| `api_image` | `gitansh16k/barely-api:v1.5` |
-| `worker_image` | `gitansh16k/barely-worker:v1.5` |
-| `ui_image` | `gitansh16k/barely-ui:v1.5` |
+| `api_image` | `gitansh16k/ecs-barely-api:v1.6` |
+| `worker_image` | `gitansh16k/ecs-barely-worker:v1.6` |
+| `ui_image` | `gitansh16k/ecs-barely-ui:v1.6` |
+| `cpu_architecture` | `X86_64` |
+
+### Rebuilding the images
+
+Fargate pulls the platform declared by `cpu_architecture`. Build with both flags below, or the task fails to start:
+
+```bash
+DH=gitansh16k; REPO=ecs-barely; TAG=v1.6
+docker login -u $DH
+
+docker build --platform linux/amd64 --provenance=false --sbom=false --target api    -t $DH/$REPO-api:$TAG .
+docker build --platform linux/amd64 --provenance=false --sbom=false --target worker -t $DH/$REPO-worker:$TAG .
+docker build --platform linux/amd64 --provenance=false --sbom=false -f Dockerfile.ui -t $DH/$REPO-ui:$TAG .
+
+for i in api worker ui; do docker push $DH/$REPO-$i:$TAG; done
+```
+
+- **`--provenance=false --sbom=false`** — with Docker's containerd image store, `docker build` exports an OCI *manifest list* carrying provenance attestations. The attestation descriptor has platform `unknown/unknown`, which Fargate cannot resolve, failing the pull with `image Manifest does not contain descriptor matching platform 'linux/amd64'` **even when the image really is amd64**. These flags export a plain single-platform manifest.
+- **`--platform linux/amd64`** — must match `cpu_architecture`. For arm64 Fargate, build `--platform linux/arm64` and set `cpu_architecture = "ARM64"`.
+
+Verify before applying — one `linux/amd64` entry, no `unknown/unknown`:
+
+```bash
+docker buildx imagetools inspect $DH/$REPO-worker:$TAG
+```
+
+ECS caches by tag, so pushing over an existing tag will not redeploy. Bump `TAG` instead.
 
 ## Tear Down
 

@@ -31,7 +31,7 @@ resource "aws_ecs_service" "api" {
   }
 
   health_check_grace_period_seconds = 60
-  depends_on                        = [aws_lb_listener.http]
+  depends_on                        = [aws_lb_listener.http, aws_secretsmanager_secret_version.app_secrets]
 
   tags = { Name = "${local.name_prefix}-svc-api" }
 }
@@ -64,6 +64,12 @@ resource "aws_ecs_service" "worker" {
   }
 
   tags = { Name = "${local.name_prefix}-svc-worker" }
+
+  # The task definition references only the secret ARN, so nothing in the graph
+  # forces the secret VALUE to exist first. Without this the service starts
+  # pulling before the version is written and fails with
+  # ResourceNotFoundException ... staging label: AWSCURRENT.
+  depends_on = [aws_secretsmanager_secret_version.app_secrets]
 }
 
 resource "aws_ecs_service" "ui" {
@@ -91,7 +97,7 @@ resource "aws_ecs_service" "ui" {
   }
 
   health_check_grace_period_seconds = 60
-  depends_on                        = [aws_lb_listener.http]
+  depends_on                        = [aws_lb_listener.http, aws_secretsmanager_secret_version.app_secrets]
 
   tags = { Name = "${local.name_prefix}-svc-ui" }
 }

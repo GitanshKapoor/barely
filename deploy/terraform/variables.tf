@@ -109,22 +109,33 @@ variable "barely_secret_key" {
 
 # --- Container Images ---
 
+variable "cpu_architecture" {
+  description = "CPU architecture of the pushed images. Must match what docker build produced: X86_64 or ARM64."
+  type        = string
+  default     = "X86_64"
+
+  validation {
+    condition     = contains(["X86_64", "ARM64"], var.cpu_architecture)
+    error_message = "cpu_architecture must be X86_64 or ARM64."
+  }
+}
+
 variable "api_image" {
   description = "Docker image for the API service"
   type        = string
-  default     = "docker.io/gitansh16k/barely-api:v1.5"
+  default     = "docker.io/gitansh16k/ecs-barely-api:v1.6"
 }
 
 variable "worker_image" {
   description = "Docker image for the Worker service"
   type        = string
-  default     = "docker.io/gitansh16k/barely-worker:v1.5"
+  default     = "docker.io/gitansh16k/ecs-barely-worker:v1.6"
 }
 
 variable "ui_image" {
   description = "Docker image for the UI service"
   type        = string
-  default     = "docker.io/gitansh16k/barely-ui:v1.5"
+  default     = "docker.io/gitansh16k/ecs-barely-ui:v1.6"
 }
 
 # --- ECS Task Sizing ---
