@@ -104,9 +104,9 @@ Barely is engineered for cloud scale with production-ready installation runbooks
 
 | Target Environment | Key Highlights | Dedicated Installation Runbook |
 | :--- | :--- | :--- |
-| 🐳 **Docker Compose** | Multi-bridge network isolation, non-root execution (`UID 10001`), 1GB `/dev/shm` for Chromium, zero DB host ports. | [📖 Docker Compose Runbook](deploy/docker/README.md) |
+| 🐳 **Docker Compose** | Full stack in one command — PostgreSQL, API, Worker, and Dashboard. Clone, configure `.env`, run `docker compose up`. | [📖 Docker Compose Guide](deploy/docker/README.md) |
 | ⎈ **Kubernetes (Helm v3)** | Production Helm chart, NGINX Ingress, HPA horizontal autoscaling, zero-trust `NetworkPolicy`, External Secrets (ESO). | [📖 Kubernetes Helm Guide](charts/barely/README.md) |
-| ☁️ **AWS ECS (Terraform)** | 100% Private VPC subnets (`assign_public_ip = false`), ALB path routing, AWS Cloud Map private DNS, Secrets Manager. | [📖 AWS ECS Terraform Guide](deploy/terraform/README.md) |
+| ☁️ **AWS ECS Fargate** | Self-contained module — creates VPC, subnets, NAT, RDS, ALB, Secrets Manager automatically. Fill 2 values, run `terraform apply`. | [📖 AWS ECS Deployment Guide](deploy/terraform/README.md) |
 | 🚀 **CI/CD Integration** | Autonomous AI tests on Pull Requests, GitHub Secrets setup, PR merge gating, PDF report artifacts. | [📖 CI/CD Integration Guide](deploy/ci-cd/README.md) |
 
 ### Enterprise Security Standards

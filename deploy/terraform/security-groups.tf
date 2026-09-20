@@ -1,18 +1,18 @@
 # ==============================================================================
-# Barely Terraform Module - Tiered Least-Privilege Security Groups
-# Implements strict 3-tier zero-trust isolation:
-# Public Internet -> ALB -> Private UI & API -> Private RDS
-# UI is 100% blocked from DB. Worker has 0 incoming ports.
+# Barely — Tiered Security Groups (Zero-Trust)
+# Internet -> ALB -> UI/API -> RDS
+# Worker has ZERO inbound ports. UI is blocked from DB.
 # ==============================================================================
 
-# --- 1. ALB Security Group ---
+# --- ALB Security Group (public-facing) ---
+
 resource "aws_security_group" "alb" {
   name        = "${local.name_prefix}-sg-alb"
-  description = "Controls public inbound traffic to the Application Load Balancer"
-  vpc_id      = var.vpc_id
+  description = "ALB - allows HTTP/HTTPS from internet"
+  vpc_id      = aws_vpc.main.id
 
   ingress {
-    description = "Allow inbound HTTP from internet"
+    description = "HTTP"
     from_port   = 80
     to_port     = 80
     protocol    = "tcp"
@@ -20,7 +20,7 @@ resource "aws_security_group" "alb" {
   }
 
   ingress {
-    description = "Allow inbound HTTPS from internet"
+    description = "HTTPS"
     from_port   = 443
     to_port     = 443
     protocol    = "tcp"
@@ -28,27 +28,24 @@ resource "aws_security_group" "alb" {
   }
 
   egress {
-    description = "Allow all outbound traffic from ALB to private target groups"
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  tags = {
-    Name = "${local.name_prefix}-sg-alb"
-    Tier = "Public-Ingress"
-  }
+  tags = { Name = "${local.name_prefix}-sg-alb" }
 }
 
-# --- 2. ECS UI Tasks Security Group ---
+# --- ECS UI Security Group ---
+
 resource "aws_security_group" "ecs_ui" {
   name        = "${local.name_prefix}-sg-ecs-ui"
-  description = "Controls traffic to and from the Next.js UI Fargate tasks"
-  vpc_id      = var.vpc_id
+  description = "UI tasks - inbound only from ALB on 3000"
+  vpc_id      = aws_vpc.main.id
 
   ingress {
-    description     = "Allow inbound HTTP strictly from ALB"
+    description     = "HTTP from ALB"
     from_port       = 3000
     to_port         = 3000
     protocol        = "tcp"
@@ -56,27 +53,24 @@ resource "aws_security_group" "ecs_ui" {
   }
 
   egress {
-    description = "Allow outbound to API and VPC NAT endpoints"
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  tags = {
-    Name = "${local.name_prefix}-sg-ecs-ui"
-    Tier = "Private-Frontend"
-  }
+  tags = { Name = "${local.name_prefix}-sg-ecs-ui" }
 }
 
-# --- 3. ECS API Tasks Security Group ---
+# --- ECS API Security Group ---
+
 resource "aws_security_group" "ecs_api" {
   name        = "${local.name_prefix}-sg-ecs-api"
-  description = "Controls traffic to and from the FastAPI Control Plane tasks"
-  vpc_id      = var.vpc_id
+  description = "API tasks - inbound from ALB and UI on 8000"
+  vpc_id      = aws_vpc.main.id
 
   ingress {
-    description     = "Allow inbound HTTP strictly from ALB"
+    description     = "HTTP from ALB"
     from_port       = 8000
     to_port         = 8000
     protocol        = "tcp"
@@ -84,7 +78,7 @@ resource "aws_security_group" "ecs_api" {
   }
 
   ingress {
-    description     = "Allow internal API requests strictly from UI tasks"
+    description     = "Internal from UI"
     from_port       = 8000
     to_port         = 8000
     protocol        = "tcp"
@@ -92,49 +86,43 @@ resource "aws_security_group" "ecs_api" {
   }
 
   egress {
-    description = "Allow outbound to RDS, NAT Gateway (LLMs, Jira, Slack), and VPC endpoints"
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  tags = {
-    Name = "${local.name_prefix}-sg-ecs-api"
-    Tier = "Private-ControlPlane"
-  }
+  tags = { Name = "${local.name_prefix}-sg-ecs-api" }
 }
 
-# --- 4. ECS Worker Tasks Security Group ---
+# --- ECS Worker Security Group (ZERO inbound) ---
+
 resource "aws_security_group" "ecs_worker" {
   name        = "${local.name_prefix}-sg-ecs-worker"
-  description = "Controls traffic for asynchronous test runners (0 inbound ports)"
-  vpc_id      = var.vpc_id
+  description = "Worker tasks - zero inbound, outbound to RDS/NAT/LLM APIs"
+  vpc_id      = aws_vpc.main.id
 
-  # Ingress is intentionally omitted: ZERO inbound traffic allowed
+  # Intentionally no ingress rules — workers pull work, never accept connections
 
   egress {
-    description = "Allow outbound to RDS, NAT Gateway (tested websites, LLMs), and VPC endpoints"
     from_port   = 0
     to_port     = 0
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  tags = {
-    Name = "${local.name_prefix}-sg-ecs-worker"
-    Tier = "Private-Worker"
-  }
+  tags = { Name = "${local.name_prefix}-sg-ecs-worker" }
 }
 
-# --- 5. RDS PostgreSQL Security Group ---
+# --- RDS Security Group ---
+
 resource "aws_security_group" "rds" {
   name        = "${local.name_prefix}-sg-rds"
-  description = "Controls database traffic strictly to authorized application tasks"
-  vpc_id      = var.vpc_id
+  description = "RDS - PostgreSQL access only from API and Worker tasks"
+  vpc_id      = aws_vpc.main.id
 
   ingress {
-    description     = "Allow PostgreSQL access strictly from API tasks"
+    description     = "PostgreSQL from API"
     from_port       = 5432
     to_port         = 5432
     protocol        = "tcp"
@@ -142,17 +130,14 @@ resource "aws_security_group" "rds" {
   }
 
   ingress {
-    description     = "Allow PostgreSQL access strictly from Worker tasks"
+    description     = "PostgreSQL from Worker"
     from_port       = 5432
     to_port         = 5432
     protocol        = "tcp"
     security_groups = [aws_security_group.ecs_worker.id]
   }
 
-  # Egress is omitted: Database never initiates outbound connections
+  # RDS never initiates outbound — no egress needed
 
-  tags = {
-    Name = "${local.name_prefix}-sg-rds"
-    Tier = "Private-Database"
-  }
+  tags = { Name = "${local.name_prefix}-sg-rds" }
 }

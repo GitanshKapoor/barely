@@ -1,7 +1,7 @@
 # ==============================================================================
-# Barely - AWS ECS Fargate Terraform Module
-# Production Deployment: Application Load Balancer, AWS Cloud Map Private DNS,
-# Tiered Security Groups, Non-Root Fargate Tasks, Zero-Plaintext Secrets Manager.
+# Barely — AWS ECS Fargate Terraform
+# Fully self-contained: creates VPC, subnets, NAT, RDS, ECS, ALB, Secrets Manager.
+# User fills in db_password + at least one AI key. That's it.
 # ==============================================================================
 
 terraform {
@@ -11,6 +11,10 @@ terraform {
       source  = "hashicorp/aws"
       version = "~> 5.0"
     }
+    random = {
+      source  = "hashicorp/random"
+      version = "~> 3.0"
+    }
   }
 }
 
@@ -19,13 +23,24 @@ provider "aws" {
 
   default_tags {
     tags = {
-      Project     = "Barely"
+      Project     = var.project_name
       Environment = var.environment
       ManagedBy   = "Terraform"
     }
   }
 }
 
+data "aws_availability_zones" "available" {
+  state = "available"
+}
+
 locals {
-  name_prefix = "${var.app_name}-${var.environment}"
+  name_prefix = "${var.project_name}-${var.environment}"
+  azs         = slice(data.aws_availability_zones.available.names, 0, 2)
+}
+
+# Auto-generate encryption key if not provided
+resource "random_password" "secret_key" {
+  length  = 64
+  special = false
 }
