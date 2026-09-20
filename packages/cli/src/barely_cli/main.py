@@ -9,9 +9,11 @@ from barely_core.parser.goal_parser import GoalParser
 from barely_core.browser.engine import BrowserEngine
 from barely_core.agent.loop import AgentLoop
 from barely_cli.secrets import secret_app
+from barely_cli.models import model_app
 
 app = typer.Typer(help="Barely - Declarative AI-driven end-to-end testing.")
 app.add_typer(secret_app, name="secret")
+app.add_typer(model_app, name="model")
 
 @app.command()
 def doctor():
@@ -61,7 +63,7 @@ def run(
         parsed_goal.context = context
 
     start_url = url or "https://example.com"
-    selected_model = model or os.getenv("BARELY_MODEL") or "anthropic/claude-3-7-sonnet"
+    selected_model = model or os.getenv("BARELY_MODEL") or os.getenv("DEFAULT_MODEL") or "anthropic/claude-sonnet-4-5"
 
     # Auto-detect headless mode on Linux if no display is attached (e.g. EC2, CI, SSH)
     if not headless and sys.platform.startswith("linux"):
@@ -106,17 +108,37 @@ def run(
         except ImportError:
             typer.echo("⚠️ PDF Reporter plugin not installed.")
             
-        # 2. Jira Plugin (Runs only on failure)
-        if not result.success:
-            jira_domain = os.getenv("JIRA_DOMAIN")
-            if jira_domain:
-                try:
-                    from barely_jira.client import JiraReporter
-                    reporter = JiraReporter(jira_domain, os.getenv("JIRA_EMAIL"), os.getenv("JIRA_API_TOKEN"), os.getenv("JIRA_PROJECT_KEY"))
-                    issue_url = reporter.file_bug(result.goal_name, result.failure_reason, "\n".join(result.step_history))
-                    typer.echo(f"✅ Created Jira Bug: {issue_url}")
-                except ImportError:
-                    pass
+        # 2. Automated Defect Filing (Jira & GitHub) and Channel Notifications (Slack & Teams)
+        try:
+            from barely_core.integrations.dispatcher import dispatch_cli_notifications
+            run_id = Path(result.run_dir).name if hasattr(result, "run_dir") and result.run_dir else "cli-run"
+            run_data = {
+                "id": run_id,
+                "name": parsed_goal.name,
+                "start_url": start_url,
+                "device": "desktop",
+                "status": "completed" if result.success else "failed",
+                "success": result.success,
+                "failure_reason": result.failure_reason,
+                "model": selected_model,
+                "steps": [
+                    {"description": s.description, "thought": getattr(s, "thought", "")}
+                    for s in getattr(result, "rich_history", [])
+                ]
+            }
+            outcomes = dispatch_cli_notifications(run_data)
+            if outcomes.get("jira_url"):
+                typer.secho(f"🎫 Created Jira Bug: {outcomes['jira_url']}", fg=typer.colors.GREEN, bold=True)
+            if outcomes.get("github_url"):
+                typer.secho(f"🐙 Created GitHub Issue: {outcomes['github_url']}", fg=typer.colors.GREEN, bold=True)
+            if outcomes.get("slack_sent"):
+                typer.secho("📢 Dispatched incident notification to Slack.", fg=typer.colors.GREEN)
+            if outcomes.get("teams_sent"):
+                typer.secho("📢 Dispatched incident notification to Microsoft Teams.", fg=typer.colors.GREEN)
+            for err in outcomes.get("errors", []):
+                typer.secho(f"⚠️  Integration Warning: {err}", fg=typer.colors.YELLOW)
+        except Exception as ie:
+            pass
 
     except Exception as e:
         typer.echo(f"💥 Fatal Agent Error: {e}")

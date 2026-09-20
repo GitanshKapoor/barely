@@ -177,3 +177,79 @@ def dispatch_run_notifications(run_id: str):
         logger.error(f"Unexpected error in dispatch_run_notifications for run {run_id}: {e}")
     finally:
         db.close()
+
+def dispatch_cli_notifications(run_data: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Direct dispatcher for CLI and standalone test runs (no database session required).
+    Dispatches Jira, GitHub, Slack, and Microsoft Teams notifications if configured in .env.
+    Returns a dictionary of action outcomes.
+    """
+    outcomes: Dict[str, Any] = {
+        "jira_url": None,
+        "github_url": None,
+        "slack_sent": False,
+        "teams_sent": False,
+        "errors": []
+    }
+    is_failure = run_data.get("success") is False or run_data.get("status") == "failed"
+
+    # 1. Jira Issue Creation (if failed)
+    auto_jira = (get_setting("JIRA_AUTO_CREATE") or "true").strip().lower() in ("true", "1", "yes")
+    if is_failure and auto_jira:
+        jira_client = JiraClient()
+        if jira_client.is_configured:
+            try:
+                success, issue_key, issue_url, error = jira_client.create_issue(run_data)
+                if success and issue_url:
+                    outcomes["jira_url"] = issue_url
+                    run_data["jira_issue_key"] = issue_key
+                    run_data["jira_issue_url"] = issue_url
+                elif error:
+                    outcomes["errors"].append(f"Jira: {error}")
+            except Exception as je:
+                outcomes["errors"].append(f"Jira: {je}")
+
+    # 2. GitHub Issue Creation (if failed)
+    auto_github = (get_setting("GITHUB_AUTO_CREATE") or "true").strip().lower() in ("true", "1", "yes")
+    if is_failure and auto_github:
+        github_client = GitHubClient()
+        if github_client.is_configured:
+            try:
+                success, issue_num, issue_url, error = github_client.create_issue(run_data)
+                if success and issue_url:
+                    outcomes["github_url"] = issue_url
+                    run_data["github_issue_number"] = issue_num
+                    run_data["github_issue_url"] = issue_url
+                elif error:
+                    outcomes["errors"].append(f"GitHub: {error}")
+            except Exception as ge:
+                outcomes["errors"].append(f"GitHub: {ge}")
+
+    # 3. Slack Incident Notification
+    effective_channel = (get_setting("DEFAULT_NOTIFICATION_MECHANISM") or "both").strip().lower()
+    if effective_channel in ("both", "slack"):
+        slack_client = SlackClient()
+        slack_trigger = (get_setting("SLACK_NOTIFY_ON") or "failure_only").strip().lower()
+        if slack_client.is_configured and slack_trigger != "disabled":
+            should_notify = (slack_trigger == "all" or (slack_trigger == "failure_only" and is_failure))
+            if should_notify:
+                try:
+                    slack_client.send_notification(run_data)
+                    outcomes["slack_sent"] = True
+                except Exception as se:
+                    outcomes["errors"].append(f"Slack: {se}")
+
+    # 4. Microsoft Teams Incident Notification
+    if effective_channel in ("both", "teams"):
+        teams_client = TeamsClient()
+        teams_trigger = (get_setting("TEAMS_NOTIFY_ON") or "failure_only").strip().lower()
+        if teams_client.is_configured and teams_trigger != "disabled":
+            should_notify = (teams_trigger == "all" or (teams_trigger == "failure_only" and is_failure))
+            if should_notify:
+                try:
+                    teams_client.send_notification(run_data)
+                    outcomes["teams_sent"] = True
+                except Exception as te:
+                    outcomes["errors"].append(f"Teams: {te}")
+
+    return outcomes

@@ -120,13 +120,35 @@ def unset_dotenv(key: str, filepath: Path = Path(".env")) -> bool:
 
 @secret_app.command("set")
 def set_secret(
-    key: str = typer.Argument(..., help="Secret name (e.g. ANTHROPIC_API_KEY, GROQ_API_KEY)"),
+    key: Optional[str] = typer.Argument(None, help="Secret name (e.g. ANTHROPIC_API_KEY). If omitted, prompts with a menu."),
     value: Optional[str] = typer.Argument(None, help="Secret value. If omitted, prompts with hidden input.")
 ):
-    """Set or update an API key or secret. If value is omitted, prompts securely."""
-    clean_key = key.strip().upper()
+    """Set or update an API key or secret securely. Prompts with hidden input to protect shell history."""
+    if not key:
+        typer.echo("")
+        typer.secho("Select a secret to configure:", bold=True)
+        for i, (s_key, s_label) in enumerate(STANDARD_SECRETS, 1):
+            typer.echo(f"  {i}) {s_key:<20} ({s_label})")
+        typer.echo(f"  {len(STANDARD_SECRETS) + 1}) Custom key name...")
+        
+        choice = typer.prompt(f"Choose option [1-{len(STANDARD_SECRETS) + 1}]", default="1")
+        try:
+            idx = int(choice.strip()) - 1
+            if 0 <= idx < len(STANDARD_SECRETS):
+                clean_key = STANDARD_SECRETS[idx][0]
+            elif idx == len(STANDARD_SECRETS):
+                clean_key = typer.prompt("Enter custom secret name").strip().upper()
+            else:
+                typer.secho("❌ Invalid selection.", fg=typer.colors.RED)
+                raise typer.Exit(1)
+        except ValueError:
+            clean_key = choice.strip().upper()
+    else:
+        clean_key = key.strip().upper()
     
-    if not value:
+    if value is not None:
+        typer.secho("💡 Security Tip: To keep secrets out of shell history (~/.bash_history), run 'barely secret set <KEY>' without a value to enter it via hidden prompt.", fg=typer.colors.BLUE)
+    else:
         value = typer.prompt(f"Enter secret value for {clean_key}", hide_input=True)
 
     if not value or not value.strip():
