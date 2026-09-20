@@ -105,6 +105,7 @@ function formatActionDescription(desc: string, thought?: string | null): string 
 }
 
 export default function ClientRunDetails({ id }: { id: string }) {
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL || '';
   const [run, setRun] = useState<RunData | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'steps' | 'logs'>('steps');
@@ -127,7 +128,7 @@ export default function ClientRunDetails({ id }: { id: string }) {
 
   const fetchRun = async () => {
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || '';
       const res = await fetch(`${apiUrl}/api/runs/${id}`, { cache: 'no-store' });
       if (res.ok) {
         const data: RunData = await res.json();
@@ -149,7 +150,7 @@ export default function ClientRunDetails({ id }: { id: string }) {
     setCreatingJira(true);
     setJiraMessage(null);
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || '';
       const res = await fetch(`${apiUrl}/api/runs/${id}/jira`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -173,7 +174,7 @@ export default function ClientRunDetails({ id }: { id: string }) {
     setCreatingGithub(true);
     setGithubMessage(null);
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || '';
       const res = await fetch(`${apiUrl}/api/runs/${id}/github`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -218,7 +219,7 @@ export default function ClientRunDetails({ id }: { id: string }) {
     if (!confirm("Are you sure you want to cancel this running test?")) return;
     setCancelling(true);
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || '';
       await fetch(`${apiUrl}/api/runs/${id}/cancel`, { method: 'POST' });
       await fetchRun();
     } catch (e) {
@@ -469,7 +470,7 @@ export default function ClientRunDetails({ id }: { id: string }) {
 
           {/* Export PDF */}
           <button
-            onClick={() => window.open(`http://localhost:8000/api/runs/${run.id}/report?print=true`, '_blank')}
+            onClick={() => window.open(`${apiUrl}/api/runs/${run.id}/report?print=true`, '_blank')}
             className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 text-xs font-semibold rounded-lg transition-all shadow-sm cursor-pointer whitespace-nowrap"
             title="Print or export test run summary report as PDF"
           >
@@ -479,7 +480,7 @@ export default function ClientRunDetails({ id }: { id: string }) {
 
           {/* Download Artifacts Package */}
           <a 
-            href={`http://localhost:8000/api/runs/${run.id}/download`}
+            href={`${apiUrl}/api/runs/${run.id}/download`}
             download
             className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-800/80 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 text-xs font-semibold rounded-lg transition-all shadow-sm cursor-pointer whitespace-nowrap"
             title="Download ZIP package with step screenshots and trace"

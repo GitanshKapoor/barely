@@ -49,7 +49,7 @@ export default function BaselinesPage() {
 
   const fetchBaselines = async () => {
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || '';
       const res = await fetch(`${apiUrl}/api/baselines`, { cache: 'no-store' });
       if (res.ok) {
         const data = await res.json();

@@ -59,7 +59,7 @@ flowchart TD
         Distiller["DOM Distiller Engine\nARIA Tree Pruning & Unique ID Injection"]
         CacheCheck{"Action Plan\nCache Hit?"}
         LLM["LiteLLM Multi-Modal Reasoning Loop\nAnthropic Claude • OpenAI GPT • Google Gemini • Groq"]
-        Runner["Playwright Browser Automation\nEphemeral K8s Runner Pods / ECS Tasks\nNon-Root UID 10001 • 1GB /dev/shm"]
+        Runner["Playwright Browser Automation\nEphemeral K8s Runner Pods / ECS Tasks\nNon-Root UID 10001 • Auto shm sizing"]
         VRT["Autonomous VRT Engine\nViewport Snapshots across Desktop, Tablet, Mobile"]
     end
 
@@ -197,8 +197,16 @@ securityContext:
     type: RuntimeDefault
 ```
 
-### 2. Chromium Shared Memory Protection (`/dev/shm 1Gi`)
-Browser engines execute intensive multi-tab layout rendering. Without dedicated shared memory, Docker containers frequently crash with `SIGSEGV` or `Target closed`. Barely provisions 1GB dedicated `/dev/shm` across Docker Compose, Kubernetes Helm, and AWS ECS task definitions.
+### 2. Chromium Shared Memory Protection
+Browser engines execute intensive multi-tab layout rendering. Without adequate shared memory, containers crash with `SIGSEGV` or `Target closed`. Barely handles this per platform:
+
+| Platform | `/dev/shm` | Mechanism |
+| :--- | :--- | :--- |
+| Docker Compose | 1GB | `shm_size: 1gb` on the worker service |
+| Kubernetes Helm | 1Gi | `dshm` emptyDir with `medium: Memory` |
+| AWS ECS Fargate | 64MB (fixed) | Fargate rejects `linuxParameters.sharedMemorySize`, so it cannot be raised |
+
+Because Fargate pins `/dev/shm` at 64MB, `BrowserEngine` measures it at launch and adds Chromium's `--disable-dev-shm-usage` only when it falls below a 256MB threshold, moving scratch space to disk-backed `/tmp`. Compose and Kubernetes keep the faster RAM-backed `/dev/shm` untouched.
 
 ### 3. Zero-Leak Secrets Management
 - **Master Encryption Key (`BARELY_SECRET_KEY`)**: 256-bit symmetric key (`openssl rand -hex 32`) powering Authenticated Symmetric Cipher / Fernet AES-256 encryption for all credentials stored at rest in PostgreSQL.
