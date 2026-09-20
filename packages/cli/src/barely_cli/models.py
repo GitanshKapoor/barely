@@ -70,7 +70,7 @@ def list_models():
         is_active = (model_id == active)
         has_key = bool(os.getenv(key_name) and os.getenv(key_name).strip())
 
-        prefix = "★" if is_active else " "
+        prefix = "[✓]" if is_active else "[ ]"
         key_badge = " [Key configured]" if has_key else " [No key - run 'barely secret set']"
 
         if is_active:

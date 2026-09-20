@@ -1,4 +1,5 @@
 import os
+import sys
 from pathlib import Path
 from typing import Optional
 
@@ -125,6 +126,9 @@ def set_secret(
 ):
     """Set or update an API key or secret securely. Prompts with hidden input to protect shell history."""
     if not key:
+        if not sys.stdin.isatty():
+            typer.secho("❌ Secret key name must be specified when piping input (e.g. 'cat key.txt | barely secret set KEY').", fg=typer.colors.RED)
+            raise typer.Exit(1)
         typer.echo("")
         typer.secho("Select a secret to configure:", bold=True)
         for i, (s_key, s_label) in enumerate(STANDARD_SECRETS, 1):
@@ -148,6 +152,9 @@ def set_secret(
     
     if value is not None:
         typer.secho("💡 Security Tip: To keep secrets out of shell history (~/.bash_history), run 'barely secret set <KEY>' without a value to enter it via hidden prompt.", fg=typer.colors.BLUE)
+    elif not sys.stdin.isatty():
+        # Read from piped stdin (e.g. cat token.txt | barely secret set ANTHROPIC_API_KEY)
+        value = sys.stdin.read().strip()
     else:
         value = typer.prompt(f"Enter secret value for {clean_key}", hide_input=True)
 

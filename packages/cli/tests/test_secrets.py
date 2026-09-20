@@ -93,6 +93,13 @@ class TestBarelySecrets(unittest.TestCase):
             unset_res = self.runner.invoke(secret_app, ["unset", "GROQ_API_KEY"])
             self.assertEqual(unset_res.exit_code, 0)
             self.assertIn("Removed GROQ_API_KEY", unset_res.stdout)
+
+            # Test piped input (simulate cat token.txt | barely secret set KEY)
+            pipe_res = self.runner.invoke(secret_app, ["set", "OPENAI_API_KEY"], input="sk-openai-piped-secret-9999\n")
+            self.assertEqual(pipe_res.exit_code, 0)
+            self.assertIn("Successfully saved OPENAI_API_KEY", pipe_res.stdout)
+            env_content = (Path(self.temp_dir.name) / ".env").read_text()
+            self.assertIn("OPENAI_API_KEY=sk-openai-piped-secret-9999", env_content)
         finally:
             os.chdir(cwd)
 
