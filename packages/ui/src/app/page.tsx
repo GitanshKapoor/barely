@@ -4,7 +4,9 @@ import AutoRefresher from "../components/AutoRefresher";
 
 async function getStats() {
   try {
-    const apiUrl = process.env.API_URL || 'http://barely-api:8000';
+    // Server-side fetch needs an absolute URL. Every platform sets INTERNAL_API_URL
+    // on the UI container; API_URL is kept as a fallback for older compose files.
+    const apiUrl = process.env.INTERNAL_API_URL || process.env.API_URL || 'http://barely-api:8000';
     const res = await fetch(`${apiUrl}/api/runs`, { cache: 'no-store' });
     if (!res.ok) return { runs: [] };
     const data = await res.json();

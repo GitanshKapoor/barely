@@ -12,12 +12,22 @@ from barely_cli.doctor import (
     run_doctor
 )
 
+from collections import namedtuple
+
+VersionInfo = namedtuple("VersionInfo", ["major", "minor", "micro"])
+
 class TestBarelyDoctor(unittest.TestCase):
 
     def test_python_version_check(self):
-        ok, msg = check_python_version()
-        self.assertTrue(ok)
-        self.assertIn("Python", msg)
+        with patch.object(sys, "version_info", VersionInfo(3, 11, 0)):
+            ok, msg = check_python_version()
+            self.assertTrue(ok)
+            self.assertIn("Python", msg)
+
+        with patch.object(sys, "version_info", VersionInfo(3, 9, 0)):
+            ok, msg = check_python_version()
+            self.assertFalse(ok)
+            self.assertIn("requires Python 3.10", msg)
 
     @patch("platform.system", return_value="Darwin")
     def test_display_environment_macos(self, mock_system):
@@ -68,8 +78,9 @@ class TestBarelyDoctor(unittest.TestCase):
     @patch("barely_cli.doctor.check_playwright", return_value=(True, "Chromium browser installed"))
     @patch("barely_cli.doctor.check_api_keys", return_value=(True, ["Anthropic configured"]))
     def test_run_doctor_healthy(self, mock_keys, mock_pw):
-        result = run_doctor()
-        self.assertTrue(result)
+        with patch.object(sys, "version_info", VersionInfo(3, 11, 0)):
+            result = run_doctor()
+            self.assertTrue(result)
 
 if __name__ == "__main__":
     unittest.main()

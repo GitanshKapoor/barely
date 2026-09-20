@@ -25,17 +25,35 @@ class BrowserEngine:
         script_path = Path(__file__).parent / "distiller.js"
         self._distiller_script = script_path.read_text(encoding="utf-8")
 
+    @staticmethod
+    def _shm_too_small(threshold_mb: int = 256) -> bool:
+        """True when /dev/shm is too small for Chromium to render in.
+
+        Fargate pins /dev/shm to 64MB and rejects linuxParameters.sharedMemorySize,
+        so Chromium must fall back to /tmp there or it dies with SIGSEGV / Target closed.
+        Docker Compose (shm_size: 1gb) and the Helm chart (dshm emptyDir, medium: Memory)
+        provision plenty, and keep the faster RAM-backed /dev/shm.
+        """
+        try:
+            st = os.statvfs("/dev/shm")
+        except (OSError, AttributeError):
+            return False  # Windows/macOS: no /dev/shm, Chromium does not use it
+        return st.f_blocks * st.f_frsize < threshold_mb * 1024 * 1024
+
     def start(self):
         """Initializes the browser with realistic browser profiles."""
         self._playwright = sync_playwright().start()
+        args = [
+            "--disable-blink-features=AutomationControlled",
+            "--no-sandbox",
+            "--disable-setuid-sandbox",
+            "--disable-infobars",
+        ]
+        if self._shm_too_small():
+            args.append("--disable-dev-shm-usage")
         self._browser = self._playwright.chromium.launch(
             headless=self.headless,
-            args=[
-                "--disable-blink-features=AutomationControlled",
-                "--no-sandbox",
-                "--disable-setuid-sandbox",
-                "--disable-infobars"
-            ]
+            args=args
         )
         
         if self.device == "ios":

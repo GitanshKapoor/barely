@@ -33,7 +33,7 @@ export default function ExecutionsPage() {
 
   const fetchRuns = async () => {
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || '';
       const res = await fetch(`${apiUrl}/api/runs`, { cache: 'no-store' });
       if (res.ok) {
         const data = await res.json();
@@ -58,7 +58,7 @@ export default function ExecutionsPage() {
     if (!confirm("Are you sure you want to cancel this execution run?")) return;
     setCancellingId(id);
     try {
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || '';
       const res = await fetch(`${apiUrl}/api/runs/${id}/cancel`, { method: 'POST' });
       if (res.ok) {
         await fetchRuns();

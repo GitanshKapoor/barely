@@ -1,54 +1,67 @@
 # ==============================================================================
-# Barely Terraform Module - Example Variables
-# Copy to terraform.tfvars and populate with your AWS account details
+# Barely — Example Variables
+# Copy to terraform.tfvars and fill in. Everything not set here uses the
+# default in variables.tf. The VPC, subnets and RDS instance are created by
+# this module, so no existing network IDs are required.
 # ==============================================================================
 
-aws_region  = "us-east-1"
-environment = "prod"
-app_name    = "barely"
+# --- Required ---
 
-# VPC & Subnets
-vpc_id = "vpc-0123456789abcdef0"
+# RDS master password. Min 8 chars; no '/', '@', '"' or spaces.
+db_password = "ChangeMe_StrongPassword123!"
 
-# Public subnets across at least 2 Availability Zones for the internet-facing ALB
-public_subnet_ids = [
-  "subnet-01111111111111111",
-  "subnet-02222222222222222"
-]
+# --- LLM Providers (at least one, or the agent cannot run) ---
 
-# Private subnets where ECS Fargate tasks execute (no public IPs assigned)
-private_app_subnet_ids = [
-  "subnet-03333333333333333",
-  "subnet-04444444444444444"
-]
+anthropic_api_key = "sk-ant-api03-..."
+# openai_api_key  = "sk-..."
+# gemini_api_key  = "..."
+# groq_api_key    = "gsk_..."
 
-# Private subnets for RDS PostgreSQL database
-private_data_subnet_ids = [
-  "subnet-05555555555555555",
-  "subnet-06666666666666666"
-]
+default_model = "anthropic/claude-sonnet-4-5"
 
-# Optional SSL/TLS Certificate ARN from AWS ACM
-# If provided, ALB enables HTTPS on port 443 with HTTP-to-HTTPS redirect on port 80
-acm_certificate_arn = "arn:aws:acm:us-east-1:123456789012:certificate/abcdef01-2345-6789-abcd-ef0123456789"
+# --- Encryption ---
 
-# Container Images (ECR URIs)
-api_image    = "123456789012.dkr.ecr.us-east-1.amazonaws.com/barely-api:1.0.0"
-ui_image     = "123456789012.dkr.ecr.us-east-1.amazonaws.com/barely-ui:1.0.0"
-worker_image = "123456789012.dkr.ecr.us-east-1.amazonaws.com/barely-worker:1.0.0"
+# AES-256 key for secrets stored in PostgreSQL. Generate: openssl rand -hex 32
+# Leave empty to have one auto-generated. Set it explicitly to keep encrypted
+# settings readable across a full teardown and rebuild.
+barely_secret_key = ""
 
-# Task Sizing
-api_cpu             = 1024
-api_memory          = 2048
-api_desired_count   = 2
+# --- General ---
 
-ui_cpu              = 512
-ui_memory           = 1024
-ui_desired_count    = 2
+aws_region   = "us-east-1"
+project_name = "barely"
+environment  = "production"
+vpc_cidr     = "10.0.0.0/16"
 
-worker_cpu          = 2048
-worker_memory       = 4096
-worker_desired_count = 2
+# --- Container Images ---
 
-# Fargate Spot allocation for Worker pool (100 = 100% Spot for cost optimization)
-fargate_spot_weight = 100
+# Must match the architecture the images were built for. See README
+# "Rebuilding the images" — build with --provenance=false --sbom=false or
+# Fargate cannot resolve the manifest.
+cpu_architecture = "X86_64"
+
+api_image    = "docker.io/gitansh16k/ecs-barely-api:v1.6"
+worker_image = "docker.io/gitansh16k/ecs-barely-worker:v1.6"
+ui_image     = "docker.io/gitansh16k/ecs-barely-ui:v1.6"
+
+# --- Database Tier ---
+
+db_instance_class    = "db.t3.micro"
+db_allocated_storage = 20
+db_name              = "barelydb"
+db_username          = "barely_admin"
+
+# --- Task Sizing ---
+
+api_cpu           = 1024
+api_memory        = 2048
+api_desired_count = 1
+
+# Worker runs Chromium — keep memory generous.
+worker_cpu           = 2048
+worker_memory        = 4096
+worker_desired_count = 1
+
+ui_cpu           = 512
+ui_memory        = 1024
+ui_desired_count = 1

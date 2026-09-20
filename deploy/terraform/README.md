@@ -1,181 +1,185 @@
-# ☁️ Barely - AWS ECS Fargate Deployment via Terraform
+# Barely — AWS ECS Fargate Deployment
 
-Production Terraform module deploying **Barely** on **AWS ECS Fargate** with zero-trust networking, Application Load Balancer (ALB), and AWS Cloud Map private DNS.
-
----
-
-## AWS Architecture Topology
-
-```mermaid
-flowchart TD
-    subgraph Internet["Public Internet"]
-        User["User / CI Pipeline"]
-    end
-
-    subgraph AWSVPC["AWS VPC (10.0.0.0/16)"]
-        subgraph PublicSubnets["Public Subnets (AZ-a, AZ-b)"]
-            ALB["Application Load Balancer (ALB)\nSecurity Group: sg-alb\nPorts: 80 (Redirect), 443 (HTTPS)"]
-            NAT["NAT Gateways (AZ-a, AZ-b)\nOutbound Internet Access"]
-        end
-
-        subgraph PrivateAppSubnets["Private Application Subnets (AZ-a, AZ-b)"]
-            subgraph CloudMap["AWS Cloud Map (Private DNS: barely.internal)"]
-                API_DNS["api.barely.internal:8000"]
-                UI_DNS["ui.barely.internal:3000"]
-            end
-
-            ECSUi["ECS Service: barely-ui\n(AWS Fargate)\nSecurity Group: sg-ecs-ui\nPort: 3000 | Non-Root UID 10001\nassign_public_ip: false"]
-            ECSApi["ECS Service: barely-api\n(AWS Fargate)\nSecurity Group: sg-ecs-api\nPort: 8000 | Non-Root UID 10001\nassign_public_ip: false"]
-            ECSWorker["ECS Service: barely-worker\n(AWS Fargate / Fargate Spot)\nSecurity Group: sg-ecs-worker\n0 Inbound Ports | Non-Root UID 10001\nassign_public_ip: false"]
-        end
-
-        subgraph PrivateDataSubnets["Private Database Subnets (AZ-a, AZ-b)"]
-            RDS[("Amazon RDS PostgreSQL 16\nSecurity Group: sg-rds\nPort: 5432 (SSL Required)")]
-        end
-
-        subgraph AWSServices["Managed AWS Services"]
-            SM["AWS Secrets Manager & KMS\n(API Keys & DB Credentials)"]
-            CW["CloudWatch Log Group\n(/ecs/barely-prod)"]
-        end
-    end
-
-    subgraph ExternalTargets["External SaaS & Tested Domains"]
-        ExternalAPIs["OpenAI / Anthropic / Tested Domains"]
-    end
-
-    User -->|HTTPS :443| ALB
-    ALB -->|Route /* :3000| ECSUi
-    ALB -->|Route /api/* :8000| ECSApi
-    ECSUi -->|Internal API :8000| ECSApi
-    ECSApi -->|SQL :5432| RDS
-    ECSWorker -->|SQL :5432| RDS
-    ECSApi -.->|Task Execution Role| SM
-    ECSWorker -.->|Task Execution Role| SM
-    ECSApi -.-> CW
-    ECSWorker -.-> CW
-    ECSUi -.-> CW
-    ECSApi -->|NAT Gateway :443| NAT
-    ECSWorker -->|NAT Gateway :80, :443| NAT
-    NAT -->|HTTPS :443| ExternalAPIs
-```
-
----
-
-## Security Groups Firewall Rules Matrix
-
-| Security Group | Inbound Rules | Outbound Rules | Security Rationale |
-| :--- | :--- | :--- | :--- |
-| **`sg-alb`** (ALB) | • `0.0.0.0/0` on `80` (HTTP)<br>• `0.0.0.0/0` on `443` (HTTPS) | • `sg-ecs-ui` on `3000`<br>• `sg-ecs-api` on `8000` | Internet entry point. Terminates TLS and forwards strictly to private target groups. |
-| **`sg-ecs-ui`** (UI) | • `sg-alb` on `3000` | • `sg-ecs-api` on `8000`<br>• `0.0.0.0/0` on `443` (VPC/NAT) | UI is inaccessible directly from the internet. Communicates only with API. **Zero access to RDS.** |
-| **`sg-ecs-api`** (API) | • `sg-alb` on `8000`<br>• `sg-ecs-ui` on `8000` | • `sg-rds` on `5432`<br>• `0.0.0.0/0` on `443` (NAT Gateway) | API accepts traffic only from ALB and UI. Connects strictly to RDS and outbound integrations. |
-| **`sg-ecs-worker`** (Worker) | **NONE (0 Inbound Rules)** | • `sg-rds` on `5432`<br>• `0.0.0.0/0` on `80, 443` (NAT Gateway) | Worker accepts zero incoming traffic. Initiates outbound connections for browser testing. |
-| **`sg-rds`** (RDS) | • `sg-ecs-api` on `5432`<br>• `sg-ecs-worker` on `5432` | **NONE (0 Outbound Rules)** | Database is completely private. Accessible only by authorized application tasks. |
-
----
+Deploy the complete Barely stack to AWS ECS Fargate with a single command. This module creates the **entire** infrastructure from scratch — VPC, subnets, NAT Gateway, RDS PostgreSQL, ECS Fargate cluster, ALB, Secrets Manager, Cloud Map DNS.
 
 ## Prerequisites
-- **Terraform** >= 1.5.0 installed
-- **AWS CLI v2** configured with administrator credentials
-- Existing AWS VPC with public and private subnets across at least 2 Availability Zones
-- AWS ECR repositories for container images
 
----
+- [Terraform >= 1.5](https://developer.hashicorp.com/terraform/install)
+- AWS CLI configured (`aws configure`)
+- At least one AI provider API key (Anthropic, OpenAI, Gemini, or Groq)
 
-## Deployment Walkthrough
+## Quick Start
 
-### Step 1: Push Container Images to ECR
-```bash
-# Authenticate Docker to your AWS ECR registry
-aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 123456789012.dkr.ecr.us-east-1.amazonaws.com
-
-# Build & push API
-docker build -t 123456789012.dkr.ecr.us-east-1.amazonaws.com/barely-api:1.0.0 --target api .
-docker push 123456789012.dkr.ecr.us-east-1.amazonaws.com/barely-api:1.0.0
-
-# Build & push UI
-docker build -t 123456789012.dkr.ecr.us-east-1.amazonaws.com/barely-ui:1.0.0 -f Dockerfile.ui .
-docker push 123456789012.dkr.ecr.us-east-1.amazonaws.com/barely-ui:1.0.0
-
-# Build & push Worker
-docker build -t 123456789012.dkr.ecr.us-east-1.amazonaws.com/barely-worker:1.0.0 --target worker .
-docker push 123456789012.dkr.ecr.us-east-1.amazonaws.com/barely-worker:1.0.0
-```
-
-### Step 2: Configure Terraform Variables
 ```bash
 cd deploy/terraform
 cp terraform.tfvars.example terraform.tfvars
-```
-Edit `terraform.tfvars` with your specific VPC IDs, subnets, ACM certificate ARN, and ECR image tags:
-```hcl
-aws_region          = "us-east-1"
-environment         = "prod"
-app_name            = "barely"
-vpc_id              = "vpc-0123456789abcdef0"
-public_subnet_ids   = ["subnet-01111111111111111", "subnet-02222222222222222"]
-private_app_subnet_ids = ["subnet-03333333333333333", "subnet-04444444444444444"]
-private_data_subnet_ids = ["subnet-05555555555555555", "subnet-06666666666666666"]
-acm_certificate_arn = "arn:aws:acm:us-east-1:123456789012:certificate/..."
-api_image           = "123456789012.dkr.ecr.us-east-1.amazonaws.com/barely-api:1.0.0"
-ui_image            = "123456789012.dkr.ecr.us-east-1.amazonaws.com/barely-ui:1.0.0"
-worker_image        = "123456789012.dkr.ecr.us-east-1.amazonaws.com/barely-worker:1.0.0"
-```
 
-### Step 3: Initialize & Deploy
-```bash
-# Initialize Terraform and download provider plugins
+# Edit terraform.tfvars — set ONLY these 2 values:
+#   db_password       = "YourStrongPassword123!"
+#   anthropic_api_key = "sk-ant-api03-..."
+
 terraform init
-
-# Review execution plan
-terraform plan
-
-# Apply infrastructure changes
 terraform apply
 ```
 
-### Step 4: Populate AWS Secrets Manager
-After Terraform provisions the secret container (`barely-prod-secrets`), populate it with your actual credentials:
-```bash
-aws secretsmanager put-secret-value \
-  --secret-id barely-prod-secrets \
-  --secret-string '{
-    "DATABASE_URL": "postgresql://barely_user:password@rds.endpoint:5432/barelydb?sslmode=require",
-    "BARELY_SECRET_KEY": "your_256_bit_hex_secret_key_here",
-    "ANTHROPIC_API_KEY": "sk-ant-api03-...",
-    "OPENAI_API_KEY": "sk-proj-...",
-    "JIRA_API_TOKEN": "your_token",
-    "SLACK_WEBHOOK_URL": "https://hooks.slack.com/services/..."
-  }'
+**That's it.** Terraform creates ~30 AWS resources in ~8 minutes:
+
+```
+Apply complete! Resources: 30 added, 0 changed, 0 destroyed.
+
+Outputs:
+  dashboard_url    = "http://barely-production-alb-123456789.us-east-1.elb.amazonaws.com"
+  api_docs_url     = "http://barely-production-alb-123456789.us-east-1.elb.amazonaws.com/docs"
+  rds_endpoint     = "barely-production-db.abc123.us-east-1.rds.amazonaws.com"
+  nat_gateway_ip   = "52.xx.xx.xx"
 ```
 
-### Step 5: Force ECS Deployment to Pick Up Secrets
-```bash
-aws ecs update-service --cluster barely-prod-cluster --service barely-prod-api --force-new-deployment
-aws ecs update-service --cluster barely-prod-cluster --service barely-prod-worker --force-new-deployment
+## What Gets Created
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                        VPC (10.0.0.0/16)                    │
+│                                                             │
+│  ┌──────────────────────┐  ┌──────────────────────┐        │
+│  │  Public Subnet AZ-1  │  │  Public Subnet AZ-2  │        │
+│  │  10.0.0.0/24         │  │  10.0.1.0/24         │        │
+│  │  [ALB] [NAT Gateway] │  │  [ALB]               │        │
+│  └──────────────────────┘  └──────────────────────┘        │
+│                                                             │
+│  ┌──────────────────────┐  ┌──────────────────────┐        │
+│  │  Private App AZ-1    │  │  Private App AZ-2    │        │
+│  │  10.0.10.0/24        │  │  10.0.11.0/24        │        │
+│  │  [API] [Worker] [UI] │  │  [API] [Worker] [UI] │        │
+│  └──────────────────────┘  └──────────────────────┘        │
+│                                                             │
+│  ┌──────────────────────┐  ┌──────────────────────┐        │
+│  │  Private Data AZ-1   │  │  Private Data AZ-2   │        │
+│  │  10.0.20.0/24        │  │  10.0.21.0/24        │        │
+│  │  [RDS Primary]       │  │  [RDS Standby]       │        │
+│  └──────────────────────┘  └──────────────────────┘        │
+└─────────────────────────────────────────────────────────────┘
 ```
 
----
+| Resource | Details |
+|----------|---------|
+| **VPC** | `10.0.0.0/16`, DNS support enabled |
+| **Subnets** | 6 subnets across 2 AZs (2 public, 2 private app, 2 private data) |
+| **Internet Gateway** | Public subnet outbound |
+| **NAT Gateway** | Private subnet outbound (ECR pulls, CloudWatch, LLM APIs) |
+| **RDS PostgreSQL 16** | Private data subnets, encrypted, automated backups, Multi-AZ in production |
+| **ECS Fargate Cluster** | Container Insights enabled, Fargate Spot for Workers |
+| **3 ECS Services** | API (FastAPI), Worker (Playwright), UI (Next.js) |
+| **ALB** | Path-based routing: `/api/*` → API, `/*` → UI |
+| **Cloud Map** | Private DNS: `api.<project>.internal`, `worker.<project>.internal` |
+| **Secrets Manager** | All secrets stored encrypted, referenced by ECS via `valueFrom` |
+| **5 Security Groups** | Tiered zero-trust: ALB → UI → API → RDS, Worker has zero inbound |
+| **IAM Roles** | Least-privilege execution + task roles |
 
-## Operational Verification
+## How Passwords & Secrets Work
 
-### Check ALB Target Health
-```bash
-aws elbv2 describe-target-health \
-  --target-group-arn $(terraform output -raw alb_dns_name)
+**Zero plaintext secrets anywhere.**
+
+1. You set `db_password` and `anthropic_api_key` in `terraform.tfvars` (git-ignored, never committed)
+2. Terraform creates an AWS Secrets Manager secret containing all sensitive values as a JSON blob
+3. ECS task definitions reference secrets via `valueFrom` — the ECS agent fetches them at container startup
+4. Secrets **never** appear in:
+   - ECS Console task definition view
+   - CloudTrail API logs
+   - Container environment variable dumps
+   - Git history
+
+```
+terraform.tfvars (local only, git-ignored)
+    ↓
+AWS Secrets Manager (encrypted at rest with KMS)
+    ↓
+ECS Task Definition (references ARN, not value)
+    ↓
+Container runtime (injected as env var at startup)
 ```
 
-### Stream CloudWatch Logs
-```bash
-# Stream API logs in real-time
-aws logs tail /ecs/barely-prod --follow --filter-pattern "api"
+The `BARELY_SECRET_KEY` (AES-256 encryption key) is auto-generated if you don't provide one.
 
-# Stream Worker test logs
-aws logs tail /ecs/barely-prod --follow --filter-pattern "worker"
+## Configuration Reference
+
+### Required (2 values)
+
+| Variable | Description |
+|----------|-------------|
+| `db_password` | RDS PostgreSQL master password (min 8 characters) |
+| `anthropic_api_key` | At least one AI provider key (or `openai_api_key`, `gemini_api_key`, `groq_api_key`) |
+
+### Optional — Database Tier
+
+| Variable | Default | Options |
+|----------|---------|---------|
+| `db_instance_class` | `db.t3.micro` | `db.t3.small`, `db.t3.medium`, `db.r6g.large` |
+| `db_allocated_storage` | `20` GB | Any number |
+
+### Optional — Container Sizing
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `api_cpu` / `api_memory` | `1024` / `2048` | 1 vCPU, 2 GB |
+| `worker_cpu` / `worker_memory` | `2048` / `4096` | 2 vCPU, 4 GB (Chromium needs this) |
+| `ui_cpu` / `ui_memory` | `512` / `1024` | 0.5 vCPU, 1 GB |
+| `*_desired_count` | `1` | Number of task replicas |
+
+### Optional — Container Images
+
+| Variable | Default |
+|----------|---------|
+| `api_image` | `gitansh16k/ecs-barely-api:v1.6` |
+| `worker_image` | `gitansh16k/ecs-barely-worker:v1.6` |
+| `ui_image` | `gitansh16k/ecs-barely-ui:v1.6` |
+| `cpu_architecture` | `X86_64` |
+
+### Rebuilding the images
+
+Fargate pulls the platform declared by `cpu_architecture`. Build with both flags below, or the task fails to start:
+
+```bash
+DH=gitansh16k; REPO=ecs-barely; TAG=v1.6
+docker login -u $DH
+
+docker build --platform linux/amd64 --provenance=false --sbom=false --target api    -t $DH/$REPO-api:$TAG .
+docker build --platform linux/amd64 --provenance=false --sbom=false --target worker -t $DH/$REPO-worker:$TAG .
+docker build --platform linux/amd64 --provenance=false --sbom=false -f Dockerfile.ui -t $DH/$REPO-ui:$TAG .
+
+for i in api worker ui; do docker push $DH/$REPO-$i:$TAG; done
 ```
 
----
+- **`--provenance=false --sbom=false`** — with Docker's containerd image store, `docker build` exports an OCI *manifest list* carrying provenance attestations. The attestation descriptor has platform `unknown/unknown`, which Fargate cannot resolve, failing the pull with `image Manifest does not contain descriptor matching platform 'linux/amd64'` **even when the image really is amd64**. These flags export a plain single-platform manifest.
+- **`--platform linux/amd64`** — must match `cpu_architecture`. For arm64 Fargate, build `--platform linux/arm64` and set `cpu_architecture = "ARM64"`.
 
-## Teardown
+Verify before applying — one `linux/amd64` entry, no `unknown/unknown`:
+
+```bash
+docker buildx imagetools inspect $DH/$REPO-worker:$TAG
+```
+
+ECS caches by tag, so pushing over an existing tag will not redeploy. Bump `TAG` instead.
+
+## Tear Down
+
 ```bash
 terraform destroy
 ```
+
+Destroys all 30 resources cleanly. RDS has `skip_final_snapshot = true` and `deletion_protection = false` for easy teardown.
+
+## Estimated Monthly Cost
+
+| Resource | Cost |
+|----------|------|
+| NAT Gateway | ~$32/mo |
+| RDS db.t3.micro | Free tier / ~$15/mo |
+| ECS Fargate (3 tasks) | ~$40-80/mo |
+| ALB | ~$16/mo |
+| **Total** | **~$100-140/mo** |
+
+> Workers use **Fargate Spot** by default (up to 70% savings on compute).
+
+## License
+
+MIT License. See [LICENSE](../../LICENSE) for details.

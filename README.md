@@ -54,11 +54,38 @@ Barely combines vision-enabled AI reasoning with enterprise cloud execution prim
 
 ## 🚀 Getting Started
 
-Barely is built for speed and simplicity. It can be launched instantly with Docker Compose or installed locally as a Python package.
+### Option A: Native CLI (Recommended)
 
-### Option A: Quickstart with Docker Compose (Recommended)
+Up and running in 60 seconds. Zero-assumption installers handle everything — packages, Python venv, Playwright Chromium, and `.env` generation:
 
-Clone the repository and launch the full platform (PostgreSQL, Control Plane API, Background Worker, and Next.js UI) in seconds:
+```bash
+# One-line install (auto-detects Ubuntu, RHEL, macOS, Windows)
+curl -sSL https://raw.githubusercontent.com/GitanshKapoor/barely/main/install.sh | bash
+source .venv/bin/activate
+
+# Configure your AI provider key (hidden prompt — nothing saved to shell history)
+barely secret set ANTHROPIC_API_KEY
+
+# Verify environment
+barely doctor
+
+# Choose your AI model
+barely model set anthropic/claude-sonnet-4-5
+
+# Initialize workspace and run your first test
+barely init
+barely run .barely/goals/example.md --url https://example.com
+```
+
+After every `barely run`, the CLI automatically generates PDF reports and — if configured — files Jira bugs, creates GitHub issues, and sends Slack/Teams notifications on failure.
+
+> On headless Linux cloud instances or SSH sessions without `$DISPLAY`, Barely automatically activates `--headless` mode.
+
+---
+
+### Option B: Docker Compose (Recommended for Teams)
+
+Launch the full platform (PostgreSQL, Control Plane API, Background Worker, and Next.js UI) in seconds:
 
 ```bash
 git clone https://github.com/GitanshKapoor/barely.git
@@ -71,88 +98,22 @@ Once running, access:
 - 🌐 **Web Dashboard:** [http://localhost:3000](http://localhost:3000)
 - 🔌 **API Documentation:** [http://localhost:8000/docs](http://localhost:8000/docs)
 
----
-
-### Option B: Local CLI Installation
-
-Barely includes automated, zero-assumption installation scripts for Ubuntu/Debian (EC2/Cloud VMs), RHEL/Fedora, macOS, and Windows:
-
-#### Quick Automated Setup
-```bash
-git clone https://github.com/GitanshKapoor/barely.git
-cd barely
-
-# 1. Run the cross-platform installer (auto-detects OS and installs packages & browser dependencies)
-./install.sh
-
-# Or run the dedicated installer for your specific operating system:
-# Ubuntu/Debian (EC2):  ./scripts/install-ubuntu.sh
-# RHEL/Amazon Linux:    ./scripts/install-rhel.sh
-# macOS:                ./scripts/install-mac.sh
-# Windows PowerShell:   powershell -ExecutionPolicy Bypass -File scripts\install-windows.ps1
-```
-
-#### 2. Verify Setup with Environment Diagnostics
-Run `barely doctor` at any time to verify Python, Playwright Chromium, system display status, and configured AI keys:
-```bash
-source .venv/bin/activate
-barely doctor
-```
-
-#### 3. Configure API Keys Securely
-Add your AI keys without opening text editors or leaking tokens into your shell history:
-```bash
-# Set interactively via hidden prompt (never leaks into bash history):
-barely secret set ANTHROPIC_API_KEY
-
-# Or set directly:
-barely secret set GROQ_API_KEY gsk_...
-
-# View configured secrets (safely masked):
-barely secret list
-```
-
-#### 4. Write a Test Goal (`.barely/goals/checkout.md`)
-```markdown
----
-name: Checkout Flow
-tags: [smoke, e2e]
-timeout: 120
-context: "You are testing an e-commerce store ABC. Act as a shopper browsing the catalog, managing cart, and purchasing."
----
-# Test Checkout Flow
-1. Navigate to the homepage
-2. Search for "Laptop"
-3. Add the first result to the cart
-4. Verify the cart badge displays "1"
-```
-
-#### 5. Run the Agent
-```bash
-barely run \
-  --url https://staging.myapp.com \
-  --goal .barely/goals/checkout.md \
-  --context "You are testing an e-commerce store ABC" \
-  --model anthropic/claude-sonnet-4-5
-```
-> 💡 *Note: On headless Linux cloud instances or SSH sessions without an active monitor, Barely automatically activates `--headless` mode.*
-
 ## 🏗️ Enterprise Cloud Deployments & Runbooks
 
 Barely is engineered for cloud scale with production-ready installation runbooks and infrastructure manifests:
 
 | Target Environment | Key Highlights | Dedicated Installation Runbook |
 | :--- | :--- | :--- |
-| 🐳 **Docker Compose** | Multi-bridge network isolation, non-root execution (`UID 10001`), 1GB `/dev/shm` for Chromium, zero DB host ports. | [📖 Docker Compose Runbook](deploy/docker/README.md) |
+| 🐳 **Docker Compose** | Full stack in one command — PostgreSQL, API, Worker, and Dashboard. Clone, configure `.env`, run `docker compose up`. | [📖 Docker Compose Guide](deploy/docker/README.md) |
 | ⎈ **Kubernetes (Helm v3)** | Production Helm chart, NGINX Ingress, HPA horizontal autoscaling, zero-trust `NetworkPolicy`, External Secrets (ESO). | [📖 Kubernetes Helm Guide](charts/barely/README.md) |
-| ☁️ **AWS ECS (Terraform)** | 100% Private VPC subnets (`assign_public_ip = false`), ALB path routing, AWS Cloud Map private DNS, Secrets Manager. | [📖 AWS ECS Terraform Guide](deploy/terraform/README.md) |
+| ☁️ **AWS ECS Fargate** | Self-contained module — creates VPC, subnets, NAT, RDS, ALB, Secrets Manager automatically. Fill 2 values, run `terraform apply`. | [📖 AWS ECS Deployment Guide](deploy/terraform/README.md) |
 | 🚀 **CI/CD Integration** | Autonomous AI tests on Pull Requests, GitHub Secrets setup, PR merge gating, PDF report artifacts. | [📖 CI/CD Integration Guide](deploy/ci-cd/README.md) |
 
 ### Enterprise Security Standards
 - **Non-Root Execution**: Every workload runs strictly as an unprivileged user (UID `10001:10001`).
 - **Restricted Capabilities**: Linux kernel capabilities are explicitly stripped (`capabilities: drop: ["ALL"]`).
 - **No Privilege Escalation**: Prevents privilege escalation attacks across container lifecycles.
-- **Dedicated Chromium Memory**: 1GB dedicated `/dev/shm` allocation avoids browser memory fragmentation.
+- **Dedicated Chromium Memory**: 1GB dedicated `/dev/shm` on Docker Compose and Kubernetes avoids browser memory fragmentation. AWS Fargate caps `/dev/shm` at 64MB and rejects `sharedMemorySize`, so Chromium there automatically falls back to disk-backed `/tmp`.
 - **Architecture Topologies**: For full architectural diagrams and firewall rules, explore the dedicated runbooks linked above.
 
 ## 💬 Community
